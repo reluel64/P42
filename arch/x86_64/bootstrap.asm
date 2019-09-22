@@ -118,7 +118,7 @@ kernel_init:
    
 ; start filling the tables
     mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
-    mov ecx, 0x1000                       ; page count
+    mov ecx, 0x1200                       ; page count
     mov edi, (PT0 - KERNEL_VIRTUAL_BASE)  ; start from page table 0
   
 
@@ -229,6 +229,11 @@ PT5:
 PT6:
     times 512 dq 0
 PT7:
+    times 512 dq 0
+PT8:
+    times 512 dq 0
+
+PT9:
     times 512 dq 0
     
 section .rodata

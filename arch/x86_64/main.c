@@ -6,7 +6,7 @@ extern void load_gdt(void *gdt_ptr_addr);
 extern void load_idt(void *itd_ptr_addr);
 
 
-static char message[80];
+char message[80];
 
 uint64_t int_count = 0;
 

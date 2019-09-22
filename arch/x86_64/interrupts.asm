@@ -75,7 +75,7 @@ load_gdt:
     ret
 
 load_tss:
-    ltr[rdi]
+    ltr di
     ret
     
 test_interrupt:
