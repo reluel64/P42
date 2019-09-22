@@ -230,12 +230,7 @@ PT6:
     times 512 dq 0
 PT7:
     times 512 dq 0
-PT8:
-    times 512 dq 0
 
-PT9:
-    times 512 dq 0
-    
 section .rodata
 align 8
 
