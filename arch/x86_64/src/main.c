@@ -64,7 +64,8 @@ char * itoa(unsigned long value, char * str, int base)
     return rc;
 }
 
-
+extern void vga_init(void);
+extern void vga_print(uint8_t *buf, uint8_t color, uint64_t len);
 
 
 #define FB_MEM (0xFFFFFFFF80000000 +  0xB8000)
@@ -80,15 +81,16 @@ void kmain()
     setup_descriptors();
     load_descriptors();
 
+    
    while(1)
    {
        memset(message,0,sizeof(message));
        itoa(int_count, message,10);
   
-        for(int i = 0; i < sizeof(message);i++)
-        {
-            vga_mem[i] = message[i] | 0x7 << 8;
-        }
+      
+            vga_print(message,0x7,-1);
+            vga_print("\n",0,-1);
+        
        interrupt_call(32);
    }
 

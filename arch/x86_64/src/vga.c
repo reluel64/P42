@@ -22,52 +22,55 @@ void vga_init()
     vga.row = 0;
 }
 
-void vga_write(uint8_t *buf)
+void vga_scroll(uint16_t rows)
 {
-    
-    for(int i = 0; buf[i]; i++)
+    uint16_t *scr_start = vga.base + vga.row * VGA_MAX_COL;
+
+    for(uint16_t r = rows * VGA_MAX_COL; r > 0 ; r--)
     {
-        if(buf[i] == '\n' || vga.row >=VGA_MAX_ROW)
-        {
-            if(vga.row + 1 < VGA_MAX_ROW)
-            {
-                vga.row++;
-                vga.col = 0;
-                continue;
-            }
-            else
-            {
-                for(int r = 1; r < VGA_MAX_ROW; r++)
-                {
-                    for(int c = 0; c < VGA_MAX_COL; c++ )
-                    {
-                        vga.base[VGA_POS(c, r-1)] = vga.base[VGA_POS(c, r)];
-                    }
-                }
-
-
-                   vga.col = 0;
-                vga.row = VGA_MAX_ROW -1;
-                /* Clear the last row */
-                for(int c = 0; c<VGA_MAX_COL;c++)
-                {
-                    vga.base[VGA_POS(c, vga.row)] = 0;
-                }
-
-             
-
-            }
-        }
-       
-        if(vga.row < VGA_MAX_ROW && vga.col < VGA_MAX_COL)
-            vga.base[VGA_POS(vga.col,vga.row)] = (uint16_t)buf[i] | (0x7 << 8); 
-
-            if(++vga.col >= VGA_MAX_COL)
-            {
-                vga.row++;
-                vga.col = 0;
-            }
-
-            
+        scr_start[r - 1] = scr_start[r]; 
     }
+
+    vga.row = (vga.row > rows ? (vga.row - rows) : 0);
+    vga.col = 0;
+}
+
+void vga_print(uint8_t *buf, uint8_t color, uint64_t len)
+{
+    uint16_t vga_ch = (uint16_t)color << 8; /* set the color now */
+    uint8_t ch = 0;
+    uint16_t pos;
+
+    for(uint64_t i = 0; i < len && buf[i] != 0; i++)
+    {
+        ch = buf[i];
+
+        /* This is a newline character
+         * so we must increase the row and move the col to 0
+         */
+       if(ch == '\n')
+       {
+           vga.row++;
+           vga.col = 0;
+           continue;
+       }
+
+        if(vga.col >= VGA_MAX_COL)
+        {
+            vga.row++;
+            vga.col = 0;
+        }
+
+       if(vga.row >= VGA_MAX_ROW)
+       {
+           vga_scroll(25);
+       }
+
+    
+    pos = vga.row * VGA_MAX_COL + vga.col;
+    vga_ch &= 0xff00; /* clear the character part */
+    vga.base[pos] = (vga_ch | ch);
+    vga.col++;
+
+   }
 }

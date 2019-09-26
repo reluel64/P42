@@ -6,7 +6,7 @@ extern uint64_t int_count;
 
 void isr_handler(uint64_t index)
 {
-    if(index == 31)
+    if(index == 32)
     int_count++;
 }
 

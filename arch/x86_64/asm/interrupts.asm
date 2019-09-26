@@ -1,5 +1,6 @@
 ;Interrupt handling
-
+; We are using the assembler capability to define macros 
+; so that we can save a lot of code being written
 
 global disable_interrupts
 global enable_interrupts
@@ -66,9 +67,6 @@ isr_entry_point%1:
 %macro isr_to_table 1
  mov qword [rdi + (%1 * 8)], isr_entry_point%1
 %endmacro
-
-
-
 
 ; Fill the interrupt table passed in RDI
 isr_handlers_fill:
