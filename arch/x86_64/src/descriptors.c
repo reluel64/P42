@@ -1,15 +1,22 @@
 /* Descriptors routines */
 
-#include "descriptors.h"
+#include <descriptors.h>
 /* local */
 #define FB_MEM (0xFFFFFFFF80000000 +  0xB8000)
-/* Interrupt Descriptor Table */ 
+/* Task state segment */ 
 static tss64_entry_t tss;
-static idt64_entry_t idt[MAX_IDTS];
 
-    /* Global Descriptor Table */
-static gdt_entry_t gdt[MAX_GDTS];
+/* Interrupt Descriptor Table */
+static idt64_entry_t idt[MAX_INTERRUPTS];
+static uint64_t interupt_handlers[MAX_INTERRUPTS];
+
+/* Global Descriptor Table */
+static gdt_entry_t gdt[MAX_GDT_ENTRIES];
+
+/* Interrupt Descriptor Pointer */
 static idt64_ptr_t idt_ptr;
+
+/* Global Descriptor Pointer */
 static gdt64_ptr_t gdt_ptr;
 
 /* extern */
@@ -18,7 +25,7 @@ extern void load_gdt(void *gdt);
 extern void load_tss(uint64_t segment);
 extern void disable_interrupts();
 extern void enable_interrupts();
-extern void isr_entry(void);
+extern void isr_handlers_fill(uint64_t *int_hnd);
 
 
 static void clear(void *ptr, uint64_t len)
@@ -44,10 +51,10 @@ int idt_entry_add
 {
    uint64_t ih_ptr = 0;
 
-   if(idt_entry == (void*)0)
+    if(idt_entry == (void*)0)
         return(-1);
 
-   clear(idt_entry, sizeof(idt64_entry_t));
+    clear(idt_entry, sizeof(idt64_entry_t));
 
     ih_ptr = (uint64_t) ih; /* makes things easier */
 
@@ -71,6 +78,7 @@ int gdt_entry_encode
     gdt_entry_t *gdt_entry
 )
 {
+    /* No way */
     if(gdt_entry == (void*)0)
         return(-1);
 
@@ -87,7 +95,6 @@ int gdt_entry_encode
     gdt_entry->dpl       = ((flags >> 5) & 0x3);
     gdt_entry->present   = ((flags >> 7) & 0x1);
 
-
     /* setup the flags 19:23 */
     gdt_entry->avl         = ((flags >> 12) & 0x1);
     gdt_entry->_long       = ((flags >> 13) & 0x1);
@@ -95,7 +102,7 @@ int gdt_entry_encode
     gdt_entry->granularity = ((flags >> 15) & 0x1); 
 
     /* set limits */
-    gdt_entry->limit_low = ((limit)  & 0xffff);
+    gdt_entry->limit_low = ((limit) & 0xffff);
     gdt_entry->limit_hi  = ((limit >> 16) & 0xf);
 
     return(0);
@@ -106,24 +113,22 @@ int setup_descriptors(void)
   
     uint32_t flags = 0;
     uint64_t tss_addr = (uint64_t)&tss;
-    uint64_t ih_ptr = (uint64_t)isr_entry;
 
     clear(gdt, sizeof(gdt));
     clear(idt, sizeof(idt));
     clear(&tss,sizeof(tss));
-
+    clear(interupt_handlers, sizeof(interupt_handlers));
     /* Kernel Code (0x8)*/
-    flags = (GDT_TYPE_SET(GDT_CODE_XR)                  |
+    flags = (GDT_TYPE_SET(GDT_CODE_XR)                 |
             GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
-            GDT_PRESENT_SET(0x1)                           |
+            GDT_PRESENT_SET(0x1)                       |
             GDT_LONG_SET(0x1)                          |
             GDT_GRANULARITY_SET(0x1));
-
 
     gdt_entry_encode(0,-1, flags, &gdt[1]);
 
     /* Kernel Data (0x10)*/
-    flags = (GDT_TYPE_SET(GDT_DATA_RW)                  |
+    flags = (GDT_TYPE_SET(GDT_DATA_RW)                 |
             GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
             GDT_PRESENT_SET(0x1)                       |
             GDT_GRANULARITY_SET(0x1));
@@ -133,11 +138,10 @@ int setup_descriptors(void)
     /* User Code (0x18)*/
     flags = GDT_TYPE_SET(GDT_CODE_XR)                  |
             GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
-            GDT_PRESENT_SET(0x1)                           |
+            GDT_PRESENT_SET(0x1)                       |
             GDT_DPL_SET (0x3)                          |
             GDT_LONG_SET(0x1)                          |
             GDT_GRANULARITY_SET(0x1);
-
 
     gdt_entry_encode(0,-1, flags, &gdt[3]);
 
@@ -150,24 +154,41 @@ int setup_descriptors(void)
 
     gdt_entry_encode(0,-1, flags, &gdt[4]);
 
-    /* Start encoding the tss descriptor */
-    flags = (GDT_TYPE_SET(GDT_SYSTEM_TSS)     | 
-            GDT_GRANULARITY_SET(0x1) |
-            GDT_DPL_SET(0x0)|
-            GDT_DESC_TYPE_SET(GDT_DESC_TYPE_SYSTEM)|
+    /* TSS descriptor*/
+    flags = (GDT_TYPE_SET(GDT_SYSTEM_TSS)              | 
+            GDT_GRANULARITY_SET(0x1)                   |
+            GDT_DPL_SET(0x0)                           |
+            GDT_DESC_TYPE_SET(GDT_DESC_TYPE_SYSTEM)    |
             GDT_PRESENT_SET(0x1));
    
     tss.io_map = sizeof(tss);
 
     gdt_entry_encode(tss_addr,sizeof(tss)-1, flags, &gdt[5]);
-    /* Yes, TSS takes two descriptors */
+    /* Yes, TSS takes two GDT entrties */
    *((uint32_t*)&gdt[6]) = (tss_addr >> 32);
 
-    
-    /* Set up interrupt handlers */
-    for(int i = 0; i < MAX_IDTS; i++)
+    isr_handlers_fill(interupt_handlers);
+
+    /* Let's do a check */
+    for(int i = 0; i < MAX_INTERRUPTS;i++)
     {
-     idt_entry_add(isr_entry, 0x8E,0, KERNEL_CODE_SEGMENT, &idt[i]);
+        if(interupt_handlers[i] == 0)
+        {
+            while(1);
+        }
+    }
+
+
+    /* Set up interrupt handlers */
+    for(int i = 0; i < MAX_INTERRUPTS; i++)
+    {
+     idt_entry_add(
+    (interrupt_handler_t)interupt_handlers[i],  /* interrupt handler              */
+     0x8E,                                      /* this is an interrupt           */
+     0,                                         /* no IST                         */
+     KERNEL_CODE_SEGMENT,                       /* isr must run in Kernel Context */
+     &idt[i]                                    /* position in the IDT            */
+     );
     }
 
     return(0);
@@ -176,19 +197,22 @@ int setup_descriptors(void)
 int load_descriptors()
 {
     /* turn off interrupts */
-    disable_interrupts();
 
     gdt_ptr.addr = (uint64_t)&gdt;
-    gdt_ptr.len  = sizeof(gdt);
+    gdt_ptr.len  = sizeof(gdt) - 1;
 
     idt_ptr.addr = (uint64_t)&idt;
     idt_ptr.len = sizeof(idt) - 1;
 
+    /* diable interrupts before trying to change the tables */
+    disable_interrupts();
+
     load_gdt(&gdt_ptr);
     load_idt(&idt_ptr);
 
-    load_tss(0x28);
+    load_tss(TSS_SEGMENT);
     
+    /* re-enable them to make the system tick */
     enable_interrupts();
 
     return(0);

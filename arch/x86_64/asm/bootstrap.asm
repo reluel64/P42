@@ -64,6 +64,7 @@ halt_cpu:
 kernel_init:
     cli
     mov edx, kstack_top - KERNEL_VIRTUAL_BASE
+    mov ebp, kstack_base - KERNEL_VIRTUAL_BASE
     mov esp, edx
     mov [mb_present - KERNEL_VIRTUAL_BASE], eax
     mov [mb_addr    - KERNEL_VIRTUAL_BASE], ebx
@@ -170,6 +171,7 @@ jmp rcx
 section .text
 
 kernel_higher_half:
+
     mov rax, PML4
     mov qword [rax],0
     lgdt [GDT_PTR]
@@ -180,7 +182,7 @@ kernel_higher_half:
     mov es, rax
     mov fs, rax
     mov gs, rax
-
+    mov rbp, kstack_base
     mov rsp, kstack_top 
     invlpg [0]
     call kmain
@@ -262,7 +264,8 @@ mb_present              dd 0
 mb_addr                 dd 0
 
 section .bss
-kstack_base resb 16384
+kstack_base: 
+    resb 16384
 kstack_top:
 
 section .rodata

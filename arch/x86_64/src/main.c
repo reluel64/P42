@@ -1,10 +1,10 @@
 #include <stdint.h>
-#include "multiboot.h"
-#include "descriptors.h"
+#include <multiboot.h>
+#include <descriptors.h>
 
 extern void load_gdt(void *gdt_ptr_addr);
 extern void load_idt(void *itd_ptr_addr);
-
+extern void interrupt_call(uint64_t int_ix);
 
 char message[80];
 
@@ -25,13 +25,6 @@ void memset(void *ptr, int byte, uint64_t len)
     for(uint64_t i = 0; i < len; i++)
     ((uint8_t*)ptr)[i] = byte;
 }
-
-
-void dummy_interrupt(void)
-{
- int_count++;
-}
-
 
 char * itoa(unsigned long value, char * str, int base)
 {
@@ -71,8 +64,6 @@ char * itoa(unsigned long value, char * str, int base)
     return rc;
 }
 
-extern isr_entry(void);
-
 
 
 
@@ -86,36 +77,6 @@ void kmain()
     uint16_t *vga_mem = (uint16_t*)FB_MEM;
     vga_init();
 
-#if 0
-    vga_write("Hello 1\n",6);
-    vga_write("Hello 2\n",6);
-    vga_write("Hello 3\n",6);
-    vga_write("Hello 4\n",6);
-    vga_write("Hello 5\n",6);
-    vga_write("Hello 6\n",6);
-    vga_write("Hello 7\n",6);
-    vga_write("Hello 8\n",6);
-    vga_write("Hello 9\n",6);
-    vga_write("Hello 10\n",6);
-    vga_write("Hello 11\n",6);
-    vga_write("Hello 12\n",6);
-    vga_write("Hello 13\n",6);
-    vga_write("Hello 14\n",6);
-    vga_write("Hello 15\n",6);
-    vga_write("Hello 16\n",6);
-    vga_write("Hello 17\n",6);
-    vga_write("Hello 18\n",6);
-    vga_write("Hello 19\n",6);
-    vga_write("Hello 20\n",6);
-    vga_write("Hello 21\n",6);
-    vga_write("Hello 22\n",6);
-    vga_write("Hello 23\n",6);
-    vga_write("Hello 24\n",6);
-    vga_write("Hello 25\n",6);
-    vga_write("Hello 26\n",6);
-    vga_write("Hello 27\n",6);
-#endif 
-
     setup_descriptors();
     load_descriptors();
 
@@ -128,7 +89,7 @@ void kmain()
         {
             vga_mem[i] = message[i] | 0x7 << 8;
         }
-        test_interrupt();
+       interrupt_call(32);
    }
 
     #if 0

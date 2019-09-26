@@ -4,12 +4,13 @@
 
 #include <stdint.h>
 
-#define MAX_IDTS (256)
-#define MAX_GDTS (7)
-#define KERNEL_CODE_SEGMENT (0x8)
+#define MAX_INTERRUPTS (256)
+#define MAX_GDT_ENTRIES (7)
+#define KERNEL_CODE_SEGMENT (0x08)
 #define KERNEL_DATA_SEGMENT (0x10)
-#define USER_CODE_SEGMENT (0x18)
-#define USER_DATA_SEGMENT (0x20)
+#define USER_CODE_SEGMENT   (0x18)
+#define USER_DATA_SEGMENT   (0x20)
+#define TSS_SEGMENT         (0x28)
 
 #define GDT_DATA_R    (0x0)    /* Read only                         */
 #define GDT_DATA_RA   (0x1)    /* Read only, accessed               */
