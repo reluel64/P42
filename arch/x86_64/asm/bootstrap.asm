@@ -119,7 +119,7 @@ kernel_init:
    
 ; start filling the tables
     mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
-    mov ecx, 0x1200                       ; page count
+    mov ecx, 0x1000                       ; page count
     mov edi, (PT0 - KERNEL_VIRTUAL_BASE)  ; start from page table 0
   
 
@@ -188,7 +188,7 @@ kernel_higher_half:
     call kmain
 
 halt:
-hlt
+    hlt
     ret
 
 section .data

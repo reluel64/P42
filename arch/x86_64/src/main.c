@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <multiboot.h>
 #include <descriptors.h>
-
+#include <io.h>
 extern void load_gdt(void *gdt_ptr_addr);
 extern void load_idt(void *itd_ptr_addr);
 extern void interrupt_call(uint64_t int_ix);
@@ -14,11 +14,37 @@ uint64_t int_count = 0;
 extern uint32_t mb_addr;
 extern uint32_t mb_present;
 
-extern void disable_interrupts();
-extern void enable_interrupts();;
 extern void test_interrupt();
+#define PORT 0x3f8   /* COM1 */
 
-typedef  void(*interrupt_handler_t)(void);
+void io_wait()
+{
+    for(int i=0;i<1000000;i++)
+    {
+        read_port_b(0x80);
+    }
+}
+
+
+void init_serial() {
+   write_port_b(PORT + 1, 0x01);    // Disable all interrupts
+   write_port_b(PORT + 3, 0x80);    // Enable DLAB (set baud rate divisor)
+   write_port_b(PORT + 0, 0x03);    // Set divisor to 3 (lo byte) 38400 baud
+   write_port_b(PORT + 1, 0x00);    //                  (hi byte)
+   write_port_b(PORT + 3, 0x03);    // 8 bits, no parity, one stop bit
+   write_port_b(PORT + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
+   write_port_b(PORT + 4, 0x0B);    // IRQs enabled, RTS/DSR set
+}
+
+int is_transmit_empty() {
+   return read_port_b(PORT + 5) & 0x20;
+}
+ 
+void write_serial(char a) {
+   while (is_transmit_empty() == 0);
+ 
+   write_port_b(PORT,a);
+}
 
 void memset(void *ptr, int byte, uint64_t len)
 {
@@ -81,17 +107,26 @@ void kmain()
     setup_descriptors();
     load_descriptors();
 
-    
    while(1)
    {
        memset(message,0,sizeof(message));
-       itoa(int_count, message,10);
+      itoa(int_count, message,10);
   
       
-            vga_print(message,0x7,-1);
+           /* vga_print(message,0x7,-1);
             vga_print("\n",0,-1);
-        
-       interrupt_call(32);
+            */
+        for(int i = 0; message[i]; i++)
+        {
+            write_serial(message[i]);
+        }        
+
+        write_serial('\n');
+      // interrupt_call(32);
+       for(int i = 0; i < 1000000;i++)
+       {
+           /*read_port_b(0x80);*/
+       }
    }
 
     #if 0

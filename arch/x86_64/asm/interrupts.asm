@@ -1,6 +1,6 @@
-;Interrupt handling
+; Interrupt handling
 ; We are using the assembler capability to define macros 
-; so that we can save a lot of code being written
+; so that we can save a lot of duplicate code being written
 
 global disable_interrupts
 global enable_interrupts
@@ -57,7 +57,7 @@ isr_entry_point%1:
     iretq
 %endmacro
 
-; We are lazy - ask the assembler to create all the 256 irqs */
+; We are lazy - ask the assembler to create all the 256 interrupt handlers
 %assign i 0 
     %rep 256
         isr_def i

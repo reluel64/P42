@@ -2,6 +2,9 @@
  * Descriptor definitions 
  */
 
+#ifndef descriptors_h
+#define descriptors_h
+
 #include <stdint.h>
 
 #define MAX_INTERRUPTS (256)
@@ -150,3 +153,5 @@ int gdt_entry_encode
 
 int setup_descriptors(void);
 int load_descriptors();
+
+#endif

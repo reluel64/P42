@@ -11,7 +11,7 @@ SECTIONS
         *(.bootstrap_text)
     }
 
- .bootstrap_stack :
+    .bootstrap_stack :
     {
         *(.bootstrap_stack)
     }
@@ -49,9 +49,11 @@ SECTIONS
 
    _end = .;
 
-    KERNEL_LMA_END = . - KERNEL_VMA;
+   
    /DISCARD/ :
    {
         *(.comment)
    }
+
+    KERNEL_LMA_END = . - KERNEL_VMA;
 }
