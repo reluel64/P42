@@ -6,15 +6,29 @@ SECTIONS
 {
     . = KERNEL_LMA;
 
-    .bootstrap_text :
+    .bootstrap_text : AT(ADDR(.bootstrap_text))
     {
         *(.bootstrap_text)
+        . = ALIGN(4096);
     }
 
-    .bootstrap_stack :
+    .bootstrap_stack : AT(ADDR(.bootstrap_stack))
     {
         *(.bootstrap_stack)
+        . = ALIGN(4096);
     }
+    
+    .bootstrap_rodata : AT(ADDR(.bootstrap_rodata))
+    {
+        *(.bootstrap_rodata)
+        . = ALIGN(4096);
+    }
+
+    .bootstrap_data : AT(ADDR(.bootstrap_data))
+    {
+        *(.bootstrap_data)
+    }
+
     . += KERNEL_VMA;
     .text : AT(ADDR(.text) - KERNEL_VMA)
     {
@@ -54,6 +68,8 @@ SECTIONS
    {
         *(.comment)
    }
+
+    
 
     KERNEL_LMA_END = . - KERNEL_VMA;
 }

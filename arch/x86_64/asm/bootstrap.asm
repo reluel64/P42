@@ -6,17 +6,22 @@ global mb_present
 global mb_addr
 global halt
 extern kmain
-
+extern KERNEL_LMA_END
+global PT0
 %define MAGIC_VAL                0x1BADB002
-%define KERNEL_VIRTUAL_BASE      0xFFFFFFFF80000000
+%define KERNEL_VMA               0xFFFFFFFF80000000
 %define KERNEL_PHYSICAL_ADDRESS  0x1000000
 %define PAGE_PRESENT             (1 << 0)
 %define PAGE_WRITE               (1 << 1)
 %define MULTIBOOT_SIG            0x2BADB002
-
+%define PML4_ADDR                KERNEL_LMA_END
+%define PDPT_ADDR                (KERNEL_LMA_END + 0x1000)
+%define PDT_ADDR                 (KERNEL_LMA_END + 0x2000)
+%define PT_ADDR                  (KERNEL_LMA_END + 0x3000)
 [BITS 32]
 
 section .bootstrap_text
+align 0x1000
 multiboot:
 
     magic:          dd 0x1BADB002   ;magic
@@ -31,6 +36,7 @@ multiboot:
     width           dd 0x0
     height          dd 0x0
     depth           dd 0x0
+
 ; Small printing routine
 
 print:
@@ -49,11 +55,11 @@ print_done:
     hlt
 
 cpuid_not_supported:
-    mov esi, no_cpuid_msg - KERNEL_VIRTUAL_BASE
+    mov esi, no_cpuid_msg
     jmp print
 
 no_64_bit:
-    mov esi, no_64_msg  - KERNEL_VIRTUAL_BASE
+    mov esi, no_64_msg
     jmp print
 
 halt_cpu:
@@ -63,15 +69,11 @@ halt_cpu:
 
 kernel_init:
     cli
-    mov edx, kstack_top - KERNEL_VIRTUAL_BASE
-    mov ebp, kstack_base - KERNEL_VIRTUAL_BASE
+    mov edx, kstack_top - KERNEL_VMA
+    mov ebp, kstack_base - KERNEL_VMA
     mov esp, edx
-    mov [mb_present - KERNEL_VIRTUAL_BASE], eax
-    mov [mb_addr    - KERNEL_VIRTUAL_BASE], ebx
-;Save multiboot
-    push eax
-    push ebx
-
+    mov [mb_present], eax
+    mov [mb_addr], ebx
 
 ;Check CPUID
 
@@ -118,17 +120,17 @@ kernel_init:
     jz no_64_bit    
    
 ; start filling the tables
-    mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
-    mov ecx, 0x1000                       ; page count
-    mov edi, (PT0 - KERNEL_VIRTUAL_BASE)  ; start from page table 0
+;    mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
+;    mov ecx, 0x1000                       ; page count
+;    mov edi, (PT0)  ; start from page table 0
   
 
-fill_tables:
-    mov dword [edi], ebx                  ;set the page
-    add ebx, 0x1000                       ;set the next physical address to map
-    add edi, 8                            ;go to the next page
-    loop fill_tables                      
-
+;fill_tables:
+;    mov dword [edi], ebx                  ;set the page
+;    add ebx, 0x1000                       ;set the next physical address to map
+;    add edi, 8                            ;go to the next page
+;    loop fill_tables                      
+call build_page_tables
 ;Prepare enabling long mode
     mov eax, cr4
     and eax, 11011111b                    ;Disable PAE.
@@ -139,7 +141,7 @@ fill_tables:
     mov cr0, eax
 
 ;Load CR3 with the PML4
-    mov edx, PML4 - KERNEL_VIRTUAL_BASE   ;Point CR3 at the PML4.
+    mov edx, KERNEL_LMA_END   ;Point CR3 at the PML4.
     mov cr3, edx
  
     mov eax, cr4
@@ -158,7 +160,7 @@ fill_tables:
      
     mov cr0, ebx                    
    
-    lgdt [GDT_PTR - KERNEL_VIRTUAL_BASE]
+    lgdt [GDT_PTR]
 
     jmp 0x08: (enter_64_bit)
     
@@ -172,7 +174,7 @@ section .text
 
 kernel_higher_half:
 
-    mov rax, PML4
+    mov rax, KERNEL_LMA_END
     mov qword [rax],0
     lgdt [GDT_PTR]
     mov rax, 0x10
@@ -191,50 +193,51 @@ halt:
     hlt
     ret
 
-section .data
+[BITS 32]
+section .bootstrap_text
+
+build_page_tables:
+    mov ecx, 0x203000
+    mov edi, KERNEL_LMA_END
+    xor eax, eax
+    cld
+    rep stosb
 
 
-PML4:
-    PML4_IDENT: dq       (PDPT - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    times 510 dq 0
-    PML4_VIRT:  dq       (PDPT - KERNEL_VIRTUAL_BASE) +  PAGE_PRESENT + PAGE_WRITE
+    mov edi, PML4_ADDR
+    mov dword [edi],                PDPT_ADDR + PAGE_PRESENT + PAGE_WRITE
+    mov dword [edi + (511 * 0x8)],  PDPT_ADDR + PAGE_PRESENT + PAGE_WRITE
 
-PDPT:
-    PDPT_IDENT: dq       (PDT - KERNEL_VIRTUAL_BASE)  + PAGE_PRESENT + PAGE_WRITE
-    times 509 dq 0
-    PDPT_VIRT:  dq       (PDT - KERNEL_VIRTUAL_BASE)  + PAGE_PRESENT + PAGE_WRITE
-    times 1 dq 0
-PDT:
-    dq       (PT0 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    dq       (PT1 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    dq       (PT2 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    dq       (PT3 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    dq       (PT4 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    dq       (PT5 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    dq       (PT6 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
-    dq       (PT7 - KERNEL_VIRTUAL_BASE) + PAGE_PRESENT + PAGE_WRITE
+    mov edi, PDPT_ADDR
+    mov dword [edi],                PDT_ADDR + PAGE_PRESENT + PAGE_WRITE
+    mov dword [edi +  (510 * 0x8)], PDT_ADDR + PAGE_PRESENT + PAGE_WRITE
+
+    mov edi, PDT_ADDR
+    mov ebx, PAGE_WRITE + PAGE_PRESENT + PT_ADDR
+    mov ecx, 512
+
+    fill_pdt:
+        mov dword [edi], ebx
+        add ebx, 0x1000
+        add edi, 8
+        loop fill_pdt
+
+    ; start filling the tables
+    mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
+    mov ecx, 512*512                       ; page count
+    mov edi, PT_ADDR  ; start from page table 0
+  
+
+    fill_tables:
+    mov dword [edi], ebx                  ;set the page
+    add ebx, 0x1000                       ;set the next physical address to map
+    add edi, 8                            ;go to the next page
+    loop fill_tables   
     
-    times 504 dq 0
-    
-PT0:
-    times 512 dq 0
-PT1:
-    times 512 dq 0
-PT2:
-    times 512 dq 0
-PT3:
-    times 512 dq 0
-PT4:
-    times 512 dq 0
-PT5:
-    times 512 dq 0
-PT6:
-    times 512 dq 0
-PT7:
-    times 512 dq 0
+    ret
 
-section .rodata
-align 8
+section .bootstrap_rodata
+align 0x1000
 
 GDT:
     NULL:     dq      0x00
@@ -250,11 +253,11 @@ GDT:
               db      0xA0
               db      0x0
 
-align 16
+align 0x1000
 
 GDT_PTR:
     dw GDT_PTR - GDT - 1
-    dd GDT - KERNEL_VIRTUAL_BASE
+    dd GDT
 
 IDT_PTR:
    dw 0
@@ -263,12 +266,10 @@ IDT_PTR:
 mb_present              dd 0
 mb_addr                 dd 0
 
+no_cpuid_msg            db "NO CPUID",  0x0
+no_64_msg               db "NO 64-bit", 0x0
+
 section .bss
 kstack_base: 
     resb 16384
 kstack_top:
-
-section .rodata
-no_cpuid_msg            db "NO CPUID",  0x0
-no_64_msg               db "NO 64-bit", 0x0
-

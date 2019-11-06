@@ -1,6 +1,5 @@
 #include <stdint.h>
-#include <multiboot.h>
-#include <descriptors.h>
+#include <vga.h>
 #include <io.h>
 extern void load_gdt(void *gdt_ptr_addr);
 extern void load_idt(void *itd_ptr_addr);
@@ -9,10 +8,6 @@ extern void interrupt_call(uint64_t int_ix);
 char message[80];
 
 uint64_t int_count = 0;
-
-
-extern uint32_t mb_addr;
-extern uint32_t mb_present;
 
 extern void test_interrupt();
 #define PORT 0x3f8   /* COM1 */
@@ -24,7 +19,6 @@ void io_wait()
         read_port_b(0x80);
     }
 }
-
 
 void init_serial() {
    write_port_b(PORT + 1, 0x01);    // Disable all interrupts
@@ -90,23 +84,19 @@ char * itoa(unsigned long value, char * str, int base)
     return rc;
 }
 
-extern void vga_init(void);
-extern void vga_print(uint8_t *buf, uint8_t color, uint64_t len);
-
-
-#define FB_MEM (0xFFFFFFFF80000000 +  0xB8000)
-extern void halt();
-void kmain()
+void kmain(uint64_t test)
 {
-    multiboot_info_t *mb_info =  (multiboot_info_t*)((uint64_t)mb_addr + 0xFFFFFFFF80000000);
-    multiboot_memory_map_t *mem_map = (multiboot_memory_map_t*)(mb_info->mmap_addr + 0xFFFFFFFF80000000);
-    uint64_t mem_map_end = (uint64_t)mem_map + mb_info->mmap_length;
-    uint16_t *vga_mem = (uint16_t*)FB_MEM;
+   char buf[64];
+  
     vga_init();
 
     setup_descriptors();
     load_descriptors();
-
+    vga_print("Hello World",0x7,-1);
+   //  init_page_table();
+    
+    itoa(test,buf,16);
+vga_print(buf,0x7,-1);
    while(1)
    {
        memset(message,0,sizeof(message));
@@ -128,33 +118,4 @@ void kmain()
            /*read_port_b(0x80);*/
        }
    }
-
-    #if 0
-    while((uint64_t)mem_map < mem_map_end)
-    {
-       if(mem_map->type == MULTIBOOT_MEMORY_AVAILABLE)
-       {
-        itoa(mem_map->len,0,16);
-        for(int  i =0; message[i] != 0;i++)
-        {
-            p[b++] = message[i] | 0x7<<8;
-        }
-
-        b+=5;
-        
-        itoa(mem_map->addr,0,16);
-        
-        for(int  i =0; message[i] != 0;i++)
-        {
-        p[b++] = message[i] | 0x7<<8;
-        }
-  line++;
-        b = (line * 80);
-       }
-        mem_map =(uint64_t) mem_map + mem_map->size + sizeof(mem_map->size);
-      
-    }
-#endif
-    /* hang the kernel */
-    while(1);
 }
