@@ -5,11 +5,7 @@ extern void load_gdt(void *gdt_ptr_addr);
 extern void load_idt(void *itd_ptr_addr);
 extern void interrupt_call(uint64_t int_ix);
 
-char message[80];
-
 uint64_t int_count = 0;
-
-extern void test_interrupt();
 #define PORT 0x3f8   /* COM1 */
 
 void io_wait()
@@ -84,38 +80,14 @@ char * itoa(unsigned long value, char * str, int base)
     return rc;
 }
 
-void kmain(uint64_t test)
+void kmain()
 {
-   char buf[64];
-  
     vga_init();
 
-    setup_descriptors();
-    load_descriptors();
+  //  setup_descriptors();
+ //   load_descriptors();
     vga_print("Hello World",0x7,-1);
+    init_phys_mm();
    //  init_page_table();
     
-    itoa(test,buf,16);
-vga_print(buf,0x7,-1);
-   while(1)
-   {
-       memset(message,0,sizeof(message));
-      itoa(int_count, message,10);
-  
-      
-           /* vga_print(message,0x7,-1);
-            vga_print("\n",0,-1);
-            */
-        for(int i = 0; message[i]; i++)
-        {
-            write_serial(message[i]);
-        }        
-
-        write_serial('\n');
-      // interrupt_call(32);
-       for(int i = 0; i < 1000000;i++)
-       {
-           /*read_port_b(0x80);*/
-       }
-   }
 }

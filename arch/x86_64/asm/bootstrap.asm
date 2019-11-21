@@ -1,13 +1,5 @@
 ;P42 x86_64 Kernel bootstrap
 ;---------------------------------------------------------
-global kernel_init
-global from_multiboot
-global mb_present
-global mb_addr
-global halt
-extern kmain
-extern KERNEL_LMA_END
-global PT0
 %define MAGIC_VAL                0x1BADB002
 %define KERNEL_VMA               0xFFFFFFFF80000000
 %define KERNEL_PHYSICAL_ADDRESS  0x1000000
@@ -18,6 +10,16 @@ global PT0
 %define PDPT_ADDR                (KERNEL_LMA_END + 0x1000)
 %define PDT_ADDR                 (KERNEL_LMA_END + 0x2000)
 %define PT_ADDR                  (KERNEL_LMA_END + 0x3000)
+
+global kernel_init
+global from_multiboot
+global mb_present
+global mb_addr
+global halt
+global EARLY_PAGE_MEMORY_AREA
+extern kmain
+extern KERNEL_LMA_END
+
 [BITS 32]
 
 section .bootstrap_text
@@ -119,18 +121,48 @@ kernel_init:
    
     jz no_64_bit    
    
-; start filling the tables
-;    mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
-;    mov ecx, 0x1000                       ; page count
-;    mov edi, (PT0)  ; start from page table 0
+   ;begin building temporary page structures
+    ;1) Clear area
+    mov ecx, EARLY_PAGE_MEMORY_AREA
+    mov edi, KERNEL_LMA_END
+    xor eax, eax
+    cld
+    rep stosb
+
+    ;2) Fill  PML4T
+    mov edi, PML4_ADDR
+    mov dword [edi],                PDPT_ADDR + PAGE_PRESENT + PAGE_WRITE
+    mov dword [edi + (511 * 0x8)],  PDPT_ADDR + PAGE_PRESENT + PAGE_WRITE
+
+    ;3) Fill PDPT
+    mov edi, PDPT_ADDR
+    mov dword [edi],                PDT_ADDR + PAGE_PRESENT + PAGE_WRITE
+    mov dword [edi +  (510 * 0x8)], PDT_ADDR + PAGE_PRESENT + PAGE_WRITE
+
+    ;4) Fill PDT
+    mov edi, PDT_ADDR
+    mov ebx, PAGE_WRITE + PAGE_PRESENT + PT_ADDR
+    mov ecx, 512
+
+    fill_pdt:
+        mov dword [edi], ebx
+        add ebx, 0x1000
+        add edi, 8
+        loop fill_pdt
+
+    ; start filling the tables
+    mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
+    mov ecx, 512*512                       ; page count
+    mov edi, PT_ADDR  ; start from page table 0
   
 
-;fill_tables:
-;    mov dword [edi], ebx                  ;set the page
-;    add ebx, 0x1000                       ;set the next physical address to map
-;    add edi, 8                            ;go to the next page
-;    loop fill_tables                      
-call build_page_tables
+    fill_tables:
+        mov dword [edi], ebx                  ;set the page
+        add ebx, 0x1000                       ;set the next physical address to map
+        add edi, 8                            ;go to the next page
+        loop fill_tables   
+    
+
 ;Prepare enabling long mode
     mov eax, cr4
     and eax, 11011111b                    ;Disable PAE.
@@ -194,47 +226,6 @@ halt:
     ret
 
 [BITS 32]
-section .bootstrap_text
-
-build_page_tables:
-    mov ecx, 0x203000
-    mov edi, KERNEL_LMA_END
-    xor eax, eax
-    cld
-    rep stosb
-
-
-    mov edi, PML4_ADDR
-    mov dword [edi],                PDPT_ADDR + PAGE_PRESENT + PAGE_WRITE
-    mov dword [edi + (511 * 0x8)],  PDPT_ADDR + PAGE_PRESENT + PAGE_WRITE
-
-    mov edi, PDPT_ADDR
-    mov dword [edi],                PDT_ADDR + PAGE_PRESENT + PAGE_WRITE
-    mov dword [edi +  (510 * 0x8)], PDT_ADDR + PAGE_PRESENT + PAGE_WRITE
-
-    mov edi, PDT_ADDR
-    mov ebx, PAGE_WRITE + PAGE_PRESENT + PT_ADDR
-    mov ecx, 512
-
-    fill_pdt:
-        mov dword [edi], ebx
-        add ebx, 0x1000
-        add edi, 8
-        loop fill_pdt
-
-    ; start filling the tables
-    mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
-    mov ecx, 512*512                       ; page count
-    mov edi, PT_ADDR  ; start from page table 0
-  
-
-    fill_tables:
-    mov dword [edi], ebx                  ;set the page
-    add ebx, 0x1000                       ;set the next physical address to map
-    add edi, 8                            ;go to the next page
-    loop fill_tables   
-    
-    ret
 
 section .bootstrap_rodata
 align 0x1000
@@ -268,7 +259,7 @@ mb_addr                 dd 0
 
 no_cpuid_msg            db "NO CPUID",  0x0
 no_64_msg               db "NO 64-bit", 0x0
-
+EARLY_PAGE_MEMORY_AREA:       dd          0x203000
 section .bss
 kstack_base: 
     resb 16384
