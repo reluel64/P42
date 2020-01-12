@@ -33,14 +33,14 @@
 #define GDT_CODE_XRC  (0xE)   /* Execute/Read, conforming           */
 #define GDT_CODE_XRCA (0xF)   /* Execute/Read, conforming, accessed */
 
-#define GDT_SYSTEM_TSS (0x9)
+#define GDT_SYSTEM_TSS           (0x9)
 #define GDT_SYSTEM_CALL_GATE     (0xC)
 #define GDT_SYSTEM_INTERUPT_GATE (0xE)
 #define GDT_SYSTEM_TRAP_GATE     (0xF)
 
 
-#define GDT_DESC_TYPE_SYSTEM (0x0)
-#define GDT_DESC_TYPE_CODE_DATA (0x1)
+#define GDT_DESC_TYPE_SYSTEM     (0x0)
+#define GDT_DESC_TYPE_CODE_DATA  (0x1)
 
 #define GDT_GRANULARITY_SET(x)   ((x) << 15)
 #define GDT_OPERAND_SIZE_SET(x)  ((x) << 14)

@@ -1,5 +1,7 @@
-KERNEL_VMA = 0xFFFFFFFF80000000;
-KERNEL_LMA = 0x1000000;
+KERNEL_VMA  = 0xFFFFFFFF80000000;
+KERNEL_LMA  = 0x1000000;
+BOOT_PAGING = 0x100000;
+BOOT_PAGING_LENGTH = 0x203000;
 
 ENTRY(kernel_init)
 SECTIONS
@@ -27,6 +29,7 @@ SECTIONS
     .bootstrap_data : AT(ADDR(.bootstrap_data))
     {
         *(.bootstrap_data)
+        . = ALIGN(4096);
     }
 
     . += KERNEL_VMA;
@@ -60,16 +63,12 @@ SECTIONS
         *(COMMON)
        . = ALIGN(4096);
    }
-
-   _end = .;
-
    
    /DISCARD/ :
    {
         *(.comment)
    }
-
-    
-
+    . = ALIGN(4096);
     KERNEL_LMA_END = . - KERNEL_VMA;
+    KERNEL_IMAGE_LEN =  KERNEL_LMA_END - KERNEL_LMA;
 }

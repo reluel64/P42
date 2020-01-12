@@ -6,20 +6,19 @@
 %define PAGE_PRESENT             (1 << 0)
 %define PAGE_WRITE               (1 << 1)
 %define MULTIBOOT_SIG            0x2BADB002
-%define PML4_ADDR                KERNEL_LMA_END
-%define PDPT_ADDR                (KERNEL_LMA_END + 0x1000)
-%define PDT_ADDR                 (KERNEL_LMA_END + 0x2000)
-%define PT_ADDR                  (KERNEL_LMA_END + 0x3000)
+%define PML4_ADDR                (BOOT_PAGING)
+%define PDPT_ADDR                (BOOT_PAGING + 0x1000)
+%define PDT_ADDR                 (BOOT_PAGING + 0x2000)
+%define PT_ADDR                  (BOOT_PAGING + 0x3000)
 
 global kernel_init
 global from_multiboot
-global mb_present
-global mb_addr
+global mem_map_sig
+global mem_map_addr
 global halt
-global EARLY_PAGE_MEMORY_AREA
 extern kmain
-extern KERNEL_LMA_END
-
+extern BOOT_PAGING
+extern BOOT_PAGING_LENGTH
 [BITS 32]
 
 section .bootstrap_text
@@ -74,8 +73,8 @@ kernel_init:
     mov edx, kstack_top - KERNEL_VMA
     mov ebp, kstack_base - KERNEL_VMA
     mov esp, edx
-    mov [mb_present], eax
-    mov [mb_addr], ebx
+    mov [mem_map_sig], eax
+    mov [mem_map_addr], ebx
 
 ;Check CPUID
 
@@ -123,8 +122,8 @@ kernel_init:
    
    ;begin building temporary page structures
     ;1) Clear area
-    mov ecx, EARLY_PAGE_MEMORY_AREA
-    mov edi, KERNEL_LMA_END
+    mov ecx, BOOT_PAGING_LENGTH
+    mov edi, BOOT_PAGING
     xor eax, eax
     cld
     rep stosb
@@ -173,7 +172,7 @@ kernel_init:
     mov cr0, eax
 
 ;Load CR3 with the PML4
-    mov edx, KERNEL_LMA_END   ;Point CR3 at the PML4.
+    mov edx, BOOT_PAGING   ;Point CR3 at the PML4.
     mov cr3, edx
  
     mov eax, cr4
@@ -185,13 +184,13 @@ kernel_init:
 
     or eax, 0x00000100                ; Set the LME bit.
     wrmsr
- 
+
 
     mov ebx, cr0                      ; Activate long mode -
     or ebx,0x80000001                 ; - by enabling paging and protection simultaneously.
-     
+  
     mov cr0, ebx                    
-   
+
     lgdt [GDT_PTR]
 
     jmp 0x08: (enter_64_bit)
@@ -205,9 +204,6 @@ jmp rcx
 section .text
 
 kernel_higher_half:
-
-    mov rax, KERNEL_LMA_END
-    mov qword [rax],0
     lgdt [GDT_PTR]
     mov rax, 0x10
 
@@ -254,12 +250,12 @@ IDT_PTR:
    dw 0
    dd 0
 
-mb_present              dd 0
-mb_addr                 dd 0
+mem_map_addr            dd 0
+mem_map_sig             dd 0
 
 no_cpuid_msg            db "NO CPUID",  0x0
 no_64_msg               db "NO 64-bit", 0x0
-EARLY_PAGE_MEMORY_AREA:       dd          0x203000
+      
 section .bss
 kstack_base: 
     resb 16384

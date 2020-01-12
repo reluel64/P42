@@ -4,12 +4,15 @@ nasm -felf64 ./asm/bootstrap.asm   -o bootstrap.o
 nasm -felf64 ./asm/interrupts.asm -o interrupts.o
 nasm -felf64 ./asm/io.asm -o io.o
 nasm -felf64 ./asm/paging.asm -o paging.o
-x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/main.c -o main.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel 
-x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/vga.c -o vga.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel  
-x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/interrupts_main.c -o interrupts_main.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel  
-x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/descriptors.c -o descriptors.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel  
-x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/mem.c -o mem.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel  
-x86_64-elf-gcc -T linker.ld -o test.bin -ffreestanding -nostdlib interrupts.o bootstrap.o main.o vga.o descriptors.o mem.o interrupts_main.o io.o paging.o -lgcc -z max-page-size=0x1000
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/main.c -o main.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/vga.c -o vga.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/interrupts_main.c -o interrupts_main.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/descriptors.c -o descriptors.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/physmm.c -o physmm.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/memory_map.c -o memory_map.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/utils.c -o utils.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/serial.c -o serial.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -T linker.ld -o test.bin  -ffreestanding -nostdlib interrupts.o bootstrap.o main.o vga.o  serial.o descriptors.o physmm.o interrupts_main.o io.o paging.o memory_map.o utils.o -lgcc -z max-page-size=0x1000
 
 cp test.bin /media/alex/4D7E-2E98
 sync

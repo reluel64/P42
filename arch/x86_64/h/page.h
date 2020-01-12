@@ -117,4 +117,10 @@ typedef union pte_bits
 #define VIRT_TO_PTE_INDEX(x)   (((x) >> 12) & 0x1FF)
 #define VIRT_TO_OFFSET(x)      ((x)         & 0x1FFF)
 
+#define PML4_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 39 )
+#define PDPTE_INDEX_TO_VIRT(x) (((x) & 0x1FF) << 30 )
+#define PDE_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 21)
+#define PTE_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 12)
+#define OFFSET_TO_VIRT(x)      ((x)  & 0x1FFF)
+
 #endif
