@@ -8,6 +8,8 @@ SECTIONS
 {
     . = KERNEL_LMA;
 
+    BOOTSTRAP_START = .;
+
     .bootstrap_text : AT(ADDR(.bootstrap_text))
     {
         *(.bootstrap_text)
@@ -31,6 +33,8 @@ SECTIONS
         *(.bootstrap_data)
         . = ALIGN(4096);
     }
+
+    BOOTSTRAP_END = .;
 
     . += KERNEL_VMA;
     .text : AT(ADDR(.text) - KERNEL_VMA)
@@ -69,6 +73,8 @@ SECTIONS
         *(.comment)
    }
     . = ALIGN(4096);
+
+    KERNEL_VMA_END = .;
     KERNEL_LMA_END = . - KERNEL_VMA;
     KERNEL_IMAGE_LEN =  KERNEL_LMA_END - KERNEL_LMA;
 }

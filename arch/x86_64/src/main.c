@@ -11,6 +11,6 @@ void kmain()
   //  setup_descriptors();
  //   load_descriptors();
     //vga_print("Hello World",0x7,-1);
-    init_phys_mm();
+    physmm_init();
 
 }
