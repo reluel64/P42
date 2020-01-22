@@ -13,12 +13,14 @@
 #define GIGA_BYTE(x) ((x) * 1024ull * 1024ull *1024ull)
 #define MEGA_BYTE(x) ((x) * 1024ull *1024ull)
 #define KILO_BYTE(x) ((x) * 1024ull)
+#define IN_SEGMENT(x,base,len) (((x)>=(base) && (x)<=(base)+(len)))
 
 extern uint64_t KERNEL_LMA;
 extern uint64_t KERNEL_LMA_END;
 extern uint64_t KERNEL_VMA;
 extern uint64_t KERNEL_VMA_END;
 extern uint64_t BOOT_PAGING;
+extern uint64_t BOOT_PAGING_END;
 extern uint64_t BOOT_PAGING_LENGTH;
 extern uint64_t read_cr3();
 extern void     write_cr3(uint64_t phys_addr);
@@ -26,6 +28,7 @@ extern void     __invlpg(uint64_t address);
 
 static uint64_t boot_paging     = (uint64_t)&BOOT_PAGING;
 static uint64_t boot_paging_len = (uint64_t)&BOOT_PAGING_LENGTH;
+static uint64_t boot_paging_end = (uint64_t)&BOOT_PAGING_END;
 
 
 /* Because diferent platforms can have
@@ -94,6 +97,7 @@ typedef struct
     uint64_t kernel_size;
     uint64_t kernel_virt_base;
     uint64_t kernel_virt_end;
+    memory_map_entry_t kernel_segment;
 }phys_mm_root_t;
 
 typedef struct
@@ -187,9 +191,13 @@ static void mem_iter_fill_root(memory_map_entry_t *ent, void *pv)
     if((ent->base < physmm_root.kernel_phys_base) && 
        (ent->base + ent->length > physmm_root.kernel_phys_end))
        {
-           *((memory_map_entry_t*)pv) = *ent;
+           physmm_root.kernel_segment = *ent;
        }
 }
+
+/* Callback used to build the memory tracking
+ * structures 
+ */
 
 static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
 {
@@ -203,8 +211,7 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
     phys_mm_region_t      region    = {0};
     phys_mm_avail_desc_t *mem_desc           = NULL;
     phys_mm_avail_desc_t  desc      = {0};
-    memory_map_entry_t   *kernel_loc_map = ppv[3];
-    uint8_t               bmp_after      = (uint8_t)ppv[2];
+    memory_map_entry_t   *kernel_loc_map = &physmm_root.kernel_segment;
 
     memset(&region, 0, sizeof(phys_mm_region_t));
     memset(&desc, 0, sizeof(phys_mm_avail_desc_t));
@@ -212,8 +219,6 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
     region.base    = ent->base;
     region.length  = ent->length;
     region.type    = ent->type;
-    region.virt_pv = 0;
-    region.phys_pv = 0;
 
     if(region.type == MEMORY_USABLE)
     {
@@ -225,44 +230,19 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
         desc.bmp_phys_addr = ALIGN_DOWN(region.base + 
                                          (region.length - desc.bmp_area_len),
                                          PAGE_SIZE);
+
+        if((desc.bmp_phys_addr + desc.bmp_area_len) > 
+            (region.base + region.length))
+        {
+            desc.bmp_phys_addr -= PAGE_SIZE;
+        }
         
-        if(region.base == kernel_loc_map->base)
-        {
-            if(bmp_after)
-            {
-               desc.bmp_phys_addr = physmm_root.desc_paddr + physmm_root.desc_area_len;
-               kprintf("Bitmap Start %x bitmap len %x\n",desc.bmp_phys_addr, 
-                                                         ALIGN_UP(desc.bmp_phys_addr + desc.bmp_len,PAGE_SIZE));
-            }
-
-            /* check if the bitmap would overlap the kernel */
-            if((desc.bmp_phys_addr >= physmm_root.kernel_phys_base) && 
-                desc.bmp_phys_addr <= physmm_root.kernel_phys_end)
-            {
-                kprintf("ERROR: Bitmap will overlap\n");
-            }
-        }
-
-        /* Special case when the end subtraction does not result in a page
-         * sized space.
-         * In this case we subtract a page
-         */ 
-        else
-        {
-            if((desc.bmp_phys_addr + desc.bmp_area_len) > 
-               (region.base + region.length))
-            {
-               desc.bmp_phys_addr -= PAGE_SIZE;
-            }
-        }
-       
-        /* save the descriptor before unmapping it */
-
 
         /* start building the bitmap for this descriptor*/
 
         for(uint64_t pf = 0; pf < desc.pf_count;pf++)
         {
+            
             pf_start = region.base + PAGE_SIZE * pf;
             pf_end   = pf_start + PAGE_SIZE;
            
@@ -308,8 +288,10 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
             }
         }
         /* Save desc to memory */
+        
         region.phys_pv = physmm_root.desc_paddr + (*desc_pos);
         mem_desc = (phys_mm_avail_desc_t*)physmm_temp_map(region.phys_pv);
+
         memcpy(mem_desc, &desc,sizeof(phys_mm_avail_desc_t));
 
         (*desc_pos)+= sizeof(phys_mm_avail_desc_t);
@@ -318,21 +300,21 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
     mem_region = (phys_mm_region_t*)physmm_temp_map(physmm_root.rgn_paddr + (*rgn_pos));
     memcpy(mem_region, &region,sizeof(phys_mm_region_t));
 
-
     (*rgn_pos)+= sizeof(phys_mm_region_t);
+
 }
 
 void physmm_init(void)
 {
     kprintf("Initializing Physical Memory Manager\n");
-    void *pv[6];
+    void *pv[2];
     uint64_t rgn = 0;
     uint64_t desc_pos = 0;
     uint64_t kseg_bmp_area_len = 0;
     uint64_t struct_space = 0;
-    uint8_t  place_before_kernel = 0; 
-    memory_map_entry_t kernel_loc_map = {0};
 
+    memset(&physmm_root,0,sizeof(physmm_root));
+    
     physmm_root.kernel_phys_base = &KERNEL_LMA;
     physmm_root.kernel_phys_end  = &KERNEL_LMA_END;
     physmm_root.kernel_virt_base = &KERNEL_VMA;
@@ -340,7 +322,7 @@ void physmm_init(void)
     physmm_root.kernel_size      = physmm_root.kernel_phys_end - 
                                    physmm_root.kernel_phys_base;
 
-    mem_map_iter(mem_iter_fill_root, &kernel_loc_map);
+    mem_map_iter(mem_iter_fill_root, NULL);
 
     /* How many bytes does the area for regions occupy - PAGE multiple */
     physmm_root.desc_area_len = ALIGN_UP(physmm_root.desc_len, PAGE_SIZE);
@@ -354,54 +336,26 @@ void physmm_init(void)
     physmm_root.desc_paddr = physmm_root.rgn_paddr  + 
                              physmm_root.rgn_area_len;
 
-    kseg_bmp_area_len = BITMAP_SIZE_FOR_AREA(kernel_loc_map.length);
+    kseg_bmp_area_len = BITMAP_SIZE_FOR_AREA(physmm_root.kernel_segment.length);
 
     struct_space = ALIGN_UP(physmm_root.desc_len, PAGE_SIZE) +
                    ALIGN_UP(physmm_root.rgn_len, PAGE_SIZE) + 
                    ALIGN_UP(kseg_bmp_area_len, PAGE_SIZE);
-
 
     /* If we don't have space after the kernel
      * we will check if there is any space before it
      */ 
 
     if(physmm_root.kernel_phys_end + struct_space > 
-       kernel_loc_map.base + kernel_loc_map.length)
+       physmm_root.kernel_segment.base + physmm_root.kernel_segment.length)
+
     {
         physmm_root.rgn_paddr  = ALIGN_DOWN(physmm_root.kernel_phys_end - struct_space,PAGE_SIZE);
         physmm_root.desc_paddr = physmm_root.rgn_paddr + physmm_root.rgn_area_len;
-        place_before_kernel = 1;
-    }
-
-    if(place_before_kernel == 1)
-    {
-        /* in case the kernel is in the same 
-         * segment as the boot paging structures,
-         * then we will check if there is any risk
-         * of overwriting it.
-         */ 
-       if(physmm_has_boot_paging(&kernel_loc_map))
-       {
-           if((physmm_root.kernel_phys_base - struct_space) <= 
-              (boot_paging + boot_paging_len))
-              {
-                  return(-1);
-              }
-       } 
-
-        /* if there is no space before the kernel in the segment,
-         * we will exit for now - further implementation
-         * should allow the strucutres to reside in another segment
-         */ 
-       if(physmm_root.kernel_phys_base - struct_space < kernel_loc_map.base)
-            return(-1);
-
     }
 
     pv[0] = &rgn;
     pv[1] = &desc_pos;
-    pv[2] = (void*)place_before_kernel;
-    pv[3] = &kernel_loc_map;
 
     mem_map_iter(mem_iter_build_structs, pv);
 
@@ -427,6 +381,7 @@ void physmm_build_init_pt()
     uint64_t pt_count   = 0;
     uint64_t pg_mem     = 0;
     uint64_t full_map   = 0;
+    
     phys_mm_region_t region;
     phys_mm_avail_desc_t desc;
 
@@ -444,12 +399,9 @@ void physmm_build_init_pt()
             continue;
 
         desc   = *(phys_mm_avail_desc_t*)physmm_temp_map(region.phys_pv);
-        full_map += region.length;
         mem_req += desc.bmp_area_len;
     }
-
-    kprintf("FullMap 0x%x\n",full_map);
-    mem_req = ALIGN_DOWN(full_map, PAGE_SIZE);
+    mem_req = GIGA_BYTE(256);
     pg_mem  += PAGE_SIZE;
     mem_req += pg_mem;         
 
@@ -486,7 +438,7 @@ void physmm_build_init_pt()
         pg_mem  += PAGE_SIZE;
     }
 
-    /* Find an apporpiate descriptor */
+    /* Find an appropiate descriptor */
     for(uint64_t i = 0; i < physmm_root.rgn_len; i+= sizeof(phys_mm_region_t))
     {
         region = *(phys_mm_region_t*)physmm_temp_map(physmm_root.rgn_paddr + i);
@@ -496,25 +448,22 @@ void physmm_build_init_pt()
 
         desc   = *(phys_mm_avail_desc_t*)physmm_temp_map(region.phys_pv);
 
+        /* Skip memory below 1 MB */
         if(desc.avail_pf * PAGE_SIZE >= pg_mem && region.base >= 0x100000)
             break;
     }
 
-    kprintf("Appropiate memory range: %x - %x\n",region.base,region.length);
+   
 
-#if 0
-    for(uint64_t i = 0; i < physmm_root.rgn_len; i+= sizeof(phys_mm_region_t))
-    {
-        region = *(phys_mm_region_t*)physmm_temp_map(physmm_root.rgn_paddr + i);
+    
+    pml4_base = physmm_root.desc_paddr    + 
+                physmm_root.desc_area_len;
 
-        if(region.type != MEMORY_USABLE)
-            continue;
+    pdpt_base = pml4_base + PAGE_SIZE;
+    pdt_base = pdpt_base + PAGE_SIZE * pdpt_count;
+    pt_base = pdt_base + PAGE_SIZE * pdt_count;
+    
 
-        desc   = *(phys_mm_avail_desc_t*)physmm_temp_map(region.phys_pv);
+    kprintf("PML4 0x%x\nPDPT 0x%x\nPDT 0x%x\nPT 0x%x\n",pml4_base,pdpt_base,pdt_base,pt_base);
 
-        mem_req += desc.bmp_area_len;
-    }
-#endif
-
-    kprintf("PDPT REQ 0x%x\nPDT REQ 0x%x\nPT REQ 0x%x\nMem_req 0x%x\n",pdpt_count, pdt_count,pt_count,mem_req);
 }

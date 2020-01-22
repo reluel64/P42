@@ -12,7 +12,7 @@ typedef struct _cr3
     uint64_t ignored_2:7;
     uint64_t pml4:40;
     uint64_t reserved:12;
-}cr3_t;
+}__attribute__((packed)) cr3_t;
 
 typedef struct _pml4
 {
@@ -29,7 +29,7 @@ typedef struct _pml4
     uint64_t ignored_3:11;
     uint64_t xd:1;
 
-}pml4_t;
+}__attribute__((packed)) pml4_t;
 
 typedef struct _pdpte
 {
@@ -61,7 +61,7 @@ typedef struct _pde
     uint64_t pd:40;         /* Page page table address*/
     uint64_t ignored_3:11;
     uint64_t xd:1;
-}pde_t;
+}__attribute__((packed)) pde_t;
 
 typedef struct _pte
 {
@@ -78,7 +78,7 @@ typedef struct _pte
     uint64_t page:40;         /* page frame address*/
     uint64_t ignored_3:11;
     uint64_t xd:1;
-}pte_t;
+}__attribute__((packed)) pte_t;
 
 typedef union cr3_bits
 {
