@@ -45,7 +45,7 @@ typedef struct _pdpte
     uint64_t pd:40;         /* Page directory address*/
     uint64_t ignored_3:11;
     uint64_t xd:1;
-}pdpte_t;
+}__attribute__((packed)) pdpte_t;
 
 typedef struct _pde
 {
@@ -90,7 +90,7 @@ typedef union pml4_bits
 {
     pml4_t fields;
     uint64_t bits;
-}pml4_bits_t;
+}pml4e_bits_t;
 
 typedef union pdpte_bits
 {

@@ -12,3 +12,9 @@ typedef struct
     uint32_t type;
     uint32_t extended;
 }memory_map_entry_t;
+
+int mem_map_iter
+(
+    void (*callback)(memory_map_entry_t *mmap,void *pv),
+    void *pv
+);

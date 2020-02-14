@@ -1,15 +1,12 @@
 /* Descriptors routines */
 
 #include <descriptors.h>
-/* local */
-#define FB_MEM (0xFFFFFFFF80000000 +  0xB8000)
+#include <utils.h>
 /* Task state segment */ 
 static tss64_entry_t tss;
-
-/* Interrupt Descriptor Table */
-static idt64_entry_t idt[MAX_INTERRUPTS];
+#if 0
 static uint64_t interupt_handlers[MAX_INTERRUPTS];
-
+#endif
 /* Global Descriptor Table */
 static gdt_entry_t gdt[MAX_GDT_ENTRIES];
 
@@ -28,18 +25,6 @@ extern void enable_interrupts();
 extern void isr_handlers_fill(uint64_t *int_hnd);
 
 
-static void clear(void *ptr, uint64_t len)
-{
-    for(uint64_t i = 0; i < len; i++)
-         ((uint8_t*)ptr)[i] = 0;
-}
-
-static void copy(void *dst, void  *src, uint64_t len)
-{
-    for(uint64_t i = 0; i < len; i++)
-         ((uint8_t*)dst)[i] = ((uint8_t*)src)[i];
-}
-
 int idt_entry_add
 (
     interrupt_handler_t ih,
@@ -53,8 +38,6 @@ int idt_entry_add
 
     if(idt_entry == (void*)0)
         return(-1);
-
-    clear(idt_entry, sizeof(idt64_entry_t));
 
     ih_ptr = (uint64_t) ih; /* makes things easier */
 
@@ -82,7 +65,7 @@ int gdt_entry_encode
     if(gdt_entry == (void*)0)
         return(-1);
 
-    clear(gdt_entry, sizeof(gdt_entry_t));
+    memset(gdt_entry,0,sizeof(gdt_entry_t));
 
     /* set the base linear address */
     gdt_entry->base_high = ((base >> 24) & 0xff);
@@ -107,17 +90,14 @@ int gdt_entry_encode
 
     return(0);
 }
-
+#if 0
 int setup_descriptors(void)
 {
   
     uint32_t flags = 0;
     uint64_t tss_addr = (uint64_t)&tss;
 
-    clear(gdt, sizeof(gdt));
-    clear(idt, sizeof(idt));
-    clear(&tss,sizeof(tss));
-    clear(interupt_handlers, sizeof(interupt_handlers));
+
     /* Kernel Code (0x8)*/
     flags = (GDT_TYPE_SET(GDT_CODE_XR)                 |
             GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
@@ -193,7 +173,7 @@ int setup_descriptors(void)
 
     return(0);
 }
-
+#endif
 int load_descriptors()
 {
     /* turn off interrupts */
@@ -201,8 +181,8 @@ int load_descriptors()
     gdt_ptr.addr = (uint64_t)&gdt;
     gdt_ptr.len  = sizeof(gdt) - 1;
 
-    idt_ptr.addr = (uint64_t)&idt;
-    idt_ptr.len = sizeof(idt) - 1;
+    //idt_ptr.addr = (uint64_t)&idt;
+   // idt_ptr.len = sizeof(idt) - 1;
 
     /* diable interrupts before trying to change the tables */
     disable_interrupts();

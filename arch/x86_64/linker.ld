@@ -3,7 +3,9 @@ KERNEL_LMA  = 0x1000000;
 BOOT_PAGING = 0x100000;
 BOOT_PAGING_LENGTH = 0x203000;
 BOOT_PAGING_END = BOOT_PAGING + BOOT_PAGING_LENGTH;
+
 ENTRY(kernel_init)
+
 SECTIONS
 {
     . = KERNEL_LMA;
@@ -37,13 +39,21 @@ SECTIONS
     BOOTSTRAP_END = .;
 
     . += KERNEL_VMA;
+    
     .text : AT(ADDR(.text) - KERNEL_VMA)
     {
         _code = .;
         *(.text)
+        . = ALIGN(4096);
+        _code_end = .;
+    }
 
+    .rodata : AT(ADDR(.rodata) - KERNEL_VMA)
+    {
+        _rodata = .;
         *(.rodata*)
         . = ALIGN(4096);
+        _rodata_end = .;
     }
 
    .data : AT(ADDR(.data) - KERNEL_VMA)
@@ -51,6 +61,7 @@ SECTIONS
         _data = .;
         *(.data)
         . = ALIGN(4096);
+        _data_end = .;
    }
 
    .eh_frame : AT(ADDR(.eh_frame) - KERNEL_VMA)
@@ -66,6 +77,7 @@ SECTIONS
        *(.bss)
         *(COMMON)
        . = ALIGN(4096);
+       _bss_end = .;
    }
    
    /DISCARD/ :

@@ -140,7 +140,7 @@ kernel_init:
 
     ;4) Fill PDT
     mov edi, PDT_ADDR
-    mov ebx, PAGE_WRITE + PAGE_PRESENT + PT_ADDR
+    mov ebx, PT_ADDR + PAGE_WRITE + PAGE_PRESENT
     mov ecx, 512
 
     fill_pdt:
@@ -151,14 +151,13 @@ kernel_init:
 
     ; start filling the tables
     mov ebx, (PAGE_PRESENT | PAGE_WRITE)  ; page attributes
-    mov ecx, 512*512                       ; page count
-    mov edi, PT_ADDR  ; start from page table 0
-  
+    mov ecx, 512*512                      ; page count
+    mov edi, PT_ADDR                      ; start from page table 0
 
     fill_tables:
-        mov dword [edi], ebx                  ;set the page
-        add ebx, 0x1000                       ;set the next physical address to map
-        add edi, 8                            ;go to the next page
+        mov dword [edi], ebx              ;set the page
+        add ebx, 0x1000                   ;set the next physical address to map
+        add edi, 8                        ;go to the next page
         loop fill_tables   
     
 

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <utils.h>
 #define FB_MEM (0xFFFFFFFF80000000 +  0xB8000)
 #define VGA_MAX_ROW (25)
 #define VGA_MAX_COL (80)
@@ -176,14 +177,14 @@ int kprintf(char *fmt,...)
                     str = va_arg(lst, char*);
                     for(int i = 0; str[i]; i++)
                     {
-                        vga_print_ch(str[i]);
+                        write_serial(str[i]);
                     }
                     break;
                 }
                 case 'c':
                 {
                     ch = va_arg(lst, int);
-                    vga_print_ch(ch);
+                    write_serial(ch);
                     break;
                 }
                 case 'd':
@@ -193,13 +194,13 @@ int kprintf(char *fmt,...)
                     itoa(num, nbuf, fmt[1]== 'd'? 10 : 16);
                     for(int i = 0; nbuf[i]; i++)
                     {
-                        vga_print_ch(nbuf[i]);
+                        write_serial(nbuf[i]);
                     }
                     break;
                 }
 
                 default:
-                 vga_print_ch(fmt[1]);
+                 write_serial(fmt[1]);
                 break;
 
             }
@@ -207,7 +208,7 @@ int kprintf(char *fmt,...)
         }
         else
         {
-        vga_print_ch(fmt[0]);
+        write_serial(fmt[0]);
         }
         fmt++;
     }

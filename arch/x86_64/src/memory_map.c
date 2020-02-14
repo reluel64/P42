@@ -4,7 +4,6 @@
 #include <multiboot.h>
 #include <stddef.h>
 
-extern uint64_t phys_temp_map(uint64_t phys_addr);
 
 extern uint32_t mem_map_addr; /* address of the multiboot header */
 extern uint32_t mem_map_sig; /* multiboot header presence */
@@ -25,7 +24,7 @@ int mem_map_iter
     
     if(mem_map_sig == MULTIBOOT_BOOTLOADER_MAGIC)
     {
-        mb_info = mem_map_addr;
+        mb_info = (multiboot_info_t*)(uint64_t)mem_map_addr;
         map_length = mb_info->mmap_length;
 
         for(uint64_t i = 0; i < map_length; )
