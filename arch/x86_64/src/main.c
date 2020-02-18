@@ -14,5 +14,8 @@ void kmain()
  //   load_descriptors();
     //vga_print("Hello World",0x7,-1);
     physmm_init();
+    
     pagemgr_init();
+
+    kprintf("HERE\n");
 }
