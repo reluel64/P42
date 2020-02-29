@@ -29,6 +29,7 @@ extern uint64_t BOOT_PAGING_LENGTH;
 static uint64_t boot_paging     = (uint64_t)&BOOT_PAGING;
 static uint64_t boot_paging_len = (uint64_t)&BOOT_PAGING_LENGTH;
 static uint64_t boot_paging_end = (uint64_t)&BOOT_PAGING_END;
+
 static uint64_t physmm_boot_alloc_pf();
 static int physmm_boot_free_pf(uint64_t phys_addr);
 
@@ -353,143 +354,10 @@ void physmm_init(void)
     kprintf("Region start 0x%x end 0x%x\n", physmm_root.rgn_paddr, physmm_root.rgn_area_len);
     kprintf("Desc start 0x%x end 0x%x\n", physmm_root.desc_paddr, physmm_root.desc_area_len);
     kprintf("Structure size 0x%x\n",struct_space);
+    kprintf("sizeof region_t %x\n",sizeof(phys_mm_region_t));
 #endif
 
 }
-
-
-
-
-#if 0
-void physmm_build_init_pt()
-{
-    uint64_t pml4_base  = 0;
-    uint64_t pdpt_base  = 0;
-    uint64_t pdt_base   = 0;
-    uint64_t pt_base    = 0;
-    uint64_t pdpt_count = 0;
-    uint64_t pdt_count  = 0;
-    uint64_t pt_count   = 0;
-    uint64_t pg_mem     = 0;
-    uint64_t full_map   = 0;
-
-    pml4_bits_t   *pml4 = {0};
-    pdpte_bits_t  *pdpt = {0};
-    pde_bits_t    *pdt  = {0};
-    pte_bits_t    *pt   = {0};
-
-    phys_mm_region_t region;
-    phys_mm_avail_desc_t desc;
-
-    uint64_t mem_req = physmm_root.kernel_size  + 
-                       physmm_root.rgn_area_len +
-                       physmm_root.desc_area_len;
-
-
-    /* Get the required length to map for bitmaps */
-    for(uint64_t i = 0; i < physmm_root.rgn_len; i+= sizeof(phys_mm_region_t))
-    {
-        region = *(phys_mm_region_t*)pagemgr_boot_temp_map(physmm_root.rgn_paddr + i);
-
-        if(region.type != MEMORY_USABLE)
-            continue;
-
-        desc   = *(phys_mm_avail_desc_t*)pagemgr_boot_temp_map(region.phys_pv);
-        mem_req += desc.bmp_area_len;
-    }
-
-    pg_mem  += PAGE_SIZE;
-    mem_req += pg_mem;         
-
-    mem_req = ALIGN_UP(mem_req,PAGE_SIZE);
-
-    /* Calculate how many bytes we need
-     * to store the paging structures 
-     */
-
-    for(pdpt_count = 0; ; pdpt_count++)
-    {
-        if(mem_req <= GIGA_BYTE(pdpt_count * 512))
-            break;
-
-        mem_req += PAGE_SIZE;
-        pg_mem  += PAGE_SIZE;
-    }
-
-    for(pdt_count = 0; ; pdt_count++)
-    {
-        if(mem_req <= GIGA_BYTE(pdt_count))
-            break;
-
-        mem_req += PAGE_SIZE;
-        pg_mem  += PAGE_SIZE;
-    }
-
-    for(pt_count = 0; ; pt_count++)
-    {
-        if(mem_req <= MEGA_BYTE(pt_count * 2))
-            break;
-
-        mem_req += PAGE_SIZE;
-        pg_mem  += PAGE_SIZE;
-    }
-
-    /* Find an appropiate descriptor */
-    for(uint64_t i = 0; i < physmm_root.rgn_len; i+= sizeof(phys_mm_region_t))
-    {
-        region = *(phys_mm_region_t*)pagemgr_boot_temp_map(physmm_root.rgn_paddr + i);
-
-        if(region.type != MEMORY_USABLE)
-            continue;
-
-        desc   = *(phys_mm_avail_desc_t*)pagemgr_boot_temp_map((uint64_t)region.phys_pv);
-
-        /* Skip memory below 1 MB */
-        if(desc.avail_pf * PAGE_SIZE >= pg_mem && region.base >= 0x100000)
-            break;
-    }
-
-   
-    pml4_base = physmm_root.rgn_paddr- PAGE_SIZE; 
-
-    pdpt_base = pml4_base - PAGE_SIZE;
-    pdt_base = pdpt_base - PAGE_SIZE * pdpt_count;
-    pt_base = pdt_base - PAGE_SIZE * pdt_count;
-
-    /* build PML4 */
-    for(uint16_t i = 0; i < 512; i++)
-    {
-        pml4 = (pml4_bits_t*)pagemgr_boot_temp_map(pml4_base + sizeof(pml4_bits_t) * i);
-        pml4->bits = 0;
-        
-        if(i == 511)
-        {
-            pml4->fields.present = 1;
-            pml4->fields.read_write = 1;
-            pml4->fields.pdpt = pdpt_base;
-        }
-    }
-
-    /* build last pdpt PDPT */
-    for(uint16_t i = 0; i < 512;i++)
-    {
-        pdpt = (pdpte_bits_t*)pagemgr_boot_temp_map(pdpt_base + sizeof(pdpte_bits_t) * i);
-        pdpt->bits = 0;
-
-        if(i == 510)
-        {
-            pdpt->fields.present = 1;
-            pdpt->fields.read_write = 1;
-            pdpt->fields.pd = pdt_base;
-        }
-    }
-
-    kprintf("PDPTs %d PDTs %d PTs %d\n",pdpt_count,pdt_count,pt_count);
-    kprintf("PML4 0x%x\nPDPT 0x%x\nPDT 0x%x\nPT 0x%x\n",pml4_base,pdpt_base,pdt_base,pt_base);
-    kprintf("RANGE END %x\n",physmm_root.kernel_segment.base+physmm_root.kernel_segment.length);;
-    kprintf("pml4_bits_t size %d\n",sizeof(pml4_bits_t));
-}
-#endif
 
 /* Allocate a page frame using the boot paging */
 

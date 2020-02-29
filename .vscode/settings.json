@@ -6,6 +6,7 @@
         "paging.h": "c",
         "physmm.h": "c",
         "memory_map.h": "c",
-        "utils.h": "c"
+        "utils.h": "c",
+        "vmmgr.h": "c"
     }
 }

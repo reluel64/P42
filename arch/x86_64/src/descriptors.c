@@ -6,10 +6,10 @@
 static tss64_entry_t tss;
 #if 0
 static uint64_t interupt_handlers[MAX_INTERRUPTS];
-#endif
+
 /* Global Descriptor Table */
 static gdt_entry_t gdt[MAX_GDT_ENTRIES];
-
+#endif
 /* Interrupt Descriptor Pointer */
 static idt64_ptr_t idt_ptr;
 
@@ -178,8 +178,8 @@ int load_descriptors()
 {
     /* turn off interrupts */
 
-    gdt_ptr.addr = (uint64_t)&gdt;
-    gdt_ptr.len  = sizeof(gdt) - 1;
+  //  gdt_ptr.addr = (uint64_t)&gdt;
+   // gdt_ptr.len  = sizeof(gdt) - 1;
 
     //idt_ptr.addr = (uint64_t)&idt;
    // idt_ptr.len = sizeof(idt) - 1;

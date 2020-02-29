@@ -6,7 +6,8 @@ global read_cr3
 global __invlpg
 global randomize
 global random_seed
-
+global has_pml5
+global has_nx
 flush_pages:
     mov rax, cr3
     mov cr3, rax
@@ -22,23 +23,4 @@ read_cr3:
 
 __invlpg:
     invlpg [rdi]
-
-random_seed:
-    rdtsc       ; issue a timestamp counter read
-    shl rdx, 32
-    or rax, rdx  ; make it a 64 bit number
-    ret
-
-;Randomization using xorshift64 algorithm
-randomize:
-    mov rdx, rdi
-    shl rdi, 13
-    xor rdx, rdi
-    mov rdi, rdx
-    shr rdi, 7
-    xor rdx, rdi
-    mov rdi, rdx
-    shl rdi, 17
-    xor rdx, rdi
-    mov rax, rdx
     ret
