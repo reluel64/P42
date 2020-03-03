@@ -543,4 +543,12 @@ void physmm_init(void)
     }
 }
 
-int physmm_alloc_pf()
+int physmm_alloc_pf(uint64_t length, uint8_t flags, alloc_cb cb)
+{
+    phys_mm_region_t     *rgn  = (phys_mm_region_t*)physmm_root.rgn_vaddr;
+    phys_mm_avail_desc_t *desc;
+
+    length = ALIGN_UP(length, PAGE_SIZE);
+
+    
+}
