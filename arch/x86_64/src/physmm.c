@@ -9,6 +9,8 @@
 #include <memory_map.h>
 #include <utils.h>
 #include <pagemgr.h>
+#include <vmmgr.h>
+
 #define BITMAP_SIZE_FOR_AREA(x)  (((x) / PAGE_SIZE) / 8)
 #define GIGA_BYTE(x) ((x) * 1024ull * 1024ull *1024ull)
 #define MEGA_BYTE(x) ((x) * 1024ull *1024ull)
@@ -80,29 +82,30 @@ static int physmm_boot_free_pf(uint64_t phys_addr);
  * +----------------------+ <- start of memory segment
  */ 
 
+typedef struct _phys_mm_region_t phys_mm_region_t;
 
 typedef struct 
 {
-    uint64_t memory_size;
-    uint32_t rsrvd_regions;
-    uint32_t avail_regions;
-    uint64_t rgn_paddr;
-    uint64_t rgn_vaddr;
-    uint64_t desc_paddr;
-    uint64_t desc_vaddr;
-    uint64_t desc_len;
-    uint64_t rgn_len;
-    uint64_t rgn_area_len;
-    uint64_t desc_area_len;
-    uint64_t kernel_phys_base;
-    uint64_t kernel_phys_end;
-    uint64_t kernel_size;
-    uint64_t kernel_virt_base;
-    uint64_t kernel_virt_end;
+    uint64_t           memory_size;
+    uint32_t           rsrvd_regions;
+    uint32_t           avail_regions;
+    uint64_t           rgn_paddr;
+    uint64_t           rgn_vaddr;
+    uint64_t           desc_paddr;
+    uint64_t           desc_vaddr;
+    uint64_t           desc_len;
+    uint64_t           rgn_len;
+    uint64_t           rgn_area_len;
+    uint64_t           desc_area_len;
+    uint64_t           kernel_phys_base;
+    uint64_t           kernel_phys_end;
+    uint64_t           kernel_size;
+    uint64_t           kernel_virt_base;
+    uint64_t           kernel_virt_end;
     memory_map_entry_t kernel_segment;
 }phys_mm_root_t;
 
-typedef struct
+typedef struct _phys_mm_region_t
 {
     uint8_t type;
     uint64_t base;
@@ -111,7 +114,7 @@ typedef struct
     void *virt_pv;
 }phys_mm_region_t;
 
-typedef struct
+typedef struct phys_mm_avail_desc_t
 {
     uint64_t pf_count;      /* number of 4KB page frames             */
     uint64_t avail_pf;      /* available page frames                 */
@@ -282,9 +285,9 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
 
 }
 
-void physmm_init(void)
+void physmm_early_init(void)
 {
-    kprintf("Initializing Physical Memory Manager\n");
+    kprintf("Initializing Early Physical Memory Manager\n");
     void *pv[2];
     uint64_t rgn = 0;
     uint64_t desc_pos = 0;
@@ -354,7 +357,6 @@ void physmm_init(void)
     kprintf("Region start 0x%x end 0x%x\n", physmm_root.rgn_paddr, physmm_root.rgn_area_len);
     kprintf("Desc start 0x%x end 0x%x\n", physmm_root.desc_paddr, physmm_root.desc_area_len);
     kprintf("Structure size 0x%x\n",struct_space);
-    kprintf("sizeof region_t %x\n",sizeof(phys_mm_region_t));
 #endif
 
 }
@@ -486,12 +488,59 @@ static int physmm_boot_free_pf(uint64_t phys_addr)
     return(status);
 }
 
-uint64_t physmm_alloc_pf(void)
+uint64_t physmm_early_alloc_pf(void)
 {
     return(physmm_boot_alloc_pf());
 }
 
-int physmm_free_pf(uint64_t pf)
+int physmm_early_free_pf(uint64_t pf)
 {
     return(physmm_boot_free_pf(pf));
 }
+
+void physmm_init(void)
+{
+    phys_mm_region_t     *rgn      = NULL;
+    phys_mm_avail_desc_t *avdesc   = NULL;
+    uint64_t          rgn_pos  = 0;
+    uint64_t          desc_pos = 0;
+
+    physmm_root.rgn_vaddr = (uint64_t)vmmgr_early_map(physmm_root.rgn_paddr,
+                                            0,
+                                            physmm_root.rgn_area_len,
+                                            0);
+   
+    physmm_root.desc_vaddr = (uint64_t)vmmgr_early_map(physmm_root.desc_paddr,
+                                            0,
+                                            physmm_root.desc_area_len,
+                                            0);
+   
+    /* Begin linking the available memory addresses */
+ 
+    while(rgn_pos < physmm_root.rgn_len)
+    {
+        rgn = (phys_mm_region_t*)(physmm_root.rgn_vaddr + rgn_pos);
+        
+        kprintf("RGN 0x%x BASE 0x%x LEN 0x%x Type 0x%x\n",rgn,rgn->base,rgn->length, rgn->type);
+
+        if(rgn->type == MEMORY_USABLE)
+        {
+            rgn->virt_pv = (void*)(physmm_root.desc_vaddr + 
+                                   rgn->phys_pv           - 
+                                   physmm_root.desc_paddr);
+            avdesc = (phys_mm_avail_desc_t*)rgn->virt_pv;
+
+            avdesc->bmp_virt_addr = (uint64_t)vmmgr_early_map(avdesc->bmp_phys_addr,
+                                                    0,
+                                                    avdesc->bmp_area_len,
+                                                    0);
+
+            kprintf("BMPVADDR 0x%x BMPLEN 0x%x\n",avdesc->bmp_virt_addr,avdesc->bmp_len);
+                                                 
+        }
+
+        rgn_pos += sizeof(phys_mm_region_t);
+    }
+}
+
+int physmm_alloc_pf()

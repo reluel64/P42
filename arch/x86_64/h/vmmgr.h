@@ -9,7 +9,8 @@
 #define VIRTUAL_MEMORY_UNRESERVABLE (1 << 0)
 #define VMM_RES_KERNEL_IMAGE        (1 << 1)
 #define VMM_PHYS_MM                 (1 << 2)
-
+#define VMM_REMAP_TABLE             (1 << 3)
+#define VMM_RESERVED                (1 << 4)
 
 typedef struct
 {
@@ -32,9 +33,9 @@ typedef struct
     uint64_t base;
     uint64_t length;
     uint8_t  type;
-}vmmgr_rsrvd_t;
+}vmmgr_rsrvd_mem_t;
 
 
-
+void *vmmgr_early_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr);
 int vmmgr_init(void);
 #endif 

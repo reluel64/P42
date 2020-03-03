@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <paging.h>
 #include <utils.h>
+#include <pagemgr.h>
 typedef struct 
 {
     uint64_t page_phys_base; /* physical location of the first
@@ -19,7 +20,7 @@ typedef struct
 }pagemgr_t;
 
 /* defines */
-#define REMAP_TABLE_VADDR (0xFFFFFFFFFFE00000)
+
 #define PAGE_KERNEL_MAP_STEP (0x0)
 #define PAGE_REMAP_STEP      (0x1)
 
@@ -184,7 +185,7 @@ int pagemgr_build_init_pagetable(void)
                 if(pml5e_ix != VIRT_TO_PML5_INDEX(vaddr))
                 {
                     pml5e_ix = VIRT_TO_PML5_INDEX(vaddr);
-                    pml5e.bits = physmm_alloc_pf();
+                    pml5e.bits = physmm_early_alloc_pf();
                     pml5e.fields.present    = 1;
                     pml5e.fields.read_write = 1;
 
@@ -202,7 +203,7 @@ int pagemgr_build_init_pagetable(void)
             if(pml4e_ix != VIRT_TO_PML4_INDEX(vaddr))
             {
                 pml4e_ix = VIRT_TO_PML4_INDEX(vaddr);
-                pml4e.bits = physmm_alloc_pf();
+                pml4e.bits = physmm_early_alloc_pf();
                 pml4e.fields.present = 1;
                 pml4e.fields.read_write = 1;
 
@@ -223,7 +224,7 @@ int pagemgr_build_init_pagetable(void)
             if(pdpte_ix != VIRT_TO_PDPTE_INDEX(vaddr))
             {
                 pdpte_ix = VIRT_TO_PDPTE_INDEX(vaddr);
-                pdpte.bits = physmm_alloc_pf();
+                pdpte.bits = physmm_early_alloc_pf();
             
                 pdpte.fields.present = 1;
                 pdpte.fields.read_write = 1;
@@ -242,7 +243,7 @@ int pagemgr_build_init_pagetable(void)
             if(pde_ix != VIRT_TO_PDE_INDEX(vaddr))
             {
                 pde_ix = VIRT_TO_PDE_INDEX(vaddr);
-                pde.bits = physmm_alloc_pf();
+                pde.bits = physmm_early_alloc_pf();
                 pde.fields.present = 1;
                 pde.fields.read_write = 1;
             
@@ -329,7 +330,7 @@ int pagemgr_init(void)
 
     memset(&page_manager, 0, sizeof(pagemgr_t));
 
-    page_manager.page_phys_base = physmm_alloc_pf();
+    page_manager.page_phys_base = physmm_early_alloc_pf();
 
     if(page_manager.page_phys_base == 0)
         return(-1);
@@ -338,8 +339,6 @@ int pagemgr_init(void)
         return(-1);
 
     write_cr3(page_manager.page_phys_base);
-
-    pagemgr_early_alloc(0xffff800000000000,10*1048576,0);
     
     return(0);
 }
@@ -410,10 +409,8 @@ uint64_t pagemgr_early_alloc(uint64_t vaddr, uint64_t len, uint16_t attr)
     uint16_t      pdpt_ix = -1;
     uint16_t      pde_ix  = -1;
     uint16_t      pte_ix  = -1;
-    
     uint64_t      vaddr_end = vaddr + len;
-
-
+    uint64_t      ret = vaddr;
 
     if(page_manager.pml5_support)
         pml5 = (pml5e_bits_t*)pagemgr_temp_map(page_manager.page_phys_base, 
@@ -432,7 +429,7 @@ uint64_t pagemgr_early_alloc(uint64_t vaddr, uint64_t len, uint16_t attr)
 
                 if(pml5[pml5_ix].fields.present == 0)
                 {
-                    pml5[pml5_ix].bits = physmm_alloc_pf();
+                    pml5[pml5_ix].bits = physmm_early_alloc_pf();
                     pml5[pml5_ix].fields.present = 1;
                     pml5[pml5_ix].fields.read_write = 1;
                        
@@ -449,7 +446,7 @@ uint64_t pagemgr_early_alloc(uint64_t vaddr, uint64_t len, uint16_t attr)
 
             if(pml4[pml4_ix].fields.present == 0)
             {
-                pml4[pml4_ix].bits = physmm_alloc_pf();
+                pml4[pml4_ix].bits = physmm_early_alloc_pf();
                 pml4[pml4_ix].fields.present = 1;
                 pml4[pml4_ix].fields.read_write = 1;
             }
@@ -465,7 +462,7 @@ uint64_t pagemgr_early_alloc(uint64_t vaddr, uint64_t len, uint16_t attr)
 
             if(pdpt[pdpt_ix].fields.present == 0)
             {
-                pdpt[pdpt_ix].bits = physmm_alloc_pf();
+                pdpt[pdpt_ix].bits = physmm_early_alloc_pf();
                 pdpt[pdpt_ix].fields.present = 1;
                 pdpt[pdpt_ix].fields.read_write = 1;
             }
@@ -480,7 +477,7 @@ uint64_t pagemgr_early_alloc(uint64_t vaddr, uint64_t len, uint16_t attr)
 
             if(pdt[pde_ix].fields.present == 0)
             {
-                pdt[pde_ix].bits = physmm_alloc_pf();
+                pdt[pde_ix].bits = physmm_early_alloc_pf();
                 pdt[pde_ix].fields.present = 1;
                 pdt[pde_ix].fields.read_write = 1;
             }
@@ -490,12 +487,14 @@ uint64_t pagemgr_early_alloc(uint64_t vaddr, uint64_t len, uint16_t attr)
         }
         pte_ix = VIRT_TO_PTE_INDEX(vaddr);
 
-        pt[pte_ix].bits = physmm_alloc_pf();
+        pt[pte_ix].bits = physmm_early_alloc_pf();
         pt[pte_ix].fields.read_write = 1;
         pt[pte_ix].fields.present = 1;
 
         vaddr += 0x1000;
     }
+
+    return(ret);
 }
 
 uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_t attr)
@@ -513,6 +512,7 @@ uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_
     uint16_t      pte_ix  = -1;
     
     uint64_t      vaddr_end = vaddr + len;
+    uint64_t      ret = vaddr;
 
     if(page_manager.pml5_support)
         pml5 = (pml5e_bits_t*)pagemgr_temp_map(page_manager.page_phys_base, 
@@ -531,10 +531,9 @@ uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_
 
                 if(pml5[pml5_ix].fields.present == 0)
                 {
-                    pml5[pml5_ix].bits = physmm_alloc_pf();
+                    pml5[pml5_ix].bits = physmm_early_alloc_pf();
                     pml5[pml5_ix].fields.present = 1;
                     pml5[pml5_ix].fields.read_write = 1;
-                       
                 }
 
                 pml4 = (pml4e_bits_t*)pagemgr_temp_map(pml5[pml5_ix].bits & (~ATTRIBUTE_MASK),
@@ -548,7 +547,7 @@ uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_
 
             if(pml4[pml4_ix].fields.present == 0)
             {
-                pml4[pml4_ix].bits = physmm_alloc_pf();
+                pml4[pml4_ix].bits = physmm_early_alloc_pf();
                 pml4[pml4_ix].fields.present = 1;
                 pml4[pml4_ix].fields.read_write = 1;
             }
@@ -564,7 +563,7 @@ uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_
 
             if(pdpt[pdpt_ix].fields.present == 0)
             {
-                pdpt[pdpt_ix].bits = physmm_alloc_pf();
+                pdpt[pdpt_ix].bits = physmm_early_alloc_pf();
                 pdpt[pdpt_ix].fields.present = 1;
                 pdpt[pdpt_ix].fields.read_write = 1;
             }
@@ -579,7 +578,7 @@ uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_
 
             if(pdt[pde_ix].fields.present == 0)
             {
-                pdt[pde_ix].bits = physmm_alloc_pf();
+                pdt[pde_ix].bits = physmm_early_alloc_pf();
                 pdt[pde_ix].fields.present = 1;
                 pdt[pde_ix].fields.read_write = 1;
             }
@@ -596,4 +595,5 @@ uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_
         vaddr += 0x1000;
         paddr += 0x1000;
     }
+    return(ret);
 }

@@ -7,6 +7,7 @@
         "physmm.h": "c",
         "memory_map.h": "c",
         "utils.h": "c",
-        "vmmgr.h": "c"
+        "vmmgr.h": "c",
+        "pagemgr.h": "c"
     }
 }

@@ -1,5 +1,5 @@
-#ifndef _utilsh_
-#define _utilsh_
+#ifndef utils_h
+#define utils_h
 
 #include <stddef.h>
 #include <stdint.h>

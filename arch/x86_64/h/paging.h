@@ -1,6 +1,6 @@
 
-#ifndef _pageh_
-#define _pageh_
+#ifndef page_h
+#define page_h
 
 #include <stdint.h>
 
