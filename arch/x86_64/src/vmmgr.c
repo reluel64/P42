@@ -1,4 +1,6 @@
-/* Virtual Memory Manager */
+/* Virtual Memory Manager 
+ * Part of P42 Kernel
+ */
 
 #include <paging.h>
 #include <pagemgr.h>
@@ -98,6 +100,9 @@ int vmmgr_init(void)
 
     free_start = (uint8_t*)pagemgr_early_alloc(vmem_mgr.vmmgr_base + PAGE_SIZE,
                                                 PAGE_SIZE,0);
+
+    if(rsrvd_start == NULL || free_start == NULL)
+        return(-1);
 
     kprintf("rsrvd_start 0x%x\n",rsrvd_start);
     kprintf("free_start 0x%x\n",free_start);
@@ -213,7 +218,6 @@ static inline int vmmgr_split_free_block
 
         if(from->length == 0)
         {
-        
             *from = *rem;
             rem->base = 0;
             rem->length = 0;
@@ -315,6 +319,7 @@ void *vmmgr_early_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
     vmmgr_free_mem_t  remaining;
     vmmgr_free_mem_t  *from_slot = NULL;
     uint64_t          ret_addr         = virt;
+    uint64_t          map_addr         = 0;
 
     memset(&remaining, 0, sizeof(vmmgr_free_mem_t));
 
@@ -367,7 +372,11 @@ void *vmmgr_early_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
     if(ret_addr == 0)
         ret_addr = from_slot->base;
 
-    pagemgr_early_map(ret_addr, phys, len, attr);
+    map_addr = pagemgr_early_map(ret_addr, phys, len, attr);
+
+    if(map_addr == 0)
+        return(NULL);
+
     vmmgr_split_free_block(from_slot, ret_addr, len, &remaining);
 
     if(remaining.base != 0)

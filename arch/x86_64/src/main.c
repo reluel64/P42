@@ -16,13 +16,18 @@ void kmain()
     physmm_early_init();
 
     /* Initialize page manager*/
-    pagemgr_init();
+    if(pagemgr_init() != 0)
+        return;
 
     /* Initialize Virtual Memory Manager */
-    vmmgr_init();
+    if(vmmgr_init() != 0)
+        return;
 
     /* Initialize Physical Memory manager */
-    physmm_init();
+    if(physmm_init() != 0)
+        return;
 
     vmmgr_list_entries();
+
+    physmm_test();
 }
