@@ -648,3 +648,79 @@ uint64_t pagemgr_early_map(uint64_t vaddr, uint64_t paddr, uint64_t len, uint16_
     }
     return(ret);
 }
+
+static void pagemgr_alloc_pages_cb(uint64_t phys, uint64_t count, void *pv)
+{
+
+}
+
+/* 
+ * pagemgr_build_page_path
+ * --------------------------
+ * Allocates paged used for address
+ * translation
+ */
+
+static int pagemgr_build_page_path(uint64_t virt, uint64_t length)
+{
+    pml5e_bits_t *pml5e = NULL;
+    pml4e_bits_t *pml4e = NULL;
+    pdpte_bits_t *pdpte = NULL;
+    pde_bits_t   *pde   = NULL;
+    pte_bits_t   *pte   = NULL;
+
+    uint16_t     pml5_ix = 0;
+    uint16_t     pml4_ix = 0;
+    uint16_t     pdpt_ix = 0;
+    uint16_t     pdt_ix  = 0;
+    uint16_t     pt_ix   = 0;
+    uint64_t     pages   = 0;
+
+    if(page_manager.pml5_support)
+        pml5e = (pml5e_bits_t*)pagemgr_temp_map(page_manager.page_phys_base, 
+                                                PAGE_TEMP_REMAP_PML5);
+    else
+        pml4e = (pml4e_bits_t*)pagemgr_temp_map(page_manager.page_phys_base, 
+                                                PAGE_TEMP_REMAP_PML4);
+#if 0
+    pml5_ix = VIRT_TO_PML5_INDEX(virt);
+    pml4_ix = VIRT_TO_PML4_INDEX(virt);
+    pdpt_ix = VIRT_TO_PDPT_INDEX(virt);
+    pdt_ix  = VIRT_TO_PDT_INDEX(virt);
+    pt_ix   = VIRT_TO_PT_INDEX(virt);
+
+    #endif
+
+    
+}
+
+int pagemgr_alloc(uint64_t virt, uint64_t length, uint32_t attr)
+{
+    pml5e_bits_t *pml5e = NULL;
+    pml4e_bits_t *pml4e = NULL;
+    pdpte_bits_t *pdpte = NULL;
+    pde_bits_t   *pde   = NULL;
+    pte_bits_t   *pte   = NULL;
+
+    uint16_t     pml5_ix = 0;
+    uint16_t     pml4_ix = 0;
+    uint16_t     pdpt_ix = 0;
+    uint16_t     pdt_ix  = 0;
+    uint16_t     pt_ix   = 0;
+    uint64_t     pages   = 0;
+
+    if(page_manager.pml5_support)
+        pml5e = (pml5e_bits_t*)pagemgr_temp_map(page_manager.page_phys_base, 
+                                                PAGE_TEMP_REMAP_PML5);
+    else
+        pml4e = (pml4e_bits_t*)pagemgr_temp_map(page_manager.page_phys_base, 
+                                                PAGE_TEMP_REMAP_PML4);
+#if 0
+    pml5_ix = VIRT_TO_PML5_INDEX(virt);
+    pml4_ix = VIRT_TO_PML4_INDEX(virt);
+    pdpt_ix = VIRT_TO_PDPT_INDEX(virt);
+    pdt_ix  = VIRT_TO_PDT_INDEX(virt);
+    pt_ix   = VIRT_TO_PT_INDEX(virt);
+
+#endif
+}

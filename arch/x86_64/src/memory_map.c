@@ -33,12 +33,9 @@ int mem_map_iter
             mem_entry.base   = mb_mem_map->addr;
             mem_entry.length = mb_mem_map->len;
             mem_entry.type   = mb_mem_map->type;
-
+            
             i += mb_mem_map->size+sizeof(mb_mem_map->size);
-            if(mem_entry.base < 1024*1024)
-            {
-                mem_entry.type = MEMORY_RESERVED;
-            }
+           
             callback(&mem_entry, pv); 
         }
     }
