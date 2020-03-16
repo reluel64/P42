@@ -36,8 +36,23 @@ static uint64_t boot_paging     = (uint64_t)&BOOT_PAGING;
 static uint64_t boot_paging_len = (uint64_t)&BOOT_PAGING_LENGTH;
 static uint64_t boot_paging_end = (uint64_t)&BOOT_PAGING_END;
 
-static uint64_t physmm_boot_alloc_pf();
-static int physmm_boot_free_pf(uint64_t phys_addr);
+static int physmm_boot_alloc_pf
+(
+    uint64_t count, 
+    uint8_t flags, 
+    alloc_cb cb, 
+    void *pv
+);
+
+static int physmm_alloc_pf
+(
+    uint64_t pages, 
+    uint8_t flags, 
+    alloc_cb reqcb, 
+    void *pv
+);
+
+
 
 /* Because diferent platforms can have
  * various reserved regions, each region 
@@ -127,6 +142,7 @@ typedef struct phys_mm_avail_desc_t
 }phys_mm_avail_desc_t;
 
 static phys_mm_root_t physmm_root;
+static physmm_t physmm_if;
 
 static void mem_iter_fill_root(memory_map_entry_t *ent, void *pv)
 {
@@ -263,7 +279,7 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
 
         (*desc_pos) += sizeof(phys_mm_avail_desc_t);
     }
-
+    
 	/* save region to memory */
 
     mem_region = (phys_mm_region_t*)pagemgr_boot_temp_map(physmm_root.rgn_paddr + (*rgn_pos));
@@ -348,21 +364,30 @@ void physmm_early_init(void)
     kprintf("Desc start 0x%x end 0x%x\n", physmm_root.desc_paddr, physmm_root.desc_area_len);
     kprintf("Structure size 0x%x\n",struct_space);
 #endif
-
+    memset(&physmm_if, 0, sizeof(physmm_t));
+    physmm_if.alloc = physmm_boot_alloc_pf;
 }
 
 /* Allocate a page frame using the boot paging */
 
-static uint64_t physmm_boot_alloc_pf()
+static int physmm_boot_alloc_pf
+(
+    uint64_t count, 
+    uint8_t flags, 
+    alloc_cb cb, 
+    void *pv
+)
 {
     phys_mm_region_t     region;
     phys_mm_avail_desc_t desc;
     uint64_t             i         = 0;
     uint64_t             pf_pos    = 0;
-    uint64_t            *bmp    = NULL;
+    uint64_t            *bmp       = NULL;
     uint64_t             phys_addr = 0;
+    uint64_t             marked_pf = 0;
     void                *wbuf      = NULL;
-
+    int                  status    = 0;
+    int                  stop      = 0;
     while(i < physmm_root.rgn_len)
     {
         region = *(phys_mm_region_t*)pagemgr_boot_temp_map(physmm_root.rgn_paddr + i);
@@ -391,41 +416,53 @@ static uint64_t physmm_boot_alloc_pf()
         }
 
         bmp = (uint64_t*)pagemgr_boot_temp_map(desc.bmp_phys_addr + 
-                                               sizeof(uint64_t) * (pf_pos / 64)
+                                               sizeof(uint64_t) * (pf_pos / PF_PER_ITEM)
                                               );
 
         while(pf_pos < desc.pf_count)
         {
-            if((pf_pos % 64) == 0)
+
+            if((pf_pos % PF_PER_ITEM) == 0)
             {
             bmp = (uint64_t*)pagemgr_boot_temp_map(desc.bmp_phys_addr + 
-                                                    sizeof(uint64_t) * (pf_pos / 64)
+                                                    sizeof(uint64_t) * (pf_pos / PF_PER_ITEM)
                                                 );
             }
 			
 			/* mark the page frame as used */
-            if((~bmp[0]) & (1 << (pf_pos % 64)))
+            if((~bmp[0]) & (1 << (pf_pos % PF_PER_ITEM)))
             {
                 phys_addr = region.base + pf_pos * PAGE_SIZE;
-                bmp[0] |= (1 << (pf_pos % 64));
+                if(!cb(phys_addr, 1, pv))
+                {
+                    stop = 1;
+                    break;
+                }
+                
+               
+                bmp[0] |= (1 << (pf_pos % PF_PER_ITEM));
                 desc.avail_pf--;
-                break;
+                marked_pf++;
             }
 
             pf_pos++;
         }
 
-        if(phys_addr!= 0)
+        if(marked_pf >= count || stop)
             break;
+
     }
     /* update the desciptor */
     wbuf = (void*)pagemgr_boot_temp_map(region.phys_pv);
 
     memcpy(wbuf, &desc, sizeof(desc));
     
-    return(phys_addr);
+    if(marked_pf < count)
+        status = -1;
+    
+    return(status);
 }
-
+#if 0
 /* Free a page frame using the boot paging */
 
 static int physmm_boot_free_pf(uint64_t phys_addr)
@@ -479,16 +516,7 @@ static int physmm_boot_free_pf(uint64_t phys_addr)
    
     return(status);
 }
-
-uint64_t physmm_early_alloc_pf(void)
-{
-    return(physmm_boot_alloc_pf());
-}
-
-int physmm_early_free_pf(uint64_t pf)
-{
-    return(physmm_boot_free_pf(pf));
-}
+#endif
 
 int physmm_init(void)
 {
@@ -500,12 +528,12 @@ int physmm_init(void)
     uint64_t              pf_pos   = 0;
     uint64_t              bmp_pos  = 0;
     
-    physmm_root.rgn_vaddr = (uint64_t)vmmgr_early_map(physmm_root.rgn_paddr,
+    physmm_root.rgn_vaddr = (uint64_t)vmmgr_map(physmm_root.rgn_paddr,
                                             0,
                                             physmm_root.rgn_area_len,
                                             0);
    
-    physmm_root.desc_vaddr = (uint64_t)vmmgr_early_map(physmm_root.desc_paddr,
+    physmm_root.desc_vaddr = (uint64_t)vmmgr_map(physmm_root.desc_paddr,
                                             0,
                                             physmm_root.desc_area_len,
                                             0);
@@ -532,7 +560,7 @@ int physmm_init(void)
 
             avdesc = (phys_mm_avail_desc_t*)rgn->virt_pv;
 
-            avdesc->bmp_virt_addr = (uint64_t)vmmgr_early_map(avdesc->bmp_phys_addr,
+            avdesc->bmp_virt_addr = (uint64_t)vmmgr_map(avdesc->bmp_phys_addr,
                                                     0,
                                                     avdesc->bmp_area_len,
                                                     0);
@@ -564,6 +592,7 @@ int physmm_init(void)
     }
 
     kprintf("BOOT_PG_START 0x%x END 0x%x\n",boot_paging,boot_paging_end);
+    physmm_if.alloc = physmm_alloc_pf;
     return(0);
 }
 
@@ -713,7 +742,13 @@ static phys_mm_region_t *physmm_find_contig
  * Allocates page frame(s)
  */
 
-int physmm_alloc_pf(uint64_t pages, uint8_t flags, alloc_cb reqcb, void *pv)
+static int physmm_alloc_pf
+(
+    uint64_t pages, 
+    uint8_t flags, 
+    alloc_cb reqcb, 
+    void *pv
+)
 {
     phys_mm_region_t     *rgn         = (phys_mm_region_t*)physmm_root.rgn_vaddr;;
     phys_mm_avail_desc_t *desc        = NULL;
@@ -727,6 +762,7 @@ int physmm_alloc_pf(uint64_t pages, uint8_t flags, alloc_cb reqcb, void *pv)
     uint64_t              pf_count    = 0;
     uint8_t               stop        = 0;
     uint64_t              mask        = 0;
+    uint8_t               used_pf     = 0;
 
     if(flags & ALLOC_HIGHEST && (~flags) & ALLOC_CONTIG)
     {
@@ -743,29 +779,32 @@ int physmm_alloc_pf(uint64_t pages, uint8_t flags, alloc_cb reqcb, void *pv)
             return(-1);
     }
 
+    if(flags & ALLOC_CB_STOP)
+        pages = (uint64_t)~0;
+
     rgn_ix  = REGION_COUNT((uint64_t)rgn - physmm_root.rgn_vaddr);
     regions = REGION_COUNT(physmm_root.rgn_len);
     rgn     = (phys_mm_region_t*)physmm_root.rgn_vaddr;
-    
+
     for(uint32_t i = rgn_ix; i < regions; i++)
     {
         if(rgn[i].type != MEMORY_USABLE)
             continue;
-
+        
+        pf_ix  = 0;
         desc   = rgn[i].virt_pv;
         bmp    = desc->bmp_virt_addr;
-        bmp_ix = pf_ix / PF_PER_ITEM;
 
         while(pf_ix     < desc->pf_count && 
               marked_pg < pages          && 
               0         < desc->avail_pf )
         {
             phys       = rgn[i].base + pf_ix * PAGE_SIZE;
+            bmp_ix = pf_ix / PF_PER_ITEM;
 
             if(((~flags) & ALLOC_ISA_DMA))
             {
-                if(phys>=ISA_DMA_MEMORY_BEGIN && 
-                   phys <ISA_DMA_MEMORY_END)
+                if(phys < ISA_DMA_MEMORY_END)
                 {
                     pf_ix++;
                     continue;
@@ -787,60 +826,75 @@ int physmm_alloc_pf(uint64_t pages, uint8_t flags, alloc_cb reqcb, void *pv)
                 pf_ix++;
                 continue;
             }
-
+            
             /* See if we need to advance the bitmap index */
             if((pf_ix % PF_PER_ITEM) == 0)
             {
                 bmp_ix = pf_ix / PF_PER_ITEM;
 
                 /* It's a new set - check if it's free */
-                if(bmp[bmp_ix] == 0)
+                if(bmp[bmp_ix] == 0ull)
                 {
+                    //kprintf("AVAIL %d TOTAL %d pf_ix %d PHYS 0x%x BMP_IX %d\n",desc->avail_pf,desc->pf_count,pf_ix,phys,bmp_ix);
+                 
                     /* It looks free, let's see if we can 
                      * mark the entire set as busy
                      */ 
                     
-                    /* Compute the bit mask */
-                    if(pages < marked_pg + PF_PER_ITEM)
+                    pf_count = min(pages - marked_pg, PF_PER_ITEM);
+
+                    /* Call the callback */
+                    used_pf = reqcb(phys, pf_count, pv);
+
+                    if(used_pf == 0)
                     {
-                        pf_count = pages - marked_pg;
-                        mask     = (1 << (pf_count)) - 1;
+                        stop = 1;
+                        break;
                     }
-                    else
-                    {
-                        mask     = ~0;
-                        pf_count = PF_PER_ITEM;
-                    }
+                    
+                    used_pf = min(used_pf, PF_PER_ITEM);
+                    mask    = 0;
+
+                    for(uint8_t i = 0; i< used_pf; i++)
+                        mask |= 1 << i;
+
 
                     /* mark the set */
                     bmp[bmp_ix] = mask;
 
                     /* advance marked page frames */
-                    marked_pg  += pf_count;
+                    marked_pg  += used_pf;
 
                     /* advance page frame index */
-                    pf_ix      += pf_count;
+                    pf_ix      += used_pf;
 
                     /* update available PFs */
-                    if(desc->avail_pf >= pf_count)
-                        desc->avail_pf-= pf_count;
+                    if(desc->avail_pf >= used_pf)
+                        desc->avail_pf-= used_pf;
                     else
                         desc->avail_pf = 0;
+                        
 
-                    /* Call the callback */
-                    reqcb(phys, pf_count, pv);
-                    
                     continue;
                 }
+
             }
 
-            
             /* This is the slowest path to allocate stuff */
 
             if((~bmp[bmp_ix]) & (1 << (pf_ix % PF_PER_ITEM)))
             {
                 /* Only one PF here */
                 pf_count = 1;
+             
+                /* call the callback */
+                used_pf = reqcb(phys, pf_count, pv);
+
+                if(used_pf == 0)
+                {
+                    stop = 1;
+                    break;
+                }
 
                 /* Mark the bit */
                 bmp[bmp_ix] |= (1 << (pf_ix % PF_PER_ITEM));
@@ -850,40 +904,43 @@ int physmm_alloc_pf(uint64_t pages, uint8_t flags, alloc_cb reqcb, void *pv)
 
                 /* advance marked page frames */
                 marked_pg++;
-
-                /* call the callback */
-                reqcb(phys, pf_count, pv);
+              
             }
 
             pf_ix++;
         }
-
         /* Once the condition is met, 
          * just break out
          */
-
         if(marked_pg >= pages || stop)
             break;
     }
     
-    if(marked_pg < pages)
+    if(marked_pg < pages && ((~flags) & ALLOC_CB_STOP))
         return(-1);
 
     return(0);
 }
 
-
-
-void test(uint64_t addr, uint64_t length, void *pv)
+physmm_t *physmm_get(void)
 {
-   // kprintf("PHYS %x LEN %d\n",addr,length);
+    return(&physmm_if);
+}
+
+int test(uint64_t addr, uint64_t length, void *pv)
+{
+    static int allocs = 0;
+    allocs+=length;
+    //kprintf("PHYS %x LEN %d\n",addr,length);
+    //kprintf("ALLOCS %d\n", allocs);
+    return(length);
+    
 }
 
 int physmm_test(void)
 { 
    
-    int ret = physmm_alloc_pf(4194304,0,test,NULL);
-    ret = physmm_alloc_pf(4194304,0,test,NULL);
-    kprintf("RET %d\n",ret);
+   int ret = physmm_alloc_pf((1024ull*1024ull*1024ull*16ull)/4096,0,(alloc_cb)test,NULL);
+    kprintf("RET %x\n",ret);
     
 }

@@ -21,9 +21,9 @@
 extern uint64_t KERNEL_VMA;
 extern uint64_t KERNEL_VMA_END;
 extern uint64_t KERNEL_IMAGE_LEN;
-extern uint64_t pagemgr_early_alloc(uint64_t vaddr, uint64_t len, uint16_t attr);
 
 static vmmgr_t vmem_mgr;
+static pagemgr_t *pagemgr = NULL;
 
 static inline int vmmgr_split_free_block
 (
@@ -33,7 +33,7 @@ static inline int vmmgr_split_free_block
     vmmgr_free_mem_t *rem
 );
 
-
+int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type);
 void vmmgr_list_entries()
 {
     list_node_t *node = NULL;
@@ -80,8 +80,6 @@ void vmmgr_list_entries()
 
 }
 
-int vmmgr_early_reserve(uint64_t virt, uint64_t len, uint8_t type);
-
 int vmmgr_init(void)
 {
     list_node_t          *node        = NULL;
@@ -95,10 +93,11 @@ int vmmgr_init(void)
 
     linked_list_init(&vmem_mgr.free_mem);
     linked_list_init(&vmem_mgr.rsrvd_mem);
-    
-    rsrvd_start = (uint8_t*)pagemgr_early_alloc(vmem_mgr.vmmgr_base,PAGE_SIZE,0);
+    pagemgr     = pagemgr_get();
 
-    free_start = (uint8_t*)pagemgr_early_alloc(vmem_mgr.vmmgr_base + PAGE_SIZE,
+    rsrvd_start = (uint8_t*)pagemgr->alloc(vmem_mgr.vmmgr_base,PAGE_SIZE,0);
+
+    free_start  = (uint8_t*)pagemgr->alloc(vmem_mgr.vmmgr_base + PAGE_SIZE,
                                                 PAGE_SIZE,0);
 
     if(rsrvd_start == NULL || free_start == NULL)
@@ -125,23 +124,21 @@ int vmmgr_init(void)
     fmem[0].base = vmem_mgr.vmmgr_base;
     fmem[0].length = (UINT64_MAX - fmem->base)+1;
 
-
-    vmmgr_early_reserve((uint64_t)&KERNEL_VMA,
+    vmmgr_reserve((uint64_t)&KERNEL_VMA,
                         ((uint64_t)&KERNEL_VMA_END) - ((uint64_t)&KERNEL_VMA),
                         VMM_RES_KERNEL_IMAGE);
 
-    vmmgr_early_reserve(REMAP_TABLE_VADDR,
+    vmmgr_reserve(REMAP_TABLE_VADDR,
                         REMAP_TABLE_SIZE,
                         VMM_REMAP_TABLE);
 
-    vmmgr_early_reserve((uint64_t)free_start,
+    vmmgr_reserve((uint64_t)free_start,
                         PAGE_SIZE,
                         VMM_RESERVED);
 
-    vmmgr_early_reserve((uint64_t)rsrvd_start,
+    vmmgr_reserve((uint64_t)rsrvd_start,
                         PAGE_SIZE,
                         VMM_RESERVED);
-    
 }
 
 
@@ -263,7 +260,7 @@ static int vmmgr_put_free_mem(vmmgr_free_mem_t *fmem)
     return(-1);
 }
 
-int vmmgr_early_reserve(uint64_t virt, uint64_t len, uint8_t type)
+int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type)
 {
     list_node_t      *free_node        = NULL;
     list_node_t      *rsrvd_node       = NULL;
@@ -311,7 +308,7 @@ int vmmgr_early_reserve(uint64_t virt, uint64_t len, uint8_t type)
     return(-1);
 }
 
-void *vmmgr_early_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
+void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
 {
     list_node_t      *free_node        = NULL;
     list_node_t      *next_free_node   = NULL;
@@ -372,7 +369,7 @@ void *vmmgr_early_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
     if(ret_addr == 0)
         ret_addr = from_slot->base;
 
-    map_addr = pagemgr_early_map(ret_addr, phys, len, attr);
+    map_addr = pagemgr->map(ret_addr, phys, len, attr);
 
     if(map_addr == 0)
         return(NULL);
@@ -386,3 +383,73 @@ void *vmmgr_early_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
 
     return((void*)ret_addr);
 }
+
+void *vmmgr_alloc(uint64_t len, uint16_t attr)
+{
+    list_node_t      *free_node        = NULL;
+    list_node_t      *next_free_node   = NULL;
+    vmmgr_free_mem_t *free_desc        = NULL;
+    vmmgr_free_mem_t  remaining;
+    vmmgr_free_mem_t  *from_slot = NULL;
+    uint64_t          ret_addr         = 0;
+
+    memset(&remaining, 0, sizeof(vmmgr_free_mem_t));
+
+    free_node = linked_list_first(&vmem_mgr.free_mem);
+
+    while(free_node)
+    {
+        next_free_node = linked_list_next(free_node);
+        free_desc = NODE_TO_FREE_DESC(free_node);
+
+        for(uint16_t i  = 0; i < vmem_mgr.free_ent_per_page; i++)
+        {
+            if(free_desc[i].length == 0)
+                continue;
+
+            if(from_slot == NULL)
+                from_slot = free_desc + i;
+
+            if(from_slot)
+            {
+                /* Save the best-fit slot found so far */
+                    
+                if(from_slot->length < len && free_desc[i].length >= len)
+                {
+                    from_slot = free_desc + i;
+                }
+                else if((from_slot->length > free_desc[i].length) && 
+                        (free_desc[i].length > len))
+                {
+                    from_slot = free_desc + i;
+                }
+                else
+                {
+                    //from_slot = NULL;
+                }
+            }
+        }
+        
+        free_node = next_free_node;
+    }
+
+    if( from_slot->length < len)
+    {
+        return(NULL);
+    }
+
+    ret_addr = pagemgr->alloc(from_slot->base, len, attr);
+
+    if(ret_addr == 0)
+        return(NULL);
+
+    vmmgr_split_free_block(from_slot, ret_addr, len, &remaining);
+
+    if(remaining.base != 0)
+    {
+        vmmgr_put_free_mem(&remaining);
+    }
+
+    return((void*)ret_addr);
+}
+

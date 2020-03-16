@@ -14,7 +14,7 @@ typedef struct _cr3
     uint64_t reserved:12;
 }__attribute__((packed)) cr3_t;
 
-typedef struct _pml5
+typedef struct _pml5e
 {
     uint64_t present : 1;
     uint64_t read_write:1;
@@ -29,9 +29,9 @@ typedef struct _pml5
     uint64_t ignored_3:11;
     uint64_t xd:1;
 
-}__attribute__((packed)) pml5_t;
+}__attribute__((packed)) pml5e_t;
 
-typedef struct _pml4
+typedef struct _pml4e
 {
     uint64_t present : 1;
     uint64_t read_write:1;
@@ -46,7 +46,7 @@ typedef struct _pml4
     uint64_t ignored_3:11;
     uint64_t xd:1;
 
-}__attribute__((packed)) pml4_t;
+}__attribute__((packed)) pml4e_t;
 
 typedef struct _pdpte
 {
@@ -106,13 +106,13 @@ typedef union cr3_bits
 
 typedef union pml5_bits
 {
-    pml5_t fields;
+    pml5e_t fields;
     uint64_t bits;
 }pml5e_bits_t;
 
 typedef union pml4_bits
 {
-    pml4_t fields;
+    pml4e_t fields;
     uint64_t bits;
 }pml4e_bits_t;
 
@@ -136,16 +136,16 @@ typedef union pte_bits
 
 #define VIRT_TO_PML5_INDEX(x)  (((x) >> 47) & 0x1FF)
 #define VIRT_TO_PML4_INDEX(x)  (((x) >> 39) & 0x1FF)
-#define VIRT_TO_PDPTE_INDEX(x) (((x) >> 30) & 0x1FF)
-#define VIRT_TO_PDE_INDEX(x)   (((x) >> 21) & 0x1FF)
-#define VIRT_TO_PTE_INDEX(x)   (((x) >> 12) & 0x1FF)
+#define VIRT_TO_PDPT_INDEX(x) (((x) >> 30) & 0x1FF)
+#define VIRT_TO_PDT_INDEX(x)   (((x) >> 21) & 0x1FF)
+#define VIRT_TO_PT_INDEX(x)   (((x) >> 12) & 0x1FF)
 #define VIRT_TO_OFFSET(x)      ((x)         & 0x1FFF)
 
 #define PML5_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 47)
 #define PML4_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 39 )
-#define PDPTE_INDEX_TO_VIRT(x) (((x) & 0x1FF) << 30 )
-#define PDE_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 21)
-#define PTE_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 12)
+#define PDPT_INDEX_TO_VIRT(x) (((x) & 0x1FF) << 30 )
+#define PDT_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 21)
+#define PT_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 12)
 #define OFFSET_TO_VIRT(x)      ((x)  & 0x1FFF)
 
 #define ATTRIBUTE_MASK (0xFFF)

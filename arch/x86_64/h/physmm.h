@@ -6,16 +6,22 @@
 
 
 #define LOW_MEMORY   (0x100000)
-#define ALLOC_CONTIG (1<<0)
-#define ALLOC_HIGHEST (1<<2)
-#define ALLOC_ISA_DMA     (1<<3)
+#define ALLOC_CONTIG  (1 << 0)
+#define ALLOC_HIGHEST (1 << 2)
+#define ALLOC_ISA_DMA (1 << 3)
+#define ALLOC_CB_STOP (1 << 4)
 
-typedef void (*alloc_cb)(uint64_t phys, uint64_t length, void *pv);
+typedef uint8_t (*alloc_cb)(uint64_t phys, uint64_t count, void *pv);
+
+typedef struct
+{
+    int  (*alloc)(uint64_t pages, uint8_t flags, alloc_cb cb, void *pv);
+}physmm_t;
 
 void     physmm_early_init(void);
 int      physmm_init(void);
-int      physmm_early_free_pf(uint64_t pf);
-uint64_t physmm_early_alloc_pf(void);
-int      physmm_alloc_pf(uint64_t length, uint8_t flags, alloc_cb cb, void *pv);
+physmm_t *physmm_get(void);
+
+
 
 #endif

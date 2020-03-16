@@ -4,7 +4,7 @@
 #include <utils.h>
 /* Task state segment */ 
 static tss64_entry_t tss;
-#if 0
+#if 1
 static uint64_t interupt_handlers[MAX_INTERRUPTS];
 
 /* Global Descriptor Table */
@@ -90,7 +90,7 @@ int gdt_entry_encode
 
     return(0);
 }
-#if 0
+#if 1
 int setup_descriptors(void)
 {
   
@@ -147,18 +147,7 @@ int setup_descriptors(void)
     /* Yes, TSS takes two GDT entrties */
    *((uint32_t*)&gdt[6]) = (tss_addr >> 32);
 
-    isr_handlers_fill(interupt_handlers);
-
-    /* Let's do a check */
-    for(int i = 0; i < MAX_INTERRUPTS;i++)
-    {
-        if(interupt_handlers[i] == 0)
-        {
-            while(1);
-        }
-    }
-
-
+#if 0
     /* Set up interrupt handlers */
     for(int i = 0; i < MAX_INTERRUPTS; i++)
     {
@@ -170,16 +159,20 @@ int setup_descriptors(void)
      &idt[i]                                    /* position in the IDT            */
      );
     }
-
+#endif
     return(0);
 }
 #endif
+
+
+
+
 int load_descriptors()
 {
     /* turn off interrupts */
 
-  //  gdt_ptr.addr = (uint64_t)&gdt;
-   // gdt_ptr.len  = sizeof(gdt) - 1;
+    gdt_ptr.addr = (uint64_t)&gdt;
+    gdt_ptr.len  = sizeof(gdt) - 1;
 
     //idt_ptr.addr = (uint64_t)&idt;
    // idt_ptr.len = sizeof(idt) - 1;
@@ -188,12 +181,12 @@ int load_descriptors()
     disable_interrupts();
 
     load_gdt(&gdt_ptr);
-    load_idt(&idt_ptr);
+    //load_idt(&idt_ptr);
 
-    load_tss(TSS_SEGMENT);
+    //load_tss(TSS_SEGMENT);
     
     /* re-enable them to make the system tick */
-    enable_interrupts();
+   // enable_interrupts();
 
     return(0);
 }

@@ -8,7 +8,6 @@
 void kmain()
 {
     kprintf("P42 Kernel\n");
-
     /* Init polling console */
     init_serial();
     
@@ -22,12 +21,20 @@ void kmain()
     /* Initialize Virtual Memory Manager */
     if(vmmgr_init() != 0)
         return;
-
     /* Initialize Physical Memory manager */
     if(physmm_init() != 0)
         return;
+ //physmm_test();
+    void *p;
+    {
+       do
+       {
+       p = vmmgr_alloc(1024ull*1024ull*1ull,0);
+//vmmgr_list_entries();
+        kprintf("ADDR 0x%x\n",p);
+       }while(p != NULL);
+    }
 
-    vmmgr_list_entries();
-
-    physmm_test();
+    kprintf("DONE\n");
+    
 }

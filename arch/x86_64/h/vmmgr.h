@@ -36,6 +36,7 @@ typedef struct
 }vmmgr_rsrvd_mem_t;
 
 
-void *vmmgr_early_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr);
+void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr);
+void *vmmgr_alloc(uint64_t len, uint16_t attr);
 int vmmgr_init(void);
 #endif 
