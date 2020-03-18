@@ -2,10 +2,12 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <utils.h>
-#define FB_MEM (0xFFFFFFFF80000000 +  0xB8000)
+#include <vmmgr.h>
+#define FB_PHYS_MEM (0xB8000)
 #define VGA_MAX_ROW (25)
 #define VGA_MAX_COL (80)
 #define VGA_POS(x,y) (((x) + ((y) * VGA_MAX_ROW)))
+#define FB_LEN (VGA_MAX_ROW * VGA_MAX_COL * sizeof(uint16_t))
 
 typedef struct _vga
 {
@@ -19,7 +21,7 @@ static vga_t vga;
 
 void vga_init()
 {
-    vga.base = (uint16_t*)FB_MEM;
+    vga.base = (uint16_t*)vmmgr_map(FB_PHYS_MEM, 0, FB_LEN, VMM_ATTR_WRITABLE);
     vga.col = 0;
     vga.row = 0;
 }

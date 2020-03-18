@@ -1,7 +1,6 @@
 /* Physical memory manager */
 #include <stdint.h>
 #include <paging.h>
-#include <descriptors.h>
 #include <multiboot.h>
 #include <vga.h>
 #include <physmm.h>
@@ -52,7 +51,7 @@ static int physmm_alloc_pf
     void *pv
 );
 
-
+static int physmm_free_pf(free_cb cb, void *pv);
 
 /* Because diferent platforms can have
  * various reserved regions, each region 
@@ -531,12 +530,12 @@ int physmm_init(void)
     physmm_root.rgn_vaddr = (uint64_t)vmmgr_map(physmm_root.rgn_paddr,
                                             0,
                                             physmm_root.rgn_area_len,
-                                            0);
+                                            VMM_ATTR_WRITABLE);
    
     physmm_root.desc_vaddr = (uint64_t)vmmgr_map(physmm_root.desc_paddr,
                                             0,
                                             physmm_root.desc_area_len,
-                                            0);
+                                            VMM_ATTR_WRITABLE);
 
     if(physmm_root.desc_vaddr == 0 ||
        physmm_root.rgn_vaddr  == 0)
@@ -563,7 +562,7 @@ int physmm_init(void)
             avdesc->bmp_virt_addr = (uint64_t)vmmgr_map(avdesc->bmp_phys_addr,
                                                     0,
                                                     avdesc->bmp_area_len,
-                                                    0);
+                                                    VMM_ATTR_WRITABLE);
             if(avdesc->bmp_virt_addr == 0)
                 return(-1);
 
@@ -592,7 +591,8 @@ int physmm_init(void)
     }
 
     kprintf("BOOT_PG_START 0x%x END 0x%x\n",boot_paging,boot_paging_end);
-    physmm_if.alloc = physmm_alloc_pf;
+    physmm_if.alloc   = physmm_alloc_pf;
+    physmm_if.dealloc = physmm_free_pf;
     return(0);
 }
 
@@ -793,7 +793,7 @@ static int physmm_alloc_pf
         
         pf_ix  = 0;
         desc   = rgn[i].virt_pv;
-        bmp    = desc->bmp_virt_addr;
+        bmp    = (uint64_t*)desc->bmp_virt_addr;
 
         while(pf_ix     < desc->pf_count && 
               marked_pg < pages          && 
@@ -804,9 +804,10 @@ static int physmm_alloc_pf
 
             if(((~flags) & ALLOC_ISA_DMA))
             {
-                if(phys < ISA_DMA_MEMORY_END)
+                if(phys >= ISA_DMA_MEMORY_BEGIN && 
+                   phys < ISA_DMA_MEMORY_END)
                 {
-                    pf_ix++;
+                    pf_ix = ISA_DMA_MEMORY_END / PAGE_SIZE;
                     continue;
                 }
             }
@@ -833,10 +834,8 @@ static int physmm_alloc_pf
                 bmp_ix = pf_ix / PF_PER_ITEM;
 
                 /* It's a new set - check if it's free */
-                if(bmp[bmp_ix] == 0ull)
-                {
-                    //kprintf("AVAIL %d TOTAL %d pf_ix %d PHYS 0x%x BMP_IX %d\n",desc->avail_pf,desc->pf_count,pf_ix,phys,bmp_ix);
-                 
+                if(bmp[bmp_ix] == 0)
+                {                 
                     /* It looks free, let's see if we can 
                      * mark the entire set as busy
                      */ 
@@ -873,7 +872,6 @@ static int physmm_alloc_pf
                         desc->avail_pf-= used_pf;
                     else
                         desc->avail_pf = 0;
-                        
 
                     continue;
                 }
@@ -920,6 +918,42 @@ static int physmm_alloc_pf
         return(-1);
 
     return(0);
+}
+
+static int physmm_free_pf(free_cb cb, void *pv)
+{
+    uint64_t              pf_ix      = 0;
+    uint64_t              bmp_ix     = 0;
+    uint64_t              pf_count   = 0;
+    uint64_t              phys       = 0;
+    uint32_t              regions    = 0;
+    phys_mm_region_t     *rgn        = NULL;
+    phys_mm_avail_desc_t *desc       = NULL;
+    int                   keep_going = 1;
+
+    regions = REGION_COUNT(physmm_root.rgn_len);
+
+    while(keep_going)
+    {
+        keep_going = cb(&phys, &pf_count, pv);
+
+        if(pf_count == 0 || keep_going == 0)
+            break;
+
+        rgn = (phys_mm_region_t*)physmm_root.rgn_vaddr;
+
+        for(uint32_t i = 0; i < regions; i++)
+        {
+            if(rgn[i].type != MEMORY_USABLE)
+                continue;
+
+            if(!IN_SEGMENT(phys, rgn[i].base, rgn[i].length))
+                continue;
+            
+            desc = rgn[i].virt_pv;
+
+        }
+    }
 }
 
 physmm_t *physmm_get(void)

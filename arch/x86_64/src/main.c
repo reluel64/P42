@@ -5,6 +5,9 @@
 #include <physmm.h>
 #include <pagemgr.h>
 #include <vmmgr.h>
+#include <gdt.h>
+#include <isr.h>
+
 void kmain()
 {
     kprintf("P42 Kernel\n");
@@ -24,17 +27,18 @@ void kmain()
     /* Initialize Physical Memory manager */
     if(physmm_init() != 0)
         return;
- //physmm_test();
-    void *p;
-    {
-       do
-       {
-       p = vmmgr_alloc(1024ull*1024ull*1ull,0);
-//vmmgr_list_entries();
-        kprintf("ADDR 0x%x\n",p);
-       }while(p != NULL);
-    }
+        
+    if(init_gdt() != 0)
+        return;
 
-    kprintf("DONE\n");
+    if(init_isr()!= 0)
+        return;
+    kprintf("Hello\n");
+
+   // interrupt_call();
     
+    /* Trigger a PF */
+    char *p = 0x10000;
+    kprintf("Hello World %s\n",p);
+
 }

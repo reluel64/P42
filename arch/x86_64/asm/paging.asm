@@ -8,7 +8,9 @@ global randomize
 global random_seed
 global has_pml5
 global has_nx
-flush_pages:
+global read_cr2
+
+reload_pages:
     mov rax, cr3
     mov cr3, rax
     ret
@@ -19,6 +21,15 @@ write_cr3:
 
 read_cr3:
     mov rax, cr3
+    ret
+
+write_cr2:
+    mov rax, rdi
+    mov cr2, rax
+    ret
+
+read_cr2:
+    mov rax, cr2
     ret
 
 __invlpg:

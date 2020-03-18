@@ -8,6 +8,8 @@
         "memory_map.h": "c",
         "utils.h": "c",
         "vmmgr.h": "c",
-        "pagemgr.h": "c"
+        "pagemgr.h": "c",
+        "descriptors.h": "c",
+        "algorithm": "c"
     }
 }

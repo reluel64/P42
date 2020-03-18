@@ -95,10 +95,13 @@ int vmmgr_init(void)
     linked_list_init(&vmem_mgr.rsrvd_mem);
     pagemgr     = pagemgr_get();
 
-    rsrvd_start = (uint8_t*)pagemgr->alloc(vmem_mgr.vmmgr_base,PAGE_SIZE,0);
+    rsrvd_start = (uint8_t*)pagemgr->alloc(vmem_mgr.vmmgr_base,
+                                           PAGE_SIZE,
+                                           PAGE_WRITABLE);
 
     free_start  = (uint8_t*)pagemgr->alloc(vmem_mgr.vmmgr_base + PAGE_SIZE,
-                                                PAGE_SIZE,0);
+                                                PAGE_SIZE,
+                                                PAGE_WRITABLE);
 
     if(rsrvd_start == NULL || free_start == NULL)
         return(-1);
@@ -308,16 +311,18 @@ int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type)
     return(-1);
 }
 
-void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
+void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint32_t attr)
 {
     list_node_t      *free_node        = NULL;
     list_node_t      *next_free_node   = NULL;
     vmmgr_free_mem_t *free_desc        = NULL;
     vmmgr_free_mem_t  remaining;
-    vmmgr_free_mem_t  *from_slot = NULL;
+    vmmgr_free_mem_t  *from_slot       = NULL;
     uint64_t          ret_addr         = virt;
     uint64_t          map_addr         = 0;
-
+    
+    len = ALIGN_UP(len, PAGE_SIZE);
+    
     memset(&remaining, 0, sizeof(vmmgr_free_mem_t));
 
     free_node = linked_list_first(&vmem_mgr.free_mem);
@@ -384,7 +389,7 @@ void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr)
     return((void*)ret_addr);
 }
 
-void *vmmgr_alloc(uint64_t len, uint16_t attr)
+void *vmmgr_alloc(uint64_t len, uint32_t attr)
 {
     list_node_t      *free_node        = NULL;
     list_node_t      *next_free_node   = NULL;
@@ -392,6 +397,8 @@ void *vmmgr_alloc(uint64_t len, uint16_t attr)
     vmmgr_free_mem_t  remaining;
     vmmgr_free_mem_t  *from_slot = NULL;
     uint64_t          ret_addr         = 0;
+
+    len = ALIGN_UP(len, PAGE_SIZE);
 
     memset(&remaining, 0, sizeof(vmmgr_free_mem_t));
 
@@ -425,7 +432,7 @@ void *vmmgr_alloc(uint64_t len, uint16_t attr)
                 }
                 else
                 {
-                    //from_slot = NULL;
+                    //from_slot = NULL;vmmgr_split_free_block
                 }
             }
         }

@@ -4,6 +4,8 @@ global max_linear_address
 global max_physical_address
 global enable_nx
 global enable_pml5
+global enable_wp
+
 ; Check page 15 from 
 ; https://software.intel.com/sites/default/files/managed/2b/80/5-level_paging_white_paper.pdf
 
@@ -56,4 +58,10 @@ enable_pml5:
     mov eax, cr4
     or eax, (1 << 12)
     mov cr4, eax
+    ret
+
+enable_wp:
+    mov eax, cr0
+    or eax, (1 << 16)
+    mov cr0, eax
     ret

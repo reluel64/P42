@@ -51,6 +51,7 @@ print:
         mov al, 0x07
         stosb
         jmp next_char
+
 print_done:
     cli
     hlt
@@ -159,7 +160,6 @@ kernel_init:
         add ebx, 0x1000                   ;set the next physical address to map
         add edi, 8                        ;go to the next page
         loop fill_tables   
-    
 
 ;Prepare enabling long mode
     mov eax, cr4

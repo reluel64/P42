@@ -12,10 +12,12 @@
 #define ALLOC_CB_STOP (1 << 4)
 
 typedef uint8_t (*alloc_cb)(uint64_t phys, uint64_t count, void *pv);
+typedef int     (*free_cb) (uint64_t *phys, uint64_t *count, void *pv);
 
 typedef struct
 {
     int  (*alloc)(uint64_t pages, uint8_t flags, alloc_cb cb, void *pv);
+    int  (*dealloc)(free_cb cb, void *pv);
 }physmm_t;
 
 void     physmm_early_init(void);

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <linked_list.h> 
+#include <pagemgr.h>
 
 #define VMMGR_BASE (0xffff800000000000)
 
@@ -11,6 +12,12 @@
 #define VMM_PHYS_MM                 (1 << 2)
 #define VMM_REMAP_TABLE             (1 << 3)
 #define VMM_RESERVED                (1 << 4)
+
+#define VMM_ATTR_WRITABLE          PAGE_WRITABLE
+#define VMM_ATTR_USER              PAGE_USER
+#define VMM_ATTR_WRITE_THROUGH     PAGE_WRITE_THROUGH
+#define VMM_ATTR_NO_CACHE          PAGE_NO_CACHE
+#define VMM_ATTR_EXECUTABLE        PAGE_EXECUTABLE
 
 typedef struct
 {
@@ -36,7 +43,7 @@ typedef struct
 }vmmgr_rsrvd_mem_t;
 
 
-void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint16_t attr);
-void *vmmgr_alloc(uint64_t len, uint16_t attr);
+void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint32_t attr);
+void *vmmgr_alloc(uint64_t len, uint32_t attr);
 int vmmgr_init(void);
 #endif 

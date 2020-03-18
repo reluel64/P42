@@ -1,14 +1,8 @@
-/* 
- * Descriptor definitions 
- */
-
-#ifndef descriptors_h
-#define descriptors_h
+#ifndef gdt_h
+#define gdt_h
 
 #include <stdint.h>
 
-#define MAX_INTERRUPTS (256)
-#define MAX_GDT_ENTRIES (7)
 #define KERNEL_CODE_SEGMENT (0x08)
 #define KERNEL_DATA_SEGMENT (0x10)
 #define USER_CODE_SEGMENT   (0x18)
@@ -51,9 +45,6 @@
 #define GDT_DESC_TYPE_SET(x)     ((x) << 4) /* 0 - system 1 - code/data */
 #define GDT_TYPE_SET(x)          ((x) << 0)
 
-
-typedef  void(*interrupt_handler_t)(void);
-
 /* Global Descriptor */
 typedef struct _gdt_entry
 {
@@ -72,19 +63,6 @@ typedef struct _gdt_entry
     uint8_t  base_high     ;
 
 }__attribute__((packed)) gdt_entry_t; 
-
-/* Interrupt Descriptor */
-typedef struct _idt_entry
-{
-    uint16_t  offset_1;
-    uint16_t  seg_selector;
-    uint8_t   ist : 3;
-    uint8_t   zero: 5;
-    uint8_t  type_attr;
-    uint16_t  offset_2;
-    uint32_t  offset_3;
-    uint32_t  reserved;
-}__attribute__((packed)) idt64_entry_t;
 
 /* Task State Segment */
 typedef struct tss64
@@ -126,23 +104,6 @@ typedef struct gdt_ptr
 
 }__attribute__((packed)) gdt64_ptr_t;
 
-typedef struct idt_ptr
-{
-    uint16_t len;
-    uint64_t addr;
-
-}__attribute__((packed)) idt64_ptr_t;
-
-
-int idt_entry_add
-(
-    interrupt_handler_t ih,
-    uint8_t type_attr,
-    uint8_t ist,
-    uint16_t selector,
-    idt64_entry_t *idt_entry
-);
-
 int gdt_entry_encode
 (
     uint64_t base, 
@@ -150,8 +111,6 @@ int gdt_entry_encode
     uint32_t flags,
     gdt_entry_t *gdt_entry
 );
-
-int setup_descriptors(void);
-int load_descriptors();
+int init_gdt(void);
 
 #endif
