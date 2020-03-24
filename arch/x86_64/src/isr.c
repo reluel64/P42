@@ -12,11 +12,20 @@
 #define ISR_EC_MASK (0x27D00)
 #define RESERVED_ISR_BEGIN (21)
 #define RESERVED_ISR_END   (31)
+#define MAX_HANDLERS       (256)
+
+typedef struct
+{
+    uint16_t isr_ix;
+    interrupt_handler_t ih;
+    void *pv;
+}interrupt_t;
 
 typedef struct
 {
     idt64_entry_t *idt;
     idt64_ptr_t    idt_ptr;
+    interrupt_t   *handlers;
 }isr_root_t;
 
 static isr_root_t isr;
@@ -31,12 +40,13 @@ extern uint64_t isr_no_ec_sz_start;
 extern uint64_t isr_no_ec_sz_end;
 extern uint64_t isr_ec_sz_start;
 extern uint64_t isr_ec_sz_end;
+extern uint64_t dummy_interrupt;
+extern void _lidt(void *idtr);
 
-extern void load_idt(void *idtr);
 
-int idt_entry_add
+static int idt_entry_add
 (
-    interrupt_handler_t ih,
+    uint64_t ih,
     uint8_t type_attr,
     uint8_t ist,
     uint16_t selector,
@@ -48,12 +58,10 @@ int idt_entry_add
     if(idt_entry == NULL)
         return(-1);
 
-    ih_ptr = (uint64_t) ih; /* makes things easier */
-
     /* set address of the handler */
-    idt_entry->offset_1 = (ih_ptr & 0xffff);
-    idt_entry->offset_2 = (ih_ptr & 0xffff0000) >> 16 ;
-    idt_entry->offset_3 = (ih_ptr & 0xffffffff00000000) >> 32;
+    idt_entry->offset_1 = (ih & 0xffff);
+    idt_entry->offset_2 = (ih & 0xffff0000) >> 16 ;
+    idt_entry->offset_3 = (ih & 0xffffffff00000000) >> 32;
 
     /* set type, attributes and selector */
     idt_entry->seg_selector = selector;
@@ -62,20 +70,46 @@ int idt_entry_add
     return(0);
 }
 
-int init_isr(void)
+struct interrupt_frame
+{
+    uint64_t rip;
+    uint64_t cs;
+    uint64_t rflags;
+    uint64_t rsp;
+    uint64_t ss;
+};
+
+__attribute__ ((interrupt))  void dummy_isr(struct interrupt_frame *pv, uint64_t test)
+{
+    uint64_t f = read_cr2();
+    kprintf("FAULT 0x%x 0x%x\n",pv->rip, test);
+}
+
+int isr_init(void)
 {
     idt64_entry_t      *idt = NULL;
     uint32_t            isr_size = 0;
     uint16_t            no_ec_ix = 0;
     uint16_t            ec_ix    = 0;
-    interrupt_handler_t ih = NULL;
+    uint64_t            ih = 0;
+
+    /* diable interrupts while installing the IDT */
+    _cli();
 
     memset(&isr, 0, sizeof(isr_root_t));
 
     isr.idt = vmmgr_alloc(IDT_TABLE_SIZE,VMM_ATTR_WRITABLE);
-    
+
     if(isr.idt == NULL)
         return(-1);
+
+    isr.handlers = vmmgr_alloc(MAX_HANDLERS * sizeof(interrupt_t), 
+                    VMM_ATTR_WRITABLE);
+
+    if(isr.handlers == NULL)
+        return(-1);
+    
+    memset(isr.handlers, 0, MAX_HANDLERS * sizeof(interrupt_t));
 
     memset(isr.idt, 0, IDT_TABLE_SIZE);
     idt = isr.idt;
@@ -94,8 +128,8 @@ int init_isr(void)
                 isr_size = (uint64_t)&isr_ec_sz_end - 
                            (uint64_t)&isr_ec_sz_start;
 
-                ih = (interrupt_handler_t)(uint64_t)&isr_ec_begin + 
-                                                    (ec_ix * isr_size);
+                ih = (uint64_t)&isr_ec_begin + 
+                                (ec_ix * isr_size);
                 ec_ix++;
             }
             else
@@ -103,8 +137,8 @@ int init_isr(void)
                 isr_size = (uint64_t)&isr_no_ec_sz_end - 
                            (uint64_t)&isr_no_ec_sz_start;
 
-                ih = (interrupt_handler_t)(uint64_t)&isr_no_ec_begin + 
-                                                    (no_ec_ix * isr_size);
+                ih = (uint64_t)&isr_no_ec_begin + 
+                                (no_ec_ix * isr_size);
                 no_ec_ix++;
             }
         }
@@ -113,8 +147,8 @@ int init_isr(void)
             isr_size = (uint64_t)&isr_no_ec_sz_end - 
                        (uint64_t)&isr_no_ec_sz_start;
 
-            ih = (interrupt_handler_t)(uint64_t)&isr_no_ec_begin + 
-                                                (no_ec_ix * isr_size);
+            ih = (uint64_t)&isr_no_ec_begin + 
+                            (no_ec_ix * isr_size);
             no_ec_ix++;
         }
 
@@ -129,15 +163,65 @@ int init_isr(void)
     isr.idt_ptr.addr = (uint64_t)isr.idt;
     isr.idt_ptr.len = IDT_TABLE_SIZE - 1;
 
-    load_idt(&isr.idt_ptr);
+    _lidt(&isr.idt_ptr);    
+
     return(0);
 }
 
-extern uint64_t read_cr2();
-
-void isr_handler(uint64_t index, uint64_t error_code)
+int isr_install(interrupt_handler_t ih, void *pv, uint16_t index)
 {
-    uint64_t addr = 0;
-    addr = read_cr2();
-    kprintf("Addr %d -  ERR %d - 0x%x\n",index,error_code, addr);
+    interrupt_t *intr = NULL;
+
+    intr = isr.handlers;
+
+    for(uint16_t i = 0; i <  MAX_HANDLERS; i++)
+    {
+        if(intr[i].ih == 0)
+        {
+            intr[i].ih = ih;
+            intr[i].isr_ix = index;
+            intr[i].pv = pv;
+            return(0);
+        }
+    }
+    return(-1);
+}
+
+int isr_uninstall(interrupt_handler_t ih)
+{
+    interrupt_t *intr = NULL;
+
+    intr = isr.handlers;
+
+    for(uint16_t i = 0; i <  MAX_HANDLERS; i++)
+    {
+        if(intr[i].ih == ih)
+        {
+            intr[i].ih = NULL;
+            intr[i].isr_ix = 0;
+            intr[i].pv = NULL;
+        }
+    }
+    return(-1);
+}
+
+
+void isr_dispatcher(uint64_t index, uint64_t error_code)
+{
+    int status = 0;
+    interrupt_t *intr = NULL;
+    kprintf("Interrupt %d\n",index);
+    for(uint16_t i = 0; i < MAX_HANDLERS; i++)
+    {
+        intr  = isr.handlers + i;
+
+        if(intr->isr_ix == index && intr->ih != NULL)
+        {
+            status = intr->ih(intr->pv, error_code);
+
+            if(status == 0)
+                break;
+        }
+    }
+     kprintf("Interrupt END %d\n",index);
 }

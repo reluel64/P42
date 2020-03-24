@@ -10,15 +10,16 @@ typedef struct
     tss64_entry_t *tss;
 }gdt_t;
 
-extern void load_gdt(void *gdt);
-extern void load_tss(uint64_t segment);
+extern void _lgdt(void *gdt);
+extern void _ltr(uint64_t segment);
 
 static gdt_t gdt_root;
 
 #define GDT_ENTRY_SIZE (sizeof(gdt_entry_t))
 #define MAX_GDT_COUNT (8192)
 #define MAX_GDT_TABLE_SIZE (MAX_GDT_COUNT * GDT_ENTRY_SIZE)
-int gdt_entry_encode
+
+static int gdt_entry_encode
 (
     uint64_t base, 
     uint32_t limit,
@@ -56,7 +57,7 @@ int gdt_entry_encode
     return(0);
 }
 
-int init_gdt(void)
+int gdt_init(void)
 {
     uint32_t     flags = 0;
     gdt_entry_t   *gdt   = NULL;
@@ -125,11 +126,11 @@ int init_gdt(void)
    ((uint64_t*)gdt)[6] = (((uint64_t)tss) >> 32);
 
 
-   gdt_root.gdt_ptr.addr = (uint64_t)gdt;
-   gdt_root.gdt_ptr.len  = MAX_GDT_TABLE_SIZE - 1; 
+    gdt_root.gdt_ptr.addr = (uint64_t)gdt;
+    gdt_root.gdt_ptr.len  = MAX_GDT_TABLE_SIZE - 1; 
 
-    load_gdt(&gdt_root.gdt_ptr);
-    load_tss(TSS_SEGMENT);
+    _lgdt(&gdt_root.gdt_ptr);
+    _ltr(TSS_SEGMENT);
 
     return(0);
 }

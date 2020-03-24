@@ -218,7 +218,7 @@ kernel_higher_half:
 
 halt:
     hlt
-    ret
+    jmp halt
 
 [BITS 32]
 

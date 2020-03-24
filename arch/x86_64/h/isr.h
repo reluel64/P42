@@ -3,7 +3,8 @@
 
 #include <stddef.h>
 
-typedef  void(*interrupt_handler_t)(void);
+typedef  int(*interrupt_handler_t)(void *pv, uint64_t error_code);
+
 /* Interrupt Descriptor */
 typedef struct _idt_entry
 {
@@ -26,15 +27,7 @@ typedef struct idt_ptr
 }__attribute__((packed)) idt64_ptr_t;
 
 
-int idt_entry_add
-(
-    interrupt_handler_t ih,
-    uint8_t type_attr,
-    uint8_t ist,
-    uint16_t selector,
-    idt64_entry_t *idt_entry
-);
-
-int init_isr(void);
-
+int isr_init(void);
+int isr_install(interrupt_handler_t ih, void *pv, uint16_t index);
+int isr_uninstall(interrupt_handler_t ih);
 #endif

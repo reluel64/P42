@@ -10,6 +10,7 @@
         "vmmgr.h": "c",
         "pagemgr.h": "c",
         "descriptors.h": "c",
-        "algorithm": "c"
+        "algorithm": "c",
+        "isr.h": "c"
     }
 }

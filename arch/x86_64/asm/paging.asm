@@ -9,6 +9,7 @@ global random_seed
 global has_pml5
 global has_nx
 global read_cr2
+global write_cr2
 
 reload_pages:
     mov rax, cr3
@@ -31,6 +32,7 @@ write_cr2:
 read_cr2:
     mov rax, cr2
     ret
+
 
 __invlpg:
     invlpg [rdi]

@@ -2,12 +2,11 @@
 ; We are using the assembler capability to define macros 
 ; so that we can save a lot of duplicate code being written
 
-global disable_interrupts
-global enable_interrupts
-global isr_entry
-global load_idt
-global load_gdt
-global load_tss
+global _cli
+global _sti
+global _lidt
+global _lgdt
+global _ltr
 global test_interrupt
 global interrupt_call
 global isr_handlers_fill
@@ -19,96 +18,78 @@ global isr_no_ec_sz_start
 global isr_no_ec_sz_end
 global isr_ec_sz_start
 global isr_ec_sz_end
-extern isr_handler
+
+extern isr_dispatcher
 ; ASM stub for ISRs that do not have 
 ; error codes
+[BITS 64]
 %macro isr_no_ec_def 1
 isr_%1:
-
-    push rax
-    push rbx
+    push rbp
+    mov rbp, rsp
+    push r11
+    push r10
+    push r9
+    push r8
+    push rdi
+    push rsi
     push rcx
     push rdx
-    push rsi
-    push rdi
-    push rsp
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
+    push rax
 
     cld
     mov rdi, %1
     mov rsi, 0
-    call isr_handler
+    call isr_dispatcher
     
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rsp
-    pop rdi
-    pop rsi
+    pop rax
     pop rdx
     pop rcx
-    pop rbx
-    pop rax
-
+    pop rsi
+    pop rdi
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop rbp
     iretq
 %endmacro
 
 ; ASM stub for ISRs that do have 
 ; error codes
 %macro isr_with_ec_def 1
+extern dummy_isr
 isr_%1:
 
-    pop rax
-    push rbx
+    push rbp
+    mov rbp, rsp
+    push r11
+    push r10
+    push r9
+    push r8
+    push rdi
+    push rsi
     push rcx
     push rdx
-    push rsi
-    push rdi
-    push rsp
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
+    push rax
 
     cld
     mov rdi, %1
-    mov rsi, rax
-    call isr_handler
+    mov rsi, [rbp - 0x8]
     
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rsp
-    pop rdi
-    pop rsi
+    call isr_dispatcher
+
+    pop rax
     pop rdx
     pop rcx
-    pop rbx
+    pop rsi
+    pop rdi
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop rbp
+    add rsp, 8
     
     iretq
 %endmacro
@@ -172,38 +153,34 @@ isr_ec_begin:
 %endrep
 isr_ec_end:
 
+
 ; Disable the interrupts
-disable_interrupts:
+_cli:
     cli
     ret
 
 ; Enable the interrupts
-enable_interrupts:
+_sti:
     sti
     ret
 
 ; Load the Interrupt Descriptor Table Register
 ; RDI is the address of the structure that 
 ; holds the linear address and the limit
-load_idt:
+_lidt:
     lidt[rdi]
     ret
 
 ; Load the Global Descriptor Table Register
 ; RDI is the address of the structure that 
 ; holds the linear address and the limit
-load_gdt:
+_lgdt:
     lgdt[rdi]
     ret
 
 ; Load the Task State Segment register
 ; RDI is the offset of the segment that
 ; describes the TSS in GDT
-load_tss:
+_ltr:
     ltr di
-    ret
-
-
-interrupt_call:
-    int 32
     ret

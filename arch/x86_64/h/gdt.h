@@ -104,13 +104,6 @@ typedef struct gdt_ptr
 
 }__attribute__((packed)) gdt64_ptr_t;
 
-int gdt_entry_encode
-(
-    uint64_t base, 
-    uint32_t limit,
-    uint32_t flags,
-    gdt_entry_t *gdt_entry
-);
 int init_gdt(void);
 
 #endif
