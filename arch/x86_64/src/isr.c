@@ -42,7 +42,8 @@ extern uint64_t isr_ec_sz_start;
 extern uint64_t isr_ec_sz_end;
 extern uint64_t dummy_interrupt;
 extern void _lidt(void *idtr);
-
+extern void _sti();
+extern void _cli();
 
 static int idt_entry_add
 (
@@ -53,8 +54,7 @@ static int idt_entry_add
     idt64_entry_t *idt_entry
 )
 {
-   uint64_t ih_ptr = 0;
-
+    
     if(idt_entry == NULL)
         return(-1);
 
@@ -78,12 +78,6 @@ struct interrupt_frame
     uint64_t rsp;
     uint64_t ss;
 };
-
-__attribute__ ((interrupt))  void dummy_isr(struct interrupt_frame *pv, uint64_t test)
-{
-    uint64_t f = read_cr2();
-    kprintf("FAULT 0x%x 0x%x\n",pv->rip, test);
-}
 
 int isr_init(void)
 {
@@ -152,8 +146,9 @@ int isr_init(void)
             no_ec_ix++;
         }
 
-        idt_entry_add(ih,                  /* interrupt handler              */
-                      0x8E,                /* this is an interrupt           */
+        idt_entry_add(ih,                                       /* interrupt handler              */
+                      GDT_PRESENT_SET(1) | 
+                      GDT_TYPE_SET(GDT_SYSTEM_INTERUPT_GATE),  /* this is an interrupt           */
                       0,                   /* no IST                         */
                       KERNEL_CODE_SEGMENT, /* isr must run in Kernel Context */
                       &idt[i]              /* position in the IDT            */
@@ -176,7 +171,7 @@ int isr_install(interrupt_handler_t ih, void *pv, uint16_t index)
 
     for(uint16_t i = 0; i <  MAX_HANDLERS; i++)
     {
-        if(intr[i].ih == 0)
+        if(intr[i].ih == NULL)
         {
             intr[i].ih = ih;
             intr[i].isr_ix = index;
@@ -210,7 +205,7 @@ void isr_dispatcher(uint64_t index, uint64_t error_code)
 {
     int status = 0;
     interrupt_t *intr = NULL;
-    kprintf("Interrupt %d\n",index);
+    
     for(uint16_t i = 0; i < MAX_HANDLERS; i++)
     {
         intr  = isr.handlers + i;
@@ -223,5 +218,4 @@ void isr_dispatcher(uint64_t index, uint64_t error_code)
                 break;
         }
     }
-     kprintf("Interrupt END %d\n",index);
 }

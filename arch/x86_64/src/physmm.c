@@ -232,7 +232,7 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
                                                         sizeof(uint64_t) * (pf / PF_PER_ITEM)
                                                        );
                                      
-                (*bmp) = 0;
+                (*bmp) = (uint64_t)0;
             }
 
             /* mark the page frames as busy */
@@ -268,6 +268,7 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
                 (*bmp) |= (1 << (pf % PF_PER_ITEM));
                 desc.avail_pf--;
             }
+    
         }
         /* Save desc to memory */
         
@@ -567,7 +568,8 @@ int physmm_init(void)
                 return(-1);
 
             bmp = (uint64_t*)avdesc->bmp_virt_addr;
-              /* Clear the bitmap that was reserved for boot paging */
+           
+            /* Clear the bitmap that was reserved for boot paging */
 
             if(rgn->base <= boot_paging && 
                rgn->base + rgn->length >= boot_paging_end) 
@@ -577,9 +579,9 @@ int physmm_init(void)
                     pf_pos = (i - rgn->base) / PAGE_SIZE;
                     bmp_pos = pf_pos / PF_PER_ITEM;
 
-                    if(bmp[bmp_pos]  & (1 << (pf_pos % PF_PER_ITEM)))
+                    if(bmp[bmp_pos]  & ((uint64_t)1 << (pf_pos % PF_PER_ITEM)))
                     {
-                        bmp[bmp_pos]  &= ~(1 << (pf_pos % PF_PER_ITEM));
+                        bmp[bmp_pos]  &= ~((uint64_t)1 << (pf_pos % PF_PER_ITEM));
                     }
                 }
             }
@@ -755,6 +757,7 @@ static int physmm_alloc_pf
     uint64_t             *bmp         = NULL;
     uint64_t              marked_pg   = 0;
     uint64_t              pf_ix       = 0;
+    
     uint32_t              rgn_ix      = 0;
     uint32_t              regions     = 0;
     uint64_t              bmp_ix      = 0;
@@ -763,6 +766,7 @@ static int physmm_alloc_pf
     uint8_t               stop        = 0;
     uint64_t              mask        = 0;
     uint8_t               used_pf     = 0;
+    uint8_t               pf_pos      = 0;
 
     if(flags & ALLOC_HIGHEST && (~flags) & ALLOC_CONTIG)
     {
@@ -801,6 +805,7 @@ static int physmm_alloc_pf
         {
             phys       = rgn[i].base + pf_ix * PAGE_SIZE;
             bmp_ix = pf_ix / PF_PER_ITEM;
+            pf_pos = pf_ix % PF_PER_ITEM;
 
             if(((~flags) & ALLOC_ISA_DMA))
             {
@@ -829,7 +834,7 @@ static int physmm_alloc_pf
             }
             
             /* See if we need to advance the bitmap index */
-            if((pf_ix % PF_PER_ITEM) == 0)
+            if(pf_pos == 0)
             {
                 bmp_ix = pf_ix / PF_PER_ITEM;
 
@@ -855,7 +860,7 @@ static int physmm_alloc_pf
                     mask    = 0;
 
                     for(uint8_t i = 0; i< used_pf; i++)
-                        mask |= 1 << i;
+                        mask |= (uint64_t)1 << i;
 
 
                     /* mark the set */
@@ -878,16 +883,18 @@ static int physmm_alloc_pf
 
             }
 
-            /* This is the slowest path to allocate stuff */
+            mask = ((uint64_t)1 << pf_pos);
 
-            if((~bmp[bmp_ix]) & (1 << (pf_ix % PF_PER_ITEM)))
+            /* This is the slowest path to allocate stuff */
+            if((~bmp[bmp_ix]) & mask)
             {
+
                 /* Only one PF here */
                 pf_count = 1;
              
                 /* call the callback */
                 used_pf = reqcb(phys, pf_count, pv);
-
+ 
                 if(used_pf == 0)
                 {
                     stop = 1;
@@ -895,7 +902,7 @@ static int physmm_alloc_pf
                 }
 
                 /* Mark the bit */
-                bmp[bmp_ix] |= (1 << (pf_ix % PF_PER_ITEM));
+                bmp[bmp_ix] |= mask;
                 
                 /* decrease available PFs */
                 desc->avail_pf--;
@@ -923,12 +930,19 @@ static int physmm_alloc_pf
 static int physmm_free_pf(free_cb cb, void *pv)
 {
     uint64_t              pf_ix      = 0;
-    uint64_t              bmp_ix     = 0;
-    uint64_t              pf_count   = 0;
-    uint64_t              phys       = 0;
-    uint32_t              regions    = 0;
-    phys_mm_region_t     *rgn        = NULL;
-    phys_mm_avail_desc_t *desc       = NULL;
+    uint64_t              bmp_ix      = 0;
+    uint64_t              pf_count    = 0;
+    uint64_t              pf_pos      = 0;
+    uint64_t              phys        = 0;
+    uint64_t              pf_count_ix = 0;
+    uint64_t             *bmp         = 0;
+    uint64_t              paddr       = 0;
+    uint64_t              mask        = 0;
+    uint32_t              regions     = 0;
+    phys_mm_region_t     *rgn         = NULL;
+    phys_mm_avail_desc_t *desc        = NULL;
+
+
     int                   keep_going = 1;
 
     regions = REGION_COUNT(physmm_root.rgn_len);
@@ -937,9 +951,10 @@ static int physmm_free_pf(free_cb cb, void *pv)
     {
         keep_going = cb(&phys, &pf_count, pv);
 
+
         if(pf_count == 0 || keep_going == 0)
             break;
-
+ 
         rgn = (phys_mm_region_t*)physmm_root.rgn_vaddr;
 
         for(uint32_t i = 0; i < regions; i++)
@@ -952,6 +967,43 @@ static int physmm_free_pf(free_cb cb, void *pv)
             
             desc = rgn[i].virt_pv;
 
+            bmp = desc->bmp_virt_addr;
+
+            while(pf_count_ix < pf_count)
+            {
+                paddr = phys + pf_count_ix * PAGE_SIZE;
+                pf_ix = (paddr - rgn[i].base) / PAGE_SIZE;
+                bmp_ix = pf_ix / PF_PER_ITEM;
+                pf_pos = pf_ix % PF_PER_ITEM;
+                mask = 0; 
+
+                if((pf_pos != 0) || 
+                   (pf_count_ix + PF_PER_ITEM >= pf_count) || 
+                   ((bmp[bmp_ix] & ~mask) != mask))
+                {
+                    mask = ((uint64_t) 1 << pf_pos);
+                    if(bmp[bmp_ix] & mask)
+                    {
+                        bmp[bmp_ix] &= ~mask;
+                        desc->avail_pf++;
+                    }
+                    pf_count_ix++;
+                }
+                else
+                {
+                    pf_count_ix += PF_PER_ITEM;
+                    
+                    if((bmp[bmp_ix] & ~mask) == mask)
+                    {
+                        desc->avail_pf += PF_PER_ITEM;
+                    }
+                    
+                    bmp[bmp_ix] &= mask;
+
+                }
+
+
+            }
         }
     }
 }

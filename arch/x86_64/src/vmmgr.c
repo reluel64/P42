@@ -460,3 +460,12 @@ void *vmmgr_alloc(uint64_t len, uint32_t attr)
     return((void*)ret_addr);
 }
 
+int vmmgr_change_attrib(uint64_t virt, uint64_t len, uint32_t attr)
+{
+    /* TODO: Check if range is not in freed regions */
+    if(len == 0)
+        return(-1);
+
+
+    return(pagemgr->attr(virt, len, attr));
+}

@@ -28,7 +28,6 @@ void vga_init()
 
 void vga_scroll()
 {
-    #if 0
     uint16_t *current_line = vga.base;
     uint16_t *next_line = current_line + (VGA_MAX_ROW * VGA_MAX_COL * sizeof(uint16_t));
 
@@ -44,7 +43,6 @@ void vga_scroll()
 
     vga.row = (vga.row > VGA_MAX_ROW ? (vga.row - VGA_MAX_ROW) : 0);
     vga.col = 0;
-    #endif
 }
 
 void vga_print(uint8_t *buf, uint8_t color, uint64_t len)

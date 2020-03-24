@@ -148,6 +148,6 @@ typedef union pte_bits
 #define PT_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 12)
 #define OFFSET_TO_VIRT(x)      ((x)  & 0x1FFF)
 
-#define ATTRIBUTE_MASK (0xFFF)
+#define ATTRIBUTE_MASK (0x8000000000000FFF)
 
 #endif

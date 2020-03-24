@@ -75,7 +75,7 @@ isr_%1:
 
     cld
     mov rdi, %1
-    mov rsi, [rbp - 0x8]
+    mov rsi, [rbp + 0x8]
     
     call isr_dispatcher
 

@@ -11,6 +11,7 @@
         "pagemgr.h": "c",
         "descriptors.h": "c",
         "algorithm": "c",
-        "isr.h": "c"
+        "isr.h": "c",
+        "liballoc.h": "c"
     }
 }
