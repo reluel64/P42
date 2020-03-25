@@ -280,7 +280,7 @@ static void mem_iter_build_structs(memory_map_entry_t *ent, void *pv)
         (*desc_pos) += sizeof(phys_mm_avail_desc_t);
     }
     
-	/* save region to memory */
+    /* save region to memory */
 
     mem_region = (phys_mm_region_t*)pagemgr_boot_temp_map(physmm_root.rgn_paddr + (*rgn_pos));
 
@@ -428,8 +428,8 @@ static int physmm_boot_alloc_pf
                                                     sizeof(uint64_t) * (pf_pos / PF_PER_ITEM)
                                                 );
             }
-			
-			/* mark the page frame as used */
+            
+            /* mark the page frame as used */
             if((~bmp[0]) & (1 << (pf_pos % PF_PER_ITEM)))
             {
                 phys_addr = region.base + pf_pos * PAGE_SIZE;
@@ -493,8 +493,8 @@ static int physmm_boot_free_pf(uint64_t phys_addr)
         bitmap = (uint64_t*)pagemgr_boot_temp_map(desc.bmp_phys_addr + 
                                             sizeof(uint64_t) * (pf_pos / 64)
                                             );
-		
-		/* clear the page frame */
+        
+        /* clear the page frame */
         if((*bitmap) & (1 << (pf_pos % 64)))
         {
             (*bitmap) &= ~(1 << (pf_pos % 64)); 
@@ -757,7 +757,6 @@ static int physmm_alloc_pf
     uint64_t             *bmp         = NULL;
     uint64_t              marked_pg   = 0;
     uint64_t              pf_ix       = 0;
-    
     uint32_t              rgn_ix      = 0;
     uint32_t              regions     = 0;
     uint64_t              bmp_ix      = 0;
@@ -836,8 +835,6 @@ static int physmm_alloc_pf
             /* See if we need to advance the bitmap index */
             if(pf_pos == 0)
             {
-                bmp_ix = pf_ix / PF_PER_ITEM;
-
                 /* It's a new set - check if it's free */
                 if(bmp[bmp_ix] == 0)
                 {                 
@@ -880,7 +877,6 @@ static int physmm_alloc_pf
 
                     continue;
                 }
-
             }
 
             mask = ((uint64_t)1 << pf_pos);
@@ -888,7 +884,6 @@ static int physmm_alloc_pf
             /* This is the slowest path to allocate stuff */
             if((~bmp[bmp_ix]) & mask)
             {
-
                 /* Only one PF here */
                 pf_count = 1;
              
@@ -932,31 +927,30 @@ static int physmm_free_pf(free_cb cb, void *pv)
     uint64_t              pf_ix      = 0;
     uint64_t              bmp_ix      = 0;
     uint64_t              pf_count    = 0;
-    uint64_t              pf_pos      = 0;
     uint64_t              phys        = 0;
     uint64_t              pf_count_ix = 0;
     uint64_t             *bmp         = 0;
     uint64_t              paddr       = 0;
     uint64_t              mask        = 0;
     uint32_t              regions     = 0;
+    uint8_t               pf_pos      = 0;
     phys_mm_region_t     *rgn         = NULL;
     phys_mm_avail_desc_t *desc        = NULL;
-
-
-    int                   keep_going = 1;
-
+    int                   keep_going  = 0;
     regions = REGION_COUNT(physmm_root.rgn_len);
-
-    while(keep_going)
+    
+    do
     {
+        pf_count = 0;
+        phys = 0;
         keep_going = cb(&phys, &pf_count, pv);
 
 
-        if(pf_count == 0 || keep_going == 0)
+        if(pf_count == 0)
             break;
  
         rgn = (phys_mm_region_t*)physmm_root.rgn_vaddr;
-
+        
         for(uint32_t i = 0; i < regions; i++)
         {
             if(rgn[i].type != MEMORY_USABLE)
@@ -968,6 +962,7 @@ static int physmm_free_pf(free_cb cb, void *pv)
             desc = rgn[i].virt_pv;
 
             bmp = desc->bmp_virt_addr;
+            pf_count_ix = 0;
 
             while(pf_count_ix < pf_count)
             {
@@ -977,35 +972,36 @@ static int physmm_free_pf(free_cb cb, void *pv)
                 pf_pos = pf_ix % PF_PER_ITEM;
                 mask = 0; 
 
-                if((pf_pos != 0) || 
-                   (pf_count_ix + PF_PER_ITEM >= pf_count) || 
-                   ((bmp[bmp_ix] & ~mask) != mask))
+                if(pf_pos == 0)
                 {
-                    mask = ((uint64_t) 1 << pf_pos);
-                    if(bmp[bmp_ix] & mask)
+                    if(pf_count_ix + PF_PER_ITEM < pf_count)
                     {
-                        bmp[bmp_ix] &= ~mask;
-                        desc->avail_pf++;
-                    }
-                    pf_count_ix++;
-                }
-                else
-                {
-                    pf_count_ix += PF_PER_ITEM;
-                    
-                    if((bmp[bmp_ix] & ~mask) == mask)
-                    {
+                        bmp[bmp_ix] = mask;
+                        pf_count_ix += PF_PER_ITEM;
                         desc->avail_pf += PF_PER_ITEM;
+                        continue;
                     }
-                    
-                    bmp[bmp_ix] &= mask;
-
                 }
 
-
+                mask = ((uint64_t) 1 << pf_pos);
+                bmp[bmp_ix] &= ~mask;
+                pf_count_ix++;
+                desc->avail_pf++;
+                
+                /* If we reach this, we're screwed */
+                if(desc->avail_pf > desc->pf_count)
+                {
+                    kprintf("ERROR - avail pf is above total pf\n");
+                    return(-1);
+                }
             }
+
+          
         }
-    }
+
+    }while(keep_going);
+    
+    return(0);
 }
 
 physmm_t *physmm_get(void)

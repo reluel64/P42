@@ -50,16 +50,16 @@ void kmain()
     }
     pagemgr_t *pm = pagemgr_get();
   extern int vmmgr_change_attrib(uint64_t virt, uint64_t len, uint32_t attr);
+  extern int vmmgr_free(void *vaddr, uint64_t len);
     //apic_timer_start(10000000);
-    char *i = vmmgr_alloc(8589934592, PAGE_WRITABLE);
+extern int vmmgr_unmap(void *vaddr, uint64_t len);
 
-
-extern int pagemgr_free(uint64_t vaddr, uint64_t len);
-
-pagemgr_free(i, 8589934592);
-i = vmmgr_alloc(8589934592, PAGE_WRITABLE);
- pagemgr_free(i, 8589934592);
-//pagemgr_t *pm = pagemgr_get();
-//pm->alloc(0x5000,PAGE_SIZE,PAGE_WRITABLE);
-
+    for(uint8_t j = 0; j<255;j++)
+    {
+    void *i = vmmgr_alloc(0x200000000,0);
+    vmmgr_list_entries();
+    kprintf("RET 0x%x\n",i);
+    vmmgr_free(i,0x200000000);
+    vmmgr_list_entries();
+    }
 }

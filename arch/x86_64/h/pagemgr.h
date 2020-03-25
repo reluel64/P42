@@ -14,9 +14,11 @@
 
 typedef struct
 {
-    uint64_t (*alloc) (uint64_t vaddr, uint64_t len, uint32_t attr);
-    uint64_t (*map) (uint64_t vaddr, uint64_t paddr, uint64_t len, uint32_t attr);
-    int      (*attr) (uint64_t vaddr, uint64_t len, uint32_t attr);
+    uint64_t (*alloc)   (uint64_t vaddr, uint64_t len, uint32_t attr);
+    uint64_t (*map)     (uint64_t vaddr, uint64_t paddr, uint64_t len, uint32_t attr);
+    int      (*attr)    (uint64_t vaddr, uint64_t len, uint32_t attr);
+    int      (*dealloc) (uint64_t vaddr, uint64_t len);
+    int      (*unmap)   (uint64_t vaddr, uint64_t len);
 }pagemgr_t;
 
 pagemgr_t * pagemgr_get(void);
