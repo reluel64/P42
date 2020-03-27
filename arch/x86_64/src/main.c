@@ -30,7 +30,7 @@ void kmain()
     /* Initialize Physical Memory manager */
     if(physmm_init() != 0)
         return;
-        
+
     if(gdt_init() != 0)
         return;
 
@@ -44,7 +44,7 @@ void kmain()
     disable_pic();
 
     if(lapic_init())
-    {
+    {// kprintf("%s: BITS 0x%x VIRT 0x%x\n",__FUNCTION__,path->pt[path->pt_ix].bits, virt);
        kprintf("ERROR\n");
         return;
     }
@@ -53,13 +53,20 @@ void kmain()
   extern int vmmgr_free(void *vaddr, uint64_t len);
     //apic_timer_start(10000000);
 extern int vmmgr_unmap(void *vaddr, uint64_t len);
-
-    for(uint8_t j = 0; j<255;j++)
+vmmgr_list_entries();
+kprintf("Hello World\n");
+#if 1
+   for(uint32_t j = 0; j<UINT32_MAX;j++)
     {
-    void *i = vmmgr_alloc(0x200000000,0);
-    vmmgr_list_entries();
-    kprintf("RET 0x%x\n",i);
-    vmmgr_free(i,0x200000000);
-    vmmgr_list_entries();
+    void *i = vmmgr_alloc(0, 0x1000,0);
+    
+    if(i == NULL)
+        break;
+
+    kprintf("i = 0x%x\n",i);
+      //  vmmgr_free(i,0x1000);
+    //vmmgr_list_entries();
     }
+#endif
+   
 }
