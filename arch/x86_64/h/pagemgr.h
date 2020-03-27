@@ -2,6 +2,9 @@
 #define pagemgr_h
 
 #include <stdint.h>
+#include <physmm.h>
+#include <vmmgr.h>
+#include <defs.h>
 #define REMAP_TABLE_VADDR (0xFFFFFFFFFFE00000)
 #define REMAP_TABLE_SIZE  (0x200000)
 
@@ -14,15 +17,15 @@
 
 typedef struct
 {
-    uint64_t (*alloc)   (uint64_t vaddr, uint64_t len, uint32_t attr);
-    uint64_t (*map)     (uint64_t vaddr, uint64_t paddr, uint64_t len, uint32_t attr);
-    int      (*attr)    (uint64_t vaddr, uint64_t len, uint32_t attr);
-    int      (*dealloc) (uint64_t vaddr, uint64_t len);
-    int      (*unmap)   (uint64_t vaddr, uint64_t len);
+    virt_addr_t (*alloc)   (virt_addr_t vaddr, virt_size_t len, uint32_t attr);
+    virt_addr_t (*map)     (virt_addr_t vaddr, phys_addr_t paddr, virt_size_t len, uint32_t attr);
+    int      (*attr)    (virt_addr_t vaddr, virt_size_t len, uint32_t attr);
+    int      (*dealloc) (virt_addr_t vaddr, virt_size_t len);
+    int      (*unmap)   (virt_addr_t vaddr, virt_size_t len);
 }pagemgr_t;
 
 pagemgr_t * pagemgr_get(void);
 int pagemgr_init(void);
-uint64_t pagemgr_boot_temp_map(uint64_t phys_addr);
+virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr);
 int pagemgr_install_handler(void);
 #endif

@@ -18,7 +18,7 @@ global isr_no_ec_sz_start
 global isr_no_ec_sz_end
 global isr_ec_sz_start
 global isr_ec_sz_end
-
+global _geti
 extern isr_dispatcher
 ; ASM stub for ISRs that do not have 
 ; error codes
@@ -162,6 +162,14 @@ _cli:
 ; Enable the interrupts
 _sti:
     sti
+    ret
+
+; retrieves the status of the
+; interrupt flag from EFLAGS
+_geti:
+    pushfq
+    pop rax
+    and rax, 0x0200
     ret
 
 ; Load the Interrupt Descriptor Table Register

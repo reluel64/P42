@@ -7,16 +7,19 @@
 #include <vmmgr.h>
 #include <gdt.h>
 #include <isr.h>
+#include <liballoc.h>
+#include <spinlock.h>
 int apic_timer_start(uint32_t timeout);
 
 uint8_t *apic_base ;
 
 void kmain()
 {
+
     kprintf("P42 Kernel\n");
     /* Init polling console */
     init_serial();
-    
+
     /* Init early physical memory manager */
     physmm_early_init();
 
@@ -44,29 +47,24 @@ void kmain()
     disable_pic();
 
     if(lapic_init())
-    {// kprintf("%s: BITS 0x%x VIRT 0x%x\n",__FUNCTION__,path->pt[path->pt_ix].bits, virt);
+    {
        kprintf("ERROR\n");
         return;
     }
-    pagemgr_t *pm = pagemgr_get();
-  extern int vmmgr_change_attrib(uint64_t virt, uint64_t len, uint32_t attr);
-  extern int vmmgr_free(void *vaddr, uint64_t len);
-    //apic_timer_start(10000000);
-extern int vmmgr_unmap(void *vaddr, uint64_t len);
-vmmgr_list_entries();
-kprintf("Hello World\n");
-#if 1
-   for(uint32_t j = 0; j<UINT32_MAX;j++)
-    {
-    void *i = vmmgr_alloc(0, 0x1000,0);
-    
-    if(i == NULL)
-        break;
 
-    kprintf("i = 0x%x\n",i);
-      //  vmmgr_free(i,0x1000);
-    //vmmgr_list_entries();
+
+    for(uint64_t i = 16384; ;  )
+    {
+        void *x = NULL;
+        void *v = vmmgr_alloc(0,i*1024*1024,0);
+
+        if(v== NULL)
+            break;
+        
+        vmmgr_free(v,i*1024*1024);
+        kprintf("Allocated 0x%x\n",i*1024*1024);
+        x = v;
     }
-#endif
-   
+    kprintf("DEAD\n");
+    while(1);
 }

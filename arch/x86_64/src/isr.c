@@ -30,17 +30,17 @@ typedef struct
 
 static isr_root_t isr;
 
-extern uint64_t isr_no_ec_begin;
-extern uint64_t isr_no_ec_end;
-extern uint64_t isr_ec_begin;
-extern uint64_t isr_ec_end;
-extern uint64_t isr_ec_b;
-extern uint64_t isr_ec_e;
-extern uint64_t isr_no_ec_sz_start;
-extern uint64_t isr_no_ec_sz_end;
-extern uint64_t isr_ec_sz_start;
-extern uint64_t isr_ec_sz_end;
-extern uint64_t dummy_interrupt;
+extern virt_addr_t isr_no_ec_begin;
+extern virt_addr_t isr_no_ec_end;
+extern virt_addr_t isr_ec_begin;
+extern virt_addr_t isr_ec_end;
+extern virt_addr_t isr_ec_b;
+extern virt_addr_t isr_ec_e;
+extern virt_addr_t isr_no_ec_sz_start;
+extern virt_addr_t isr_no_ec_sz_end;
+extern virt_addr_t isr_ec_sz_start;
+extern virt_addr_t isr_ec_sz_end;
+extern virt_addr_t dummy_interrupt;
 extern void _lidt(void *idtr);
 extern void _sti();
 extern void _cli();
@@ -70,22 +70,13 @@ static int idt_entry_add
     return(0);
 }
 
-struct interrupt_frame
-{
-    uint64_t rip;
-    uint64_t cs;
-    uint64_t rflags;
-    uint64_t rsp;
-    uint64_t ss;
-};
-
 int isr_init(void)
 {
     idt64_entry_t      *idt = NULL;
     uint32_t            isr_size = 0;
     uint16_t            no_ec_ix = 0;
     uint16_t            ec_ix    = 0;
-    uint64_t            ih = 0;
+    virt_addr_t         ih = 0;
 
     /* diable interrupts while installing the IDT */
     _cli();
@@ -119,29 +110,29 @@ int isr_init(void)
         {
             if((1 << i) & ISR_EC_MASK)
             {
-                isr_size = (uint64_t)&isr_ec_sz_end - 
-                           (uint64_t)&isr_ec_sz_start;
+                isr_size = (virt_addr_t)&isr_ec_sz_end - 
+                           (virt_addr_t)&isr_ec_sz_start;
 
-                ih = (uint64_t)&isr_ec_begin + 
+                ih = (virt_addr_t)&isr_ec_begin + 
                                 (ec_ix * isr_size);
                 ec_ix++;
             }
             else
             {
-                isr_size = (uint64_t)&isr_no_ec_sz_end - 
-                           (uint64_t)&isr_no_ec_sz_start;
+                isr_size = (virt_addr_t)&isr_no_ec_sz_end - 
+                           (virt_addr_t)&isr_no_ec_sz_start;
 
-                ih = (uint64_t)&isr_no_ec_begin + 
+                ih = (virt_addr_t)&isr_no_ec_begin + 
                                 (no_ec_ix * isr_size);
                 no_ec_ix++;
             }
         }
         else
         {
-            isr_size = (uint64_t)&isr_no_ec_sz_end - 
-                       (uint64_t)&isr_no_ec_sz_start;
+            isr_size = (virt_addr_t)&isr_no_ec_sz_end - 
+                       (virt_addr_t)&isr_no_ec_sz_start;
 
-            ih = (uint64_t)&isr_no_ec_begin + 
+            ih = (virt_addr_t)&isr_no_ec_begin + 
                             (no_ec_ix * isr_size);
             no_ec_ix++;
         }
@@ -155,7 +146,7 @@ int isr_init(void)
                      );
     }
 
-    isr.idt_ptr.addr = (uint64_t)isr.idt;
+    isr.idt_ptr.addr = (virt_addr_t)isr.idt;
     isr.idt_ptr.len = IDT_TABLE_SIZE - 1;
 
     _lidt(&isr.idt_ptr);    

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <linked_list.h> 
 #include <pagemgr.h>
-
+#include <defs.h>
 #define VMMGR_BASE (0xffff800000000000)
 
 #define VIRTUAL_MEMORY_UNRESERVABLE (1 << 0)
@@ -19,31 +19,37 @@
 #define VMM_ATTR_NO_CACHE          PAGE_NO_CACHE
 #define VMM_ATTR_EXECUTABLE        PAGE_EXECUTABLE
 
+typedef uint64_t virt_addr_t;
+typedef uint64_t virt_size_t;
+
+
 typedef struct
 {
     list_head_t free_mem;  /* free memory ranges */
     list_head_t rsrvd_mem;  /* reserved memory ranges */
     uint16_t    free_ent_per_page;
     uint16_t    rsrvd_ent_per_page;
-    uint64_t    vmmgr_base; /* base address where we will keep the structures */
-    
+    virt_addr_t vmmgr_base; /* base address where we will keep the structures */
 }vmmgr_t;
 
 typedef struct
 {
-    uint64_t base;
-    uint64_t length;
+    virt_addr_t base;
+    virt_size_t length;
 }vmmgr_free_mem_t;
 
 typedef struct
 {
-    uint64_t base;
-    uint64_t length;
+    virt_addr_t base;
+    virt_size_t length;
     uint8_t  type;
 }vmmgr_rsrvd_mem_t;
 
 
-void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint32_t attr);
-void *vmmgr_alloc(uint64_t virt, uint64_t len, uint32_t attr);
+void *vmmgr_map(phys_addr_t phys, virt_addr_t virt, virt_size_t len, uint32_t attr);
+void *vmmgr_alloc(virt_addr_t virt, virt_size_t len, uint32_t attr);
+int vmmgr_unmap(void *vaddr, virt_size_t len);
+int vmmgr_free(void *vaddr, virt_size_t len);
 int vmmgr_init(void);
-#endif 
+
+#endif

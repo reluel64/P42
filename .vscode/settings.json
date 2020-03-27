@@ -12,6 +12,8 @@
         "descriptors.h": "c",
         "algorithm": "c",
         "isr.h": "c",
-        "liballoc.h": "c"
+        "liballoc.h": "c",
+        "spinlock.h": "c",
+        "stdbool.h": "c"
     }
 }

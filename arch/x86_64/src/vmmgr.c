@@ -12,15 +12,18 @@
 #define VIRT_START_IN_BLOCK(virt, fblock)  ((fblock)->base <= (virt)) && \
       (((fblock)->base + (fblock)->length) >= ((virt)))
 
-#define VIRT_FROM_FREE_BLOCK(virt, len, fblock) vmm_is_in_range((fblock)->base, (fblock)->length, (virt), (len))
+#define VIRT_FROM_FREE_BLOCK(virt, len, fblock) \
+                                vmm_is_in_range((fblock)->base, \
+                                (fblock)->length, \
+                                (virt), (len))
 
 #define NODE_TO_FREE_DESC(node) ((vmmgr_free_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
 #define NODE_TO_RSRVD_DESC(node) ((vmmgr_rsrvd_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
 
-extern uint64_t KERNEL_VMA;
-extern uint64_t KERNEL_VMA_END;
-extern uint64_t KERNEL_IMAGE_LEN;
-extern uint64_t BOOTSTRAP_END;
+extern phys_addr_t KERNEL_VMA;
+extern phys_addr_t KERNEL_VMA_END;
+extern phys_addr_t KERNEL_IMAGE_LEN;
+extern phys_addr_t BOOTSTRAP_END;
 
 static vmmgr_t vmem_mgr;
 static pagemgr_t *pagemgr = NULL;
@@ -28,12 +31,13 @@ static pagemgr_t *pagemgr = NULL;
 static inline int vmmgr_split_free_block
 (
     vmmgr_free_mem_t *from, 
-    uint64_t          virt, 
-    uint64_t          len, 
+    virt_addr_t          virt, 
+    virt_size_t          len, 
     vmmgr_free_mem_t *rem
 );
 
-int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type);
+int vmmgr_reserve(virt_addr_t virt, virt_size_t len, uint8_t type);
+
 void vmmgr_list_entries()
 {
     list_node_t *node = NULL;
@@ -59,7 +63,7 @@ void vmmgr_list_entries()
 
         node = next_node;
     }
-#if 0
+#if 1
     node = linked_list_first(&vmem_mgr.rsrvd_mem);
     
     kprintf("----LISTING RESERVED RANGES----\n");
@@ -127,41 +131,45 @@ int vmmgr_init(void)
     fmem[0].base = vmem_mgr.vmmgr_base;
     fmem[0].length = (UINT64_MAX - fmem->base)+1;
 
-    vmmgr_reserve((uint64_t)&KERNEL_VMA - (uint64_t)&BOOTSTRAP_END ,
-                        ((uint64_t)&KERNEL_VMA_END) - ((uint64_t)&KERNEL_VMA),
-                        VMM_RES_KERNEL_IMAGE);
+    vmmgr_reserve( (phys_addr_t)&KERNEL_VMA           + 
+                   (phys_addr_t)&BOOTSTRAP_END        ,
+                   (phys_addr_t)&KERNEL_VMA_END - 
+                  ((phys_addr_t)&KERNEL_VMA    + 
+                   (phys_addr_t)&BOOTSTRAP_END) ,
+                   VMM_RES_KERNEL_IMAGE);
 
     vmmgr_reserve(REMAP_TABLE_VADDR,
                         REMAP_TABLE_SIZE,
                         VMM_REMAP_TABLE);
 
-    vmmgr_reserve((uint64_t)free_start,
+    vmmgr_reserve((virt_addr_t)free_start,
                         PAGE_SIZE,
                         VMM_RESERVED);
 
-    vmmgr_reserve((uint64_t)rsrvd_start,
+    vmmgr_reserve((virt_addr_t)rsrvd_start,
                         PAGE_SIZE,
                         VMM_RESERVED);
 
     vmmgr_list_entries();
 }
+/*
+ * vmm_is_in_range - checks if a segment is in range of another segmen
+ */
 
 static inline int vmm_is_in_range
 (
-    uint64_t base,
-    uint64_t len,
-    uint64_t req_base,
-    uint64_t req_len
+    virt_addr_t base,
+    virt_size_t len,
+    virt_addr_t req_base,
+    virt_size_t req_len
 )
 {
-    uint64_t rem = 0;
+    virt_size_t rem = 0;
 
     /* There's no chance that this is in range */
     if (req_base < base)
-    {
-        //kprintf("NO FIT %d\n",__LINE__);
         return(0);
-    }
+
     rem = len - (req_base - base);
 
     /* If the remaining of the segment can
@@ -170,16 +178,70 @@ static inline int vmm_is_in_range
      * we can say that the segment is in the range
      */
     if (rem >= req_len && len >= rem)
-    {
-        //kprintf("FIT 0x%x - 0x%x -> 0x%x 0x%x\n",base, len, req_base, req_len);
         return(1);
-    }
 
-//kprintf("NO FIT 0x%x - 0x%x -> 0x%x 0x%x\n",base, len, req_base, req_len);
     return(0);
 }
 
-static int vmmgr_is_reserved(uint64_t virt, uint64_t len)
+/*
+ * vmm_touches_range - checks if a segment touches another segment 
+ */
+
+ static inline int vmm_touches_range
+(
+    virt_addr_t base,
+    virt_size_t len,
+    virt_addr_t req_base,
+    virt_size_t req_len
+)
+{
+    virt_size_t rem = 0;
+
+    if(req_base < base)
+    {
+        rem = base - req_base;
+
+        if(rem >= req_len)
+            return(0);
+
+        else
+            return(1);
+    }
+    else
+    {
+        rem = len - (req_base - base);
+        
+        if (rem >= req_len && len >= rem)
+            return(1);
+    }
+
+    return(0);
+}
+
+static inline virt_addr_t vmmgr_near_addr
+(
+    virt_addr_t base,
+    virt_size_t len,
+    virt_addr_t req_base,
+    virt_size_t req_len
+)
+{
+    virt_size_t diff = 0;
+
+    if(base > req_base)
+    {
+        diff = base - req_base;    
+
+        if(vmm_is_in_range(base,len - diff, req_base + diff, req_len))
+            return(req_base + diff);
+
+    }
+
+    return(-1);
+}
+
+
+static int vmmgr_is_reserved(virt_addr_t virt, virt_size_t len)
 {
     list_node_t *node      = NULL;
     list_node_t *next_node = NULL;
@@ -191,17 +253,10 @@ static int vmmgr_is_reserved(uint64_t virt, uint64_t len)
     {
         next_node  = linked_list_next(node);
 
-        rsrvd = NODE_TO_RSRVD_DESC(node);
-
         for(uint16_t i = 0; i < vmem_mgr.rsrvd_ent_per_page; i++)
         {
-            if(rsrvd[i].base <= virt && virt <= rsrvd[i].length + rsrvd[i].base)
-                return(1);
-             
-            else if(rsrvd[i].base <= virt + len && virt + len <= rsrvd[i].length + rsrvd[i].base)
-                return(1);
-
-            else if(rsrvd[i].base >= virt && virt + len >= rsrvd[i].length + rsrvd[i].base)
+            rsrvd = NODE_TO_RSRVD_DESC(node) + i;
+            if(vmm_touches_range(rsrvd->base, rsrvd->length, virt, len))
                 return(1);
             
         }
@@ -212,39 +267,26 @@ static int vmmgr_is_reserved(uint64_t virt, uint64_t len)
     return(0);
 }
 
-
-static int vmmgr_is_free(uint64_t virt, uint64_t len)
+#if 1
+static int vmmgr_is_free(virt_addr_t virt, virt_size_t len)
 {
     list_node_t *node      = NULL;
     list_node_t *next_node = NULL;
-    vmmgr_free_mem_t *freem = NULL;
-    
+    vmmgr_free_mem_t *fmem = NULL;
+    virt_size_t         diff = 0;
     node = linked_list_first(&vmem_mgr.free_mem);
 
     while(node)
     {
         next_node  = linked_list_next(node);
 
-        freem = NODE_TO_FREE_DESC(node);
-
         for(uint16_t i = 0; i < vmem_mgr.free_ent_per_page; i++)
         {
             /*  Start of interval is in range */
-            if(freem[i].base <= virt && virt <= freem[i].length + freem[i].base)
-            {
-                return(1);
-            }
-            /* End of interval is in range */
-            else if(freem[i].base <= virt + len && virt + len <= freem[i].length + freem[i].base)
-            {
-                return(1);
-            }
+            fmem = NODE_TO_FREE_DESC(node) + i;
 
-            else if(freem[i].base >= virt && virt + len >= freem[i].length + freem[i].base)
-            {
+            if(vmm_touches_range(fmem->base, fmem->length, virt, len))
                 return(1);
-            }
-            
         }
 
         node = next_node;
@@ -252,7 +294,7 @@ static int vmmgr_is_free(uint64_t virt, uint64_t len)
 
     return(0);
 }
-
+#endif
 static int vmmgr_add_reserved(vmmgr_rsrvd_mem_t *rsrvd)
 {
     list_node_t   *rsrvd_node      = NULL;
@@ -311,6 +353,7 @@ static int vmmgr_merge_free_block(vmmgr_free_mem_t *fmem)
     list_node_t *next_fnode     = NULL;
     vmmgr_free_mem_t *free_desc = NULL;
     int merged                  = 0;
+
     fnode = linked_list_first(&vmem_mgr.free_mem);
 
     while(fnode)
@@ -367,8 +410,8 @@ static int vmmgr_merge_free_block(vmmgr_free_mem_t *fmem)
 static inline int vmmgr_split_free_block
 (
     vmmgr_free_mem_t *from, 
-    uint64_t          virt, 
-    uint64_t          len, 
+    virt_addr_t          virt, 
+    virt_size_t          len, 
     vmmgr_free_mem_t *rem
 )
 {
@@ -394,8 +437,7 @@ static inline int vmmgr_split_free_block
         return(0);
     }
     else
-    {   
-        kprintf("FAIL\n");
+    {
         return(-1);
     }
 }
@@ -418,7 +460,6 @@ static int vmmgr_put_free_mem(vmmgr_free_mem_t *fmem)
             if(free_desc[i].length == 0)
             {
                 memcpy(&free_desc[i], fmem, sizeof(vmmgr_free_mem_t));
-                
                 return(0);
             }
         }
@@ -432,7 +473,7 @@ static int vmmgr_put_free_mem(vmmgr_free_mem_t *fmem)
     return(-1);
 }
 
-int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type)
+int vmmgr_reserve(virt_addr_t virt, virt_size_t len, uint8_t type)
 {
     list_node_t      *free_node        = NULL;
     list_node_t      *rsrvd_node       = NULL;
@@ -456,10 +497,8 @@ int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type)
         
         for(uint16_t fn = 0; fn < vmem_mgr.free_ent_per_page; fn++)
         {
-            //kprintf("virt 0x%x len %d fbv 0x%x fbl 0x%x\n",virt, len,free_desc[fn].base, free_desc[fn].length); 
             if(VIRT_FROM_FREE_BLOCK(virt, len, &free_desc[fn]))
             {
-                
                 vmmgr_split_free_block(&free_desc[fn], virt, len, &remaining);
                 vmmgr_add_reserved(&rsrvd);
             
@@ -467,10 +506,6 @@ int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type)
                     vmmgr_put_free_mem(&remaining);
 
                 return(0);
-            }
-            else
-            {
-                //kprintf("virt 0x%x len %d fbv 0x%x fbl 0x%x\n",virt, len,free_desc[fn].base, free_desc[fn].length);
             }
         }   
         
@@ -486,15 +521,15 @@ int vmmgr_reserve(uint64_t virt, uint64_t len, uint8_t type)
     return(-1);
 }
 
-void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint32_t attr)
+void *vmmgr_map(phys_addr_t phys, virt_addr_t virt, virt_size_t len, uint32_t attr)
 {
     list_node_t      *free_node        = NULL;
     list_node_t      *next_free_node   = NULL;
     vmmgr_free_mem_t *free_desc        = NULL;
     vmmgr_free_mem_t  remaining;
     vmmgr_free_mem_t  *from_slot       = NULL;
-    uint64_t          ret_addr         = virt;
-    uint64_t          map_addr         = 0;
+    virt_addr_t          ret_addr         = virt;
+    virt_addr_t          map_addr         = 0;
     
     len = ALIGN_UP(len, PAGE_SIZE);
     
@@ -522,6 +557,8 @@ void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint32_t attr)
                     ret_addr = virt;
                     break;
                 }
+
+                from_slot = NULL;
             }
             else if(from_slot)
             {
@@ -541,6 +578,7 @@ void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint32_t attr)
 
         if(next_free_node == NULL && virt != 0 && ret_addr == 0)
         {
+            kprintf("RESTARTING\n");
             virt = 0;
             free_node = linked_list_first(&vmem_mgr.free_mem);
             from_slot = NULL;
@@ -579,14 +617,16 @@ void *vmmgr_map(uint64_t phys, uint64_t virt, uint64_t len, uint32_t attr)
     return((void*)ret_addr);
 }
 
-void *vmmgr_alloc(uint64_t virt, uint64_t len, uint32_t attr)
+void *vmmgr_alloc(virt_addr_t virt, virt_size_t len, uint32_t attr)
 {
-    list_node_t      *free_node        = NULL;
-    list_node_t      *next_free_node   = NULL;
-    vmmgr_free_mem_t *free_desc        = NULL;
-    vmmgr_free_mem_t  remaining;
-    vmmgr_free_mem_t  *from_slot = NULL;
-    uint64_t          ret_addr         = 0;
+    list_node_t       *free_node      = NULL;
+    list_node_t       *next_free_node = NULL;
+    virt_addr_t        ret_addr       = 0;
+    virt_size_t        dist           = 0;
+    vmmgr_free_mem_t  *free_desc      = NULL;
+    vmmgr_free_mem_t   remaining;
+    vmmgr_free_mem_t  *from_slot     = NULL;
+    virt_addr_t        near_virt     = 0;
 
     len = ALIGN_UP(len, PAGE_SIZE);
 
@@ -611,9 +651,12 @@ void *vmmgr_alloc(uint64_t virt, uint64_t len, uint32_t attr)
             {
                 if(VIRT_FROM_FREE_BLOCK(virt, len, from_slot))
                 {
+                    kprintf("FROM_SLOT 0x%x 0x%x\n",from_slot->base,from_slot->length);
                     ret_addr = virt;
                     break;
                 }
+                
+                from_slot = NULL;
             }
             else if(from_slot)
             {
@@ -669,70 +712,67 @@ void *vmmgr_alloc(uint64_t virt, uint64_t len, uint32_t attr)
     return((void*)ret_addr);
 }
 
-int vmmgr_free(void *vaddr, uint64_t len)
+int vmmgr_free(void *vaddr, virt_size_t len)
 {
-    uint64_t virt = (uint64_t)vaddr;
+    virt_addr_t virt = (virt_addr_t)vaddr;
     vmmgr_free_mem_t mm;
+
+    int status  = 0;
+
     mm.base = virt;
     mm.length = len;
     
-
     if(virt == 0)
         return(-1);
 
-    pagemgr->dealloc(virt, len);
-
-    if(vmmgr_merge_free_block(&mm) == 0)
-        return(0);
-    else
-        vmmgr_put_free_mem(&mm);
-    
-    return(0);
-#if 0
     if(vmmgr_is_free(virt, len))
-    {
-        kprintf("CANNOT FREE MEMORY\n");
-    }
-    if(vmmgr_is_reserved(virt,len))
-    {
-        kprintf("CANNOT FREE RSRVD MEMORY\n");
-    }
-#endif
+        return(-1);
+    
+    if(vmmgr_is_reserved(virt, len))
+        return(-1);
+    
+    status = vmmgr_merge_free_block(&mm);
+
+    if(status != 0)
+        status = vmmgr_put_free_mem(&mm);
+
+    if(status == 0)
+        status = pagemgr->dealloc(virt, len);
+
+    return(status);
 }
 
-int vmmgr_unmap(void *vaddr, uint64_t len)
+int vmmgr_unmap(void *vaddr, virt_size_t len)
 {
-    uint64_t virt = (uint64_t)vaddr;
+    virt_addr_t virt = (virt_addr_t)vaddr;
     vmmgr_free_mem_t mm;
+    int status  = 0;
+
     mm.base = virt;
     mm.length = len;
     
-
     if(virt == 0)
         return(-1);
-        
-    pagemgr->unmap(virt, len);
 
-    if(vmmgr_merge_free_block(&mm) == 0)
-        return(0);
-    else
-        vmmgr_put_free_mem(&mm);
-    
-    return(0);
-#if 0
     if(vmmgr_is_free(virt, len))
-    {
-        kprintf("CANNOT FREE MEMORY\n");
-    }
-    if(vmmgr_is_reserved(virt,len))
-    {
-        kprintf("CANNOT FREE RSRVD MEMORY\n");
-    }
-#endif
+        return(-1);
+    
+    if(vmmgr_is_reserved(virt, len))
+        return(-1);
+    
+    status = vmmgr_merge_free_block(&mm);
+
+    if(status != 0)
+        status = vmmgr_put_free_mem(&mm);
+    
+    if(status == 0)
+        status = pagemgr->dealloc(virt, len);
+
+    return(status);
 }
 
 
-int vmmgr_change_attrib(uint64_t virt, uint64_t len, uint32_t attr)
+int vmmgr_change_attrib(virt_addr_t virt, virt_size_t len, uint32_t attr)
 {
     /* TODO: Check if range is not in freed regions */
     if(len == 0)

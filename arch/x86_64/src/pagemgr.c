@@ -10,15 +10,18 @@
 #include <utils.h>
 #include <pagemgr.h>
 #include <isr.h>
+#include <spinlock.h>
+#include <vmmgr.h>
+
 typedef struct 
 {
-    uint64_t page_phys_base; /* physical location of the first
+    phys_addr_t page_phys_base; /* physical location of the first
                               * level of paging
                               */ 
-    uint64_t remap_table_vaddr;
-    uint8_t  pml5_support;
-    uint8_t  do_nx;
-
+    virt_addr_t remap_table_vaddr;
+    uint8_t     pml5_support;
+    uint8_t     do_nx;
+    spinlock_t  lock;
 }pagemgr_root_t;
 
 typedef struct
@@ -28,16 +31,15 @@ typedef struct
     uint16_t      pdpt_ix;
     uint16_t      pdt_ix ;
     uint16_t      pt_ix  ;
-    uint64_t      virt;
-    uint64_t      req_len;
-    uint64_t      crt_len;
+    virt_addr_t   virt;
+    virt_size_t   req_len;
+    virt_size_t   crt_len;
     pml5e_bits_t *pml5;
     pml4e_bits_t *pml4;
     pdpte_bits_t *pdpt;
     pde_bits_t   *pd;
     pte_bits_t   *pt;
     uint32_t      attr;
-    uint64_t      page_phys_base;
 }pagemgr_path_t;
 
 
@@ -62,43 +64,43 @@ typedef struct
                                   ((path))->pdt_ix    = ~0; \
                                   ((path))->crt_len   =  0;
 /* externs */
-extern uint64_t BOOT_PAGING;
-extern uint64_t KERNEL_VMA;
-extern uint64_t KERNEL_VMA_END;
-extern uint64_t BOOTSTRAP_END;
-extern uint64_t _code;
-extern uint64_t _code_end;
-extern uint64_t _data;
-extern uint64_t _data_end;
-extern uint64_t _rodata;
-extern uint64_t _rodata_end;
-extern uint64_t _bss;
-extern uint64_t _bss_end;
+extern phys_addr_t BOOT_PAGING;
+extern phys_addr_t    KERNEL_VMA;
+extern phys_addr_t KERNEL_VMA_END;
+extern phys_addr_t BOOTSTRAP_END;
+extern phys_addr_t _code;
+extern phys_addr_t _code_end;
+extern phys_addr_t _data;
+extern phys_addr_t _data_end;
+extern phys_addr_t _rodata;
+extern phys_addr_t _rodata_end;
+extern phys_addr_t _bss;
+extern phys_addr_t _bss_end;
 
-extern uint64_t read_cr3(void);
-extern uint64_t write_cr3(uint64_t phys_addr);
-extern void     __invlpg(uint64_t address);
-extern uint8_t  has_pml5(void);
-extern uint8_t  has_nx(void);
-extern void     enable_pml5();
-extern void     enable_nx();
-extern void     enable_wp();
-extern uint64_t read_cr2();
-extern void  write_cr2(uint64_t cr2);
+extern phys_addr_t read_cr3(void);
+extern void        write_cr3(phys_addr_t phys_addr);
+extern void        __invlpg(virt_addr_t address);
+extern uint8_t     has_pml5(void);
+extern uint8_t     has_nx(void);
+extern void        enable_pml5();
+extern void        enable_nx();
+extern void        enable_wp();
+extern virt_addr_t read_cr2();
+extern void        write_cr2(virt_addr_t cr2);
 
 /* locals */
 static pagemgr_root_t page_manager = {0};
 static pagemgr_t      pagemgr_if   = {0};
 static physmm_t       *physmm      = NULL;
 
-static uint64_t pagemgr_temp_map(uint64_t phys, uint16_t ix);
-static int      pagemgr_temp_unmap(uint64_t vaddr);
-static uint64_t pagemgr_alloc(uint64_t virt, uint64_t length, uint32_t attr);
-static uint64_t pagemgr_map(uint64_t virt, uint64_t phys, uint64_t length, uint32_t attr);
-static int      pagemgr_page_fault_handler(void *pv, uint64_t error_code);
-static int      pagemgr_attr_change(uint64_t vaddr, uint64_t len, uint32_t attr);
-static int      pagemgr_free(uint64_t vaddr, uint64_t len);
-static int      pagemgr_unmap(uint64_t vaddr, uint64_t len);
+static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
+static int         pagemgr_temp_unmap(virt_addr_t vaddr);
+static virt_addr_t pagemgr_alloc(virt_addr_t virt, virt_size_t length, uint32_t attr);
+static virt_addr_t pagemgr_map(virt_addr_t virt, phys_addr_t phys, virt_size_t length, uint32_t attr);
+static int         pagemgr_page_fault_handler(void *pv, phys_size_t error_code);
+static int         pagemgr_attr_change(virt_addr_t vaddr, virt_size_t len, uint32_t attr);
+static int         pagemgr_free(virt_addr_t vaddr, virt_size_t len);
+static int         pagemgr_unmap(virt_addr_t vaddr, virt_size_t len);
 
 /* This piece code is the intermediate layer
  * between the physical memory manager and
@@ -127,23 +129,23 @@ static int      pagemgr_unmap(uint64_t vaddr, uint64_t len);
  * After the page table is changed, this routine will
  * no longer work.
  */
-uint64_t pagemgr_boot_temp_map(uint64_t phys_addr)
+virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
 {
     uint16_t   offset = 0;
-    uint64_t   virt_addr = 0;
-    uint64_t   page_table = 0;
-    uint64_t  *page = NULL;
+    virt_addr_t   virt_addr = 0;
+    virt_addr_t   page_table = 0;
+    virt_addr_t  *page = NULL;
       
     offset = phys_addr % PAGE_SIZE;
     phys_addr -= offset;
 
     if(page_manager.remap_table_vaddr == 0)
     {
-         page_table = (uint64_t)&BOOT_PAGING;
-         virt_addr =  (uint64_t)&KERNEL_VMA      |
+         page_table = (virt_addr_t)&BOOT_PAGING;
+         virt_addr =  (virt_addr_t)&KERNEL_VMA      |
                        PDT_INDEX_TO_VIRT(511)    |
                        PT_INDEX_TO_VIRT(510);
-         page = (uint64_t*)(page_table + 0x3000 + 511 * 4096 + 510 * 8);
+         page = (virt_addr_t*)(page_table + 0x3000 + 511 * 4096 + 510 * 8);
 
         /* mark the page as present and writeable */
         page[0] =  phys_addr            | 0x1B;
@@ -161,9 +163,9 @@ uint64_t pagemgr_boot_temp_map(uint64_t phys_addr)
     return(virt_addr + offset);
 }
 
-static uint8_t pagemgr_boot_alloc_cb(uint64_t phys, uint64_t count, void *pv)
+static phys_size_t pagemgr_boot_alloc_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
-    uint64_t *pf = (uint64_t*)pv;
+    phys_addr_t *pf = (phys_addr_t*)pv;
     
     if(*pf != 0)
         return(0);
@@ -173,10 +175,12 @@ static uint8_t pagemgr_boot_alloc_cb(uint64_t phys, uint64_t count, void *pv)
     return(1);
 }
 
-static uint64_t pagemgr_boot_alloc_pf()
+static phys_addr_t pagemgr_boot_alloc_pf()
 {
-    uint64_t pf = 0;
+    phys_addr_t pf = 0;
+
     physmm->alloc(1, 0, pagemgr_boot_alloc_cb, &pf);
+
     return(pf);
 }
 
@@ -202,13 +206,13 @@ static int pagemgr_build_init_pagetable(void)
     pdpte_bits_t pdpte;
     pde_bits_t   pde;
     pte_bits_t   pte;
-    uint64_t     paddr        = (uint64_t)&BOOTSTRAP_END;
-    uint64_t     vaddr        = 0;
-    uint64_t     vbase        = 0;
-    uint64_t     req_len      = 0;
-    uint64_t     crt_len      = 0;
-    uint64_t     *work_ptr    = 0;
-    uint64_t     phys_addr    = 0;
+    phys_addr_t  paddr        = (uint64_t)&BOOTSTRAP_END;
+    phys_addr_t  phys_addr    = 0;
+    virt_addr_t  vaddr        = 0;
+    virt_addr_t  vbase        = 0;
+    virt_size_t  req_len      = 0;
+    virt_size_t  crt_len      = 0;
+    virt_addr_t  *work_ptr    = 0;
     uint16_t     pml5e_ix     = -1;
     uint16_t     pml4e_ix     = -1;
     uint16_t     pdpte_ix     = -1;
@@ -216,35 +220,9 @@ static int pagemgr_build_init_pagetable(void)
     uint16_t     pte_ix       = -1;
     uint8_t      krnl_tbl_ok  = 0;
     uint8_t      pml5_support = page_manager.pml5_support;
-    
-    /* Check if we support No-Execute and if we do,
-     * enable it 
-     */ 
-    if(has_nx())
-    {
-        enable_nx();
-        page_manager.do_nx = 1;
-    }
-
-    /* Check PML5 support */
-    
-    if(has_pml5())
-    {
-        enable_pml5();
-        page_manager.pml5_support = 1;
-    }
-
-    /* enable write protection -  
-     * do not allow the kernel to write to pages that
-     * are marked as read-only
-     * This allows us to detect any attempt to write to read-only pages
-     * since trying to do this will trigger a GPF
-     */
-
-    enable_wp();
 
     /* setup the top most page table */    
-    work_ptr = (uint64_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
+    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
     memset(work_ptr, 0, PAGE_SIZE);
 
 
@@ -252,8 +230,8 @@ static int pagemgr_build_init_pagetable(void)
     {
         if(step == PAGE_KERNEL_MAP_STEP)
         {
-            vbase     = (uint64_t)&KERNEL_VMA + paddr;
-            req_len = (uint64_t)&KERNEL_VMA_END - vbase;
+            vbase     = (phys_addr_t)&KERNEL_VMA + paddr;
+            req_len = (phys_addr_t)&KERNEL_VMA_END - vbase;
         }
         else
         {
@@ -281,12 +259,12 @@ static int pagemgr_build_init_pagetable(void)
                     pml5e.fields.read_write = 1;
 
                     /* Prepare PML4 TABLE */
-                    work_ptr = (uint64_t*)pagemgr_boot_temp_map(pml5e.bits & ~(ATTRIBUTE_MASK));
+                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml5e.bits & ~(ATTRIBUTE_MASK));
                     memset(work_ptr, 0, PAGE_SIZE);
 
                     /* Update ENTRY in PML5 */
-                    work_ptr = (uint64_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
-                    memcpy(&work_ptr[pml5e_ix], &pml5e, sizeof(uint64_t));
+                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
+                    memcpy(&work_ptr[pml5e_ix], &pml5e, sizeof(phys_addr_t));
                 
                 }
             }
@@ -304,16 +282,16 @@ static int pagemgr_build_init_pagetable(void)
 
                 /* Prepare PDPT */
 
-                work_ptr = (uint64_t*)pagemgr_boot_temp_map(pml4e.bits & ~(ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml4e.bits & ~(ATTRIBUTE_MASK));
                 memset(work_ptr, 0, PAGE_SIZE);
                         
                 /* Update ENTRY in PML4 */
                 if(pml5_support)
-                    work_ptr = (uint64_t*)pagemgr_boot_temp_map(pml5e.bits & (~ATTRIBUTE_MASK));
+                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml5e.bits & (~ATTRIBUTE_MASK));
                 else
-                    work_ptr = (uint64_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
+                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
 
-                memcpy(&work_ptr[pml4e_ix], &pml4e, sizeof(uint64_t));
+                memcpy(&work_ptr[pml4e_ix], &pml4e, sizeof(phys_addr_t));
             }
 
             if(pdpte_ix != VIRT_TO_PDPT_INDEX(vaddr))
@@ -329,13 +307,13 @@ static int pagemgr_build_init_pagetable(void)
 
                 /* Prepare PDT */
 
-                work_ptr = (uint64_t*)pagemgr_boot_temp_map(pdpte.bits & ~(ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pdpte.bits & ~(ATTRIBUTE_MASK));
                 memset(work_ptr, 0, PAGE_SIZE);
             
                 /* Update ENTRY in PDPT */
 
-                work_ptr = (uint64_t*)pagemgr_boot_temp_map(pml4e.bits & (~ATTRIBUTE_MASK));
-                memcpy(&work_ptr[pdpte_ix], &pdpte, sizeof(uint64_t));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml4e.bits & (~ATTRIBUTE_MASK));
+                memcpy(&work_ptr[pdpte_ix], &pdpte, sizeof(phys_addr_t));
             }
 
             if(pde_ix != VIRT_TO_PDT_INDEX(vaddr))
@@ -351,13 +329,13 @@ static int pagemgr_build_init_pagetable(void)
             
                 /* Prepare PT */
 
-                work_ptr = (uint64_t*)pagemgr_boot_temp_map(pde.bits & ~(ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pde.bits & ~(ATTRIBUTE_MASK));
                 memset(work_ptr, 0, PAGE_SIZE);
             
                 /* Update ENTRY in PDT */
 
-                work_ptr = (uint64_t*)pagemgr_boot_temp_map(pdpte.bits & (~ATTRIBUTE_MASK));
-                memcpy(&work_ptr[pde_ix], &pde, sizeof(uint64_t));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pdpte.bits & (~ATTRIBUTE_MASK));
+                memcpy(&work_ptr[pde_ix], &pde, sizeof(phys_addr_t));
             }
 
             pte_ix = VIRT_TO_PT_INDEX(vaddr);
@@ -370,14 +348,14 @@ static int pagemgr_build_init_pagetable(void)
                 pte.fields.xd = page_manager.do_nx & 0x1;
         
                 /* code must be read-only and executable */
-                if(vaddr >= (uint64_t)&_code && vaddr <=(uint64_t)&_code_end)
+                if(vaddr >= (virt_addr_t)&_code && vaddr <=(virt_addr_t)&_code_end)
                 {
                     pte.fields.read_write = 0;
                     pte.fields.xd         = 0;
                 }
                 /* data and bss must be read/write */
-                else if((vaddr >= (uint64_t)&_data && vaddr <= (uint64_t)&_data_end) ||
-                        (vaddr >= (uint64_t)&_bss && vaddr <= (uint64_t)&_bss_end))
+                else if((vaddr >= (virt_addr_t)&_data && vaddr <= (virt_addr_t)&_data_end) ||
+                        (vaddr >= (virt_addr_t)&_bss && vaddr <= (virt_addr_t)&_bss_end))
                 {
                     pte.fields.read_write = 1;
                 }
@@ -411,8 +389,8 @@ static int pagemgr_build_init_pagetable(void)
 
             crt_len += PAGE_SIZE;
 
-            work_ptr = (uint64_t*)pagemgr_boot_temp_map(pde.bits & (~ATTRIBUTE_MASK));
-            memcpy(&work_ptr[pte_ix], &pte, sizeof(uint64_t));
+            work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pde.bits & (~ATTRIBUTE_MASK));
+            memcpy(&work_ptr[pte_ix], &pte, sizeof(phys_addr_t));
 
             /* check if we are overlapping the remap table */
             if(step == PAGE_KERNEL_MAP_STEP && vaddr >= REMAP_TABLE_VADDR)
@@ -431,12 +409,37 @@ int pagemgr_init(void)
 {
     kprintf("Initializing Page Manager\n");
     physmm = physmm_get();
-    page_manager.pml5_support = has_pml5();
-
     memset(&page_manager, 0, sizeof(pagemgr_t));
-
-    page_manager.page_phys_base = pagemgr_boot_alloc_pf();
+    spinlock_init(&page_manager.lock);
     
+    page_manager.page_phys_base = pagemgr_boot_alloc_pf();
+
+    /* Check if we support No-Execute and if we do,
+     * enable it 
+     */ 
+    if(has_nx())
+    {
+        enable_nx();
+        page_manager.do_nx = 1;
+    }
+
+    /* Check PML5 support */
+    
+    if(has_pml5())
+    {
+        enable_pml5();
+        page_manager.pml5_support = 1;
+    }
+
+    /* enable write protection -  
+     * do not allow the kernel to write to pages that
+     * are marked as read-only
+     * This allows us to detect any attempt to write to read-only pages
+     * since trying to do this will trigger a GPF
+     */
+
+    enable_wp();
+
     if(page_manager.page_phys_base == 0)
         return(-1);
     
@@ -461,12 +464,12 @@ int pagemgr_install_handler(void)
     return(isr_install(pagemgr_page_fault_handler, &page_manager, 14));
 }
 
-static uint64_t pagemgr_temp_map(uint64_t phys, uint16_t ix)
+static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
 {
-    uint64_t *remap_tbl = (uint64_t*)REMAP_TABLE_VADDR;
-    uint64_t remap_value = 0;
-    
+    virt_addr_t *remap_tbl = (virt_addr_t*)REMAP_TABLE_VADDR;
+    virt_addr_t remap_value = 0;
     pte_bits_t pte = {0};
+
     phys = PAGE_MASK_ADDRESS(phys);
    
     if(phys % PAGE_SIZE)
@@ -498,10 +501,10 @@ static uint64_t pagemgr_temp_map(uint64_t phys, uint16_t ix)
     return(remap_value);
 }
 
-static int pagemgr_temp_unmap(uint64_t vaddr)
+static int pagemgr_temp_unmap(virt_addr_t vaddr)
 {
     uint16_t ix = 0;
-    uint64_t *remap_tbl = (uint64_t*)REMAP_TABLE_VADDR;
+    virt_addr_t *remap_tbl = (virt_addr_t*)REMAP_TABLE_VADDR;
 
     if(vaddr % PAGE_SIZE || vaddr <= REMAP_TABLE_VADDR)
         return(-1);
@@ -517,11 +520,11 @@ static int pagemgr_temp_unmap(uint64_t vaddr)
     return(0);
 }
 
-static uint8_t pagemgr_alloc_pages_cb(uint64_t phys, uint64_t count, void *pv)
+static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
-    uint8_t         used_pf = 0;
+    phys_size_t     used_pf = 0;
     uint8_t         clear   = 0;
-    uint64_t        virt    = 0;
+    virt_addr_t     virt    = 0;
     pagemgr_path_t *path    = (pagemgr_path_t*)pv;
     
     while((used_pf < count) && (path->crt_len < path->req_len))
@@ -653,8 +656,7 @@ static uint8_t pagemgr_alloc_pages_cb(uint64_t phys, uint64_t count, void *pv)
  */
 static int pagemgr_check_page_path(pagemgr_path_t *path)
 {
-    uint64_t used_pf = 0;
-    uint64_t virt    = 0;
+    virt_addr_t virt    = 0;
     
     while(path->crt_len < path->req_len)
     {
@@ -713,15 +715,14 @@ static int pagemgr_check_page_path(pagemgr_path_t *path)
     return(0);
 }
 
-static uint64_t pagemgr_alloc_or_map_cb(uint64_t phys, uint64_t count, void *pv)
+static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
     pagemgr_path_t *path = (pagemgr_path_t*)pv;
-    uint64_t used_pf     = 0;
-    uint64_t virt        = 0;
+    phys_size_t used_pf     = 0;
+    virt_addr_t virt        = 0;
     
     while(used_pf < count && path->crt_len < path->req_len)
     {
-
         virt = path->virt + path->crt_len;
 
         if(page_manager.pml5_support)
@@ -785,15 +786,16 @@ static uint64_t pagemgr_alloc_or_map_cb(uint64_t phys, uint64_t count, void *pv)
     return(used_pf);
 }
 
-static int pagemgr_free_or_unmap_cb(uint64_t *phys, uint64_t *count, void *pv)
+static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void *pv)
 {
-    pagemgr_path_t *path  = (pagemgr_path_t*)pv;
+    pagemgr_path_t *path      = (pagemgr_path_t*)pv;
+    phys_addr_t     crt_phys  = 0;
+    phys_size_t     crt_count = 0;
+    virt_addr_t     virt      = 0;
 
+    /* Clear the values */
     *phys = 0;
     *count = 0;
-    uint64_t crt_phys  = 0;
-    uint64_t crt_count = 0;
-    uint64_t virt = 0;
 
     while(path->crt_len < path->req_len)
     {
@@ -922,11 +924,11 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
     return(0);
 }
 
-static uint64_t pagemgr_map(uint64_t virt, uint64_t phys, uint64_t length, uint32_t attr)
+static virt_addr_t pagemgr_map(virt_addr_t virt, phys_addr_t phys, virt_size_t length, uint32_t attr)
 {
     pagemgr_path_t path;
     int            ret = 0;
-    uint64_t       pg_frames = 0;
+    phys_size_t    pg_frames = 0;
 
     memset(&path, 0, sizeof(pagemgr_path_t));
 
@@ -941,8 +943,11 @@ static uint64_t pagemgr_map(uint64_t virt, uint64_t phys, uint64_t length, uint3
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
 
+    spinlock_lock_interrupt(&page_manager.lock);
+
     if(pagemgr_build_page_path(&path) < 0)
     {
+        spinlock_unlock_interrupt(&page_manager.lock);
         return(0);
     }
     
@@ -951,14 +956,16 @@ static uint64_t pagemgr_map(uint64_t virt, uint64_t phys, uint64_t length, uint3
     pg_frames     = length / PAGE_SIZE;
 
     pagemgr_alloc_or_map_cb(phys, pg_frames, &path);
- 
+    
+    spinlock_unlock_interrupt(&page_manager.lock);
+    
     return(virt);
 }
 
-static uint64_t pagemgr_alloc(uint64_t virt, uint64_t length, uint32_t attr)
+static virt_addr_t pagemgr_alloc(virt_addr_t virt, virt_size_t length, uint32_t attr)
 {
     pagemgr_path_t path;
-    uint64_t       pg_frames = 0;
+    phys_addr_t    pg_frames = 0;
     int            ret = 0;
  
     memset(&path, 0, sizeof(pagemgr_path_t));
@@ -973,9 +980,11 @@ static uint64_t pagemgr_alloc(uint64_t virt, uint64_t length, uint32_t attr)
     else
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
+    spinlock_lock_interrupt(&page_manager.lock);
 
     if(pagemgr_build_page_path(&path) < 0)
     {
+        spinlock_unlock_interrupt(&page_manager.lock);
         return(0);
     }
 
@@ -987,6 +996,8 @@ static uint64_t pagemgr_alloc(uint64_t virt, uint64_t length, uint32_t attr)
     
     ret = physmm->alloc(pg_frames, 0, (alloc_cb)pagemgr_alloc_or_map_cb, (void*)&path);
     
+    spinlock_unlock_interrupt(&page_manager.lock);
+    
     if(ret < 0)
     {
         pagemgr_free(virt, path.crt_len);
@@ -996,15 +1007,18 @@ static uint64_t pagemgr_alloc(uint64_t virt, uint64_t length, uint32_t attr)
     return(virt);
 }
 
-static int pagemgr_attr_change(uint64_t vaddr, uint64_t len, uint32_t attr)
+static int pagemgr_attr_change(virt_addr_t vaddr, virt_size_t len, uint32_t attr)
 {
     pagemgr_path_t path;
-    uint64_t pg_frames;
+    phys_addr_t    pg_frames = 0;
+    phys_addr_t    ret       = 0;
+
     memset(&path, 0, sizeof(pagemgr_path_t));
     
     path.virt     = vaddr;
     path.req_len  = len;
     path.attr     = attr;
+    pg_frames = len / PAGE_SIZE;
 
     if(page_manager.pml5_support)
         path.pml5 = (pml5e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
@@ -1013,20 +1027,21 @@ static int pagemgr_attr_change(uint64_t vaddr, uint64_t len, uint32_t attr)
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
 
-    pg_frames = len / PAGE_SIZE;
-
     PAGE_PATH_RESET(&path);
 
-    if(pagemgr_alloc_or_map_cb(0, pg_frames, &path) != pg_frames)
-        return(-1);
+    spinlock_lock_interrupt(&page_manager.lock);
+    
+    ret = pagemgr_alloc_or_map_cb(0, pg_frames, &path) == pg_frames;
+    ret = ret ? 0 : -1;
 
-    return(0);
+    spinlock_unlock_interrupt(&page_manager.lock);
+
+    return((int)ret);
 }
 
-static int pagemgr_free(uint64_t vaddr, uint64_t len)
+static int pagemgr_free(virt_addr_t vaddr, virt_size_t len)
 {
     int ret = 0;
-    
     pagemgr_path_t path;
 
     memset(&path,0,sizeof(path));
@@ -1042,26 +1057,33 @@ static int pagemgr_free(uint64_t vaddr, uint64_t len)
                                                 PAGE_TEMP_REMAP_PML4);
     
     PAGE_PATH_RESET(&path);
+    
+    spinlock_lock_interrupt(&page_manager.lock);
+
     ret = pagemgr_check_page_path(&path);
 
     if(ret != 0)
+    {
+        spinlock_unlock_interrupt(&page_manager.lock);
         return(-1);
+    }
 
     PAGE_PATH_RESET(&path);
     physmm->dealloc(pagemgr_free_or_unmap_cb, &path);
-    
+
+    spinlock_unlock_interrupt(&page_manager.lock);
+
     return(0);
 }
 
-static int pagemgr_unmap(uint64_t vaddr, uint64_t len)
+static int pagemgr_unmap(virt_addr_t vaddr, virt_size_t len)
 {
     int ret = 0;
     pagemgr_path_t path;
-    uint64_t dummy_phys  = 0;
-    uint64_t dummy_count = 0;
+    phys_addr_t dummy_phys  = 0;
+    phys_size_t dummy_count = 0;
     
     memset(&path,0,sizeof(path));
-
 
     path.virt    = vaddr;
     path.req_len = len;
@@ -1072,16 +1094,23 @@ static int pagemgr_unmap(uint64_t vaddr, uint64_t len)
     else
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
+    spinlock_lock_interrupt(&page_manager.lock);
 
     PAGE_PATH_RESET(&path);
+    
     ret = pagemgr_check_page_path(&path);
     
     if(ret != 0)
+    {
+        spinlock_unlock_interrupt(&page_manager.lock);
         return(-1);
-    
+    }
     PAGE_PATH_RESET(&path);
 
-     while(pagemgr_free_or_unmap_cb(&dummy_phys, &dummy_count, &path));
+    while(pagemgr_free_or_unmap_cb(&dummy_phys, &dummy_count, &path));
+
+    spinlock_unlock_interrupt(&page_manager.lock);
+    
     return(0);
 }
 
@@ -1092,7 +1121,7 @@ pagemgr_t * pagemgr_get(void)
 
 static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
 {
-    uint64_t fault_address = read_cr2();
+    virt_addr_t fault_address = read_cr2();
     
     kprintf("ADDRESS 0x%x ERROR 0x%x\n",fault_address, error_code);
 

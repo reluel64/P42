@@ -99,7 +99,7 @@ list_node_t *linked_list_prev(list_node_t *ln)
     return(ln->prev);
 }
 
-uint64_t linked_list_count(list_head_t *lh)
+size_t linked_list_count(list_head_t *lh)
 {
     return(lh->count);
 }

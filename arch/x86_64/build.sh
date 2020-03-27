@@ -17,7 +17,9 @@ x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/vmmgr.c -o vmmgr.o -ffreestanding -mno-
 x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/gdt.c -o gdt.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
 x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/isr.c -o isr.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
 x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/apic.c -o apic.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
-x86_64-elf-gcc  -T linker.ld -o test.bin  -ffreestanding -nostdlib isr.o apic.o gdt.o interrupts.o bootstrap.o main.o vga.o vmmgr.o serial.o physmm.o io.o paging.o memory_map.o utils.o pagemgr.o cpu.o linked_list.o -lgcc -z max-page-size=0x1000
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/liballoc.c -o liballoc.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc -I${INCLUDE_DIR} -c ./src/spinlock.c -o spinlock.o -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel
+x86_64-elf-gcc  -T linker.ld -o test.bin  -ffreestanding -nostdlib liballoc.o spinlock.o isr.o apic.o gdt.o interrupts.o bootstrap.o main.o vga.o vmmgr.o serial.o physmm.o io.o paging.o memory_map.o utils.o pagemgr.o cpu.o linked_list.o -lgcc -z max-page-size=0x1000
 
 rm *.o
 
