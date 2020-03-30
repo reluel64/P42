@@ -101,38 +101,38 @@ typedef union cr3_bits
 {
     cr3_t fields;
     uint64_t bits;
-}cr3_bits_t;
+}__attribute__((packed))  cr3_bits_t;
 
 
 typedef union pml5_bits
 {
     pml5e_t fields;
     uint64_t bits;
-}pml5e_bits_t;
+}__attribute__((packed))  pml5e_bits_t;
 
 typedef union pml4_bits
 {
     pml4e_t fields;
     uint64_t bits;
-}pml4e_bits_t;
+}__attribute__((packed))  pml4e_bits_t;
 
 typedef union pdpte_bits
 {
     pdpte_t fields;
     uint64_t bits;
-}pdpte_bits_t;
+}__attribute__((packed))  pdpte_bits_t;
 
 typedef union pde_bits
 {
     pde_t fields;
     uint64_t bits;
-}pde_bits_t;
+}__attribute__((packed))  pde_bits_t;
 
 typedef union pte_bits
 {
     pte_t fields;
     uint64_t bits;
-}pte_bits_t;
+}__attribute__((packed))  pte_bits_t;
 
 #define VIRT_TO_PML5_INDEX(x)  (((x) >> 47) & 0x1FF)
 #define VIRT_TO_PML4_INDEX(x)  (((x) >> 39) & 0x1FF)

@@ -10,7 +10,7 @@ global has_pml5
 global has_nx
 global read_cr2
 global write_cr2
-
+global __wbinvd
 reload_pages:
     mov rax, cr3
     mov cr3, rax
@@ -36,4 +36,8 @@ read_cr2:
 
 __invlpg:
     invlpg [rdi]
+    ret
+
+__wbinvd:
+    wbinvd
     ret

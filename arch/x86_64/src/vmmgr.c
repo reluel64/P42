@@ -20,11 +20,6 @@
 #define NODE_TO_FREE_DESC(node) ((vmmgr_free_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
 #define NODE_TO_RSRVD_DESC(node) ((vmmgr_rsrvd_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
 
-extern phys_addr_t KERNEL_VMA;
-extern phys_addr_t KERNEL_VMA_END;
-extern phys_addr_t KERNEL_IMAGE_LEN;
-extern phys_addr_t BOOTSTRAP_END;
-
 static vmmgr_t vmem_mgr;
 static pagemgr_t *pagemgr = NULL;
 
@@ -106,7 +101,7 @@ int vmmgr_init(void)
     free_start  = (uint8_t*)pagemgr->alloc(vmem_mgr.vmmgr_base + PAGE_SIZE,
                                                 PAGE_SIZE,
                                                 PAGE_WRITABLE);
-
+    
     if(rsrvd_start == NULL || free_start == NULL)
         return(-1);
 
@@ -134,8 +129,7 @@ int vmmgr_init(void)
     vmmgr_reserve( (phys_addr_t)&KERNEL_VMA           + 
                    (phys_addr_t)&BOOTSTRAP_END        ,
                    (phys_addr_t)&KERNEL_VMA_END - 
-                  ((phys_addr_t)&KERNEL_VMA    + 
-                   (phys_addr_t)&BOOTSTRAP_END) ,
+                  ((phys_addr_t)&KERNEL_VMA   ),
                    VMM_RES_KERNEL_IMAGE);
 
     vmmgr_reserve(REMAP_TABLE_VADDR,
@@ -628,7 +622,10 @@ void *vmmgr_alloc(virt_addr_t virt, virt_size_t len, uint32_t attr)
     vmmgr_free_mem_t  *from_slot     = NULL;
     virt_addr_t        near_virt     = 0;
 
-    len = ALIGN_UP(len, PAGE_SIZE);
+
+
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
 
     memset(&remaining, 0, sizeof(vmmgr_free_mem_t));
 
@@ -689,6 +686,8 @@ void *vmmgr_alloc(virt_addr_t virt, virt_size_t len, uint32_t attr)
     
     if( from_slot->length < len)
     {
+        
+        kprintf("Not From slot 0x%x - 0x%x 0x%x\n",from_slot->base,from_slot->length, len);
         return(NULL);
     }
 
@@ -699,6 +698,7 @@ void *vmmgr_alloc(virt_addr_t virt, virt_size_t len, uint32_t attr)
 
     if(ret_addr == 0)
 	{
+        kprintf("PG_ALLOC_FAIL\n");
         return(NULL);
 	}    
 	
@@ -718,6 +718,9 @@ int vmmgr_free(void *vaddr, virt_size_t len)
     vmmgr_free_mem_t mm;
 
     int status  = 0;
+    
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
 
     mm.base = virt;
     mm.length = len;
@@ -748,6 +751,9 @@ int vmmgr_unmap(void *vaddr, virt_size_t len)
     vmmgr_free_mem_t mm;
     int status  = 0;
 
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
     mm.base = virt;
     mm.length = len;
     
@@ -766,7 +772,7 @@ int vmmgr_unmap(void *vaddr, virt_size_t len)
         status = vmmgr_put_free_mem(&mm);
     
     if(status == 0)
-        status = pagemgr->dealloc(virt, len);
+        status = pagemgr->unmap(virt, len);
 
     return(status);
 }
@@ -777,7 +783,6 @@ int vmmgr_change_attrib(virt_addr_t virt, virt_size_t len, uint32_t attr)
     /* TODO: Check if range is not in freed regions */
     if(len == 0)
         return(-1);
-
 
     return(pagemgr->attr(virt, len, attr));
 }

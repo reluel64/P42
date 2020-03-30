@@ -19,10 +19,6 @@
 #define VMM_ATTR_NO_CACHE          PAGE_NO_CACHE
 #define VMM_ATTR_EXECUTABLE        PAGE_EXECUTABLE
 
-typedef uint64_t virt_addr_t;
-typedef uint64_t virt_size_t;
-
-
 typedef struct
 {
     list_head_t free_mem;  /* free memory ranges */
@@ -45,7 +41,7 @@ typedef struct
     uint8_t  type;
 }vmmgr_rsrvd_mem_t;
 
-
+int vmmgr_change_attrib(virt_addr_t virt, virt_size_t len, uint32_t attr);
 void *vmmgr_map(phys_addr_t phys, virt_addr_t virt, virt_size_t len, uint32_t attr);
 void *vmmgr_alloc(virt_addr_t virt, virt_size_t len, uint32_t attr);
 int vmmgr_unmap(void *vaddr, virt_size_t len);

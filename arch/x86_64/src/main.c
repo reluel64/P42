@@ -9,10 +9,11 @@
 #include <isr.h>
 #include <liballoc.h>
 #include <spinlock.h>
+
 int apic_timer_start(uint32_t timeout);
 
-uint8_t *apic_base ;
-
+uint8_t *apic_base ;extern void physmm_dump_bitmaps(void);
+extern int vmmgr_change_attrib(virt_addr_t virt, virt_size_t len, uint32_t attr);
 void kmain()
 {
 
@@ -30,6 +31,7 @@ void kmain()
     /* Initialize Virtual Memory Manager */
     if(vmmgr_init() != 0)
         return;
+
     /* Initialize Physical Memory manager */
     if(physmm_init() != 0)
         return;
@@ -42,7 +44,7 @@ void kmain()
 
     if(pagemgr_install_handler() != 0)
         return;
-     
+  
     vga_init();
     disable_pic();
 
@@ -52,19 +54,47 @@ void kmain()
         return;
     }
 
+#if 0
+pagemgr_t *pg = pagemgr_get();
 
-    for(uint64_t i = 16384; ;  )
+
+    kprintf("------------------DUMP BEFORE------------------\n");
+    physmm_dump_bitmaps();
+    void *pp = vmmgr_alloc(0,4096ull*1024ull*1024ull,0);
+
+    if(pp == NULL)
+    {
+        kprintf("FAILED\n");
+        while(1);
+    }
+
+    vmmgr_free(pp,4096ull*1024ull*1024ull);
+
+kprintf("------------------DUMP AFTER------------------\n");
+    physmm_dump_bitmaps();
+#endif
+uint64_t i = 1024ull*1024ull;
+    for( ;i<=4096ull*1024ull*1024ull ; i+=1024ull*1024ull )
     {
         void *x = NULL;
-        void *v = vmmgr_alloc(0,i*1024*1024,0);
-
+        uint64_t v = kmalloc(i);
         if(v== NULL)
-            break;
-        
-        vmmgr_free(v,i*1024*1024);
-        kprintf("Allocated 0x%x\n",i*1024*1024);
+        {   
+        kprintf("V = 0x%x\n",v);
+           break;
+        }
+        else
+        {
+            kprintf("Alloc OK 0x%x 0x%x\n", v, i);
+        }
+        // vmmgr_change_attrib(ALIGN_UP(v, PAGE_SIZE), i - PAGE_SIZE, ~VMM_ATTR_WRITABLE);
+         //memset(v, 0xff,i);
+    kfree(v);
+       
         x = v;
     }
-    kprintf("DEAD\n");
+    kprintf("------------------DUMP DEAD------------------\n");
+    kprintf("DEAD 0x%x\n",i);
+   // physmm_dump_bitmaps();
     while(1);
 }

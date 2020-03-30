@@ -24,6 +24,27 @@ void     physmm_early_init(void);
 int      physmm_init(void);
 physmm_t *physmm_get(void);
 
+extern phys_addr_t KERNEL_LMA;
+extern phys_addr_t KERNEL_LMA_END;
+extern phys_addr_t KERNEL_VMA;
+extern phys_addr_t KERNEL_VMA_END;
+extern phys_addr_t KERNEL_IMAGE_LEN;
+extern phys_addr_t BOOTSTRAP_END;
+extern phys_addr_t BOOT_PAGING;
+extern phys_addr_t BOOT_PAGING_END;
+extern phys_addr_t BOOT_PAGING_LENGTH;
+extern phys_addr_t _code;
+extern phys_addr_t _code_end;
+extern phys_addr_t _data;
+extern phys_addr_t _data_end;
+extern phys_addr_t _rodata;
+extern phys_addr_t _rodata_end;
+extern phys_addr_t _bss;
+extern phys_addr_t _bss_end;
+
+
+
+
 
 
 #endif

@@ -77,7 +77,8 @@ int isr_init(void)
     uint16_t            no_ec_ix = 0;
     uint16_t            ec_ix    = 0;
     virt_addr_t         ih = 0;
-
+    
+    kprintf("IDT INIT\n");
     /* diable interrupts while installing the IDT */
     _cli();
 
@@ -192,7 +193,7 @@ int isr_uninstall(interrupt_handler_t ih)
 }
 
 
-void isr_dispatcher(uint64_t index, uint64_t error_code)
+void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
 {
     int status = 0;
     interrupt_t *intr = NULL;
@@ -203,8 +204,9 @@ void isr_dispatcher(uint64_t index, uint64_t error_code)
 
         if(intr->isr_ix == index && intr->ih != NULL)
         {
+            kprintf("IP 0x%x\n",ip);
             status = intr->ih(intr->pv, error_code);
-
+            
             if(status == 0)
                 break;
         }

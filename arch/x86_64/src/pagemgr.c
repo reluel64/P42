@@ -33,13 +33,14 @@ typedef struct
     uint16_t      pt_ix  ;
     virt_addr_t   virt;
     virt_size_t   req_len;
-    virt_size_t   crt_len;
+    virt_size_t   virt_off;
     pml5e_bits_t *pml5;
     pml4e_bits_t *pml4;
     pdpte_bits_t *pdpt;
     pde_bits_t   *pd;
     pte_bits_t   *pt;
     uint32_t      attr;
+    uint8_t check;
 }pagemgr_path_t;
 
 
@@ -62,20 +63,8 @@ typedef struct
                                   ((path))->pml4_ix   = ~0; \
                                   ((path))->pdpt_ix   = ~0; \
                                   ((path))->pdt_ix    = ~0; \
-                                  ((path))->crt_len   =  0;
+                                  ((path))->virt_off  =  (virt_size_t)0;
 /* externs */
-extern phys_addr_t BOOT_PAGING;
-extern phys_addr_t    KERNEL_VMA;
-extern phys_addr_t KERNEL_VMA_END;
-extern phys_addr_t BOOTSTRAP_END;
-extern phys_addr_t _code;
-extern phys_addr_t _code_end;
-extern phys_addr_t _data;
-extern phys_addr_t _data_end;
-extern phys_addr_t _rodata;
-extern phys_addr_t _rodata_end;
-extern phys_addr_t _bss;
-extern phys_addr_t _bss_end;
 
 extern phys_addr_t read_cr3(void);
 extern void        write_cr3(phys_addr_t phys_addr);
@@ -87,7 +76,7 @@ extern void        enable_nx();
 extern void        enable_wp();
 extern virt_addr_t read_cr2();
 extern void        write_cr2(virt_addr_t cr2);
-
+extern void        __wbinvd();
 /* locals */
 static pagemgr_root_t page_manager = {0};
 static pagemgr_t      pagemgr_if   = {0};
@@ -142,10 +131,11 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
     if(page_manager.remap_table_vaddr == 0)
     {
          page_table = (virt_addr_t)&BOOT_PAGING;
-         virt_addr =  (virt_addr_t)&KERNEL_VMA      |
+         virt_addr =  (virt_addr_t)&KERNEL_VMA   |
                        PDT_INDEX_TO_VIRT(511)    |
                        PT_INDEX_TO_VIRT(510);
-         page = (virt_addr_t*)(page_table + 0x3000 + 511 * 4096 + 510 * 8);
+
+         page = (virt_addr_t*)(page_table + 0x3000 + 511 * PAGE_SIZE + 510 * 8);
 
         /* mark the page as present and writeable */
         page[0] =  phys_addr            | 0x1B;
@@ -162,6 +152,8 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
   
     return(virt_addr + offset);
 }
+
+
 
 static phys_size_t pagemgr_boot_alloc_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
@@ -259,11 +251,11 @@ static int pagemgr_build_init_pagetable(void)
                     pml5e.fields.read_write = 1;
 
                     /* Prepare PML4 TABLE */
-                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml5e.bits & ~(ATTRIBUTE_MASK));
+                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pml5e.bits));
                     memset(work_ptr, 0, PAGE_SIZE);
 
                     /* Update ENTRY in PML5 */
-                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
+                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(page_manager.page_phys_base));
                     memcpy(&work_ptr[pml5e_ix], &pml5e, sizeof(phys_addr_t));
                 
                 }
@@ -282,12 +274,12 @@ static int pagemgr_build_init_pagetable(void)
 
                 /* Prepare PDPT */
 
-                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml4e.bits & ~(ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pml4e.bits));
                 memset(work_ptr, 0, PAGE_SIZE);
                         
                 /* Update ENTRY in PML4 */
                 if(pml5_support)
-                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml5e.bits & (~ATTRIBUTE_MASK));
+                    work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pml5e.bits));
                 else
                     work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
 
@@ -307,12 +299,12 @@ static int pagemgr_build_init_pagetable(void)
 
                 /* Prepare PDT */
 
-                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pdpte.bits & ~(ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pdpte.bits));
                 memset(work_ptr, 0, PAGE_SIZE);
             
                 /* Update ENTRY in PDPT */
 
-                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pml4e.bits & (~ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pml4e.bits));
                 memcpy(&work_ptr[pdpte_ix], &pdpte, sizeof(phys_addr_t));
             }
 
@@ -329,12 +321,12 @@ static int pagemgr_build_init_pagetable(void)
             
                 /* Prepare PT */
 
-                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pde.bits & ~(ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pde.bits));
                 memset(work_ptr, 0, PAGE_SIZE);
             
                 /* Update ENTRY in PDT */
 
-                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pdpte.bits & (~ATTRIBUTE_MASK));
+                work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pdpte.bits));
                 memcpy(&work_ptr[pde_ix], &pde, sizeof(phys_addr_t));
             }
 
@@ -389,7 +381,7 @@ static int pagemgr_build_init_pagetable(void)
 
             crt_len += PAGE_SIZE;
 
-            work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(pde.bits & (~ATTRIBUTE_MASK));
+            work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pde.bits));
             memcpy(&work_ptr[pte_ix], &pte, sizeof(phys_addr_t));
 
             /* check if we are overlapping the remap table */
@@ -424,7 +416,7 @@ int pagemgr_init(void)
     }
 
     /* Check PML5 support */
-    
+
     if(has_pml5())
     {
         enable_pml5();
@@ -496,6 +488,7 @@ static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
     
     remap_value = REMAP_TABLE_VADDR + (PAGE_SIZE * ix);
 
+    
     __invlpg(remap_value);
 
     return(remap_value);
@@ -520,6 +513,15 @@ static int pagemgr_temp_unmap(virt_addr_t vaddr)
     return(0);
 }
 
+static inline void pagemgr_invalidate(virt_addr_t addr)
+{
+    /* For this CPU */
+    __invlpg(addr);
+
+    /* For other CPUs we should at least send IPI */
+
+}
+
 static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
     phys_size_t     used_pf = 0;
@@ -527,9 +529,9 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
     virt_addr_t     virt    = 0;
     pagemgr_path_t *path    = (pagemgr_path_t*)pv;
     
-    while((used_pf < count) && (path->crt_len < path->req_len))
+    while((used_pf < count) && (path->virt_off < path->req_len))
     {
-        virt = path->virt + path->crt_len;
+        virt = path->virt + path->virt_off;
 
         if(page_manager.pml5_support)
         {
@@ -549,14 +551,13 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 path->pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(path->pml5[path->pml5_ix].bits,
                                                    PAGE_TEMP_REMAP_PML4);
                 if(clear)
+                {
                     memset(path->pml4, 0, PAGE_SIZE);
-
-                clear = 0;
+                    clear = 0;
+                    continue;
+                }
             }
         }
-        
-        if(used_pf >= count)
-            return(used_pf);
 
         if(path->pml4)
         {
@@ -580,13 +581,11 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 {
                     memset(path->pdpt, 0, PAGE_SIZE);
                     clear = 0;
+                    continue;
                 }
             }
         }
 
-        if(used_pf >= count)
-            return(used_pf);
-        
         if(path->pdpt)
         {
             if(path->pdpt_ix != VIRT_TO_PDPT_INDEX(virt))
@@ -608,12 +607,10 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 {
                     memset(path->pd, 0, PAGE_SIZE);
                     clear = 0;
+                    continue;
                 }
             }
         }
-
-        if(used_pf >= count)
-            return(used_pf);
 
         if(path->pd)
         {
@@ -629,12 +626,13 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                     path->pd[path->pdt_ix].fields.present    = 1;
                     used_pf++;
                     clear = 1;
-                }
-                
-                
-                path->pt = (pte_bits_t*) PAGE_STRUCT_TEMP_MAP(path->pd[path->pdt_ix].bits,
+                    path->pt = (pte_bits_t*) PAGE_STRUCT_TEMP_MAP(path->pd[path->pdt_ix].bits,
                                                PAGE_TEMP_REMAP_PT);
-                
+                }
+
+
+                //kprintf("path->pd[path->pdt_ix].bits 0x%x\n",path->pd[path->pdt_ix].bits);
+
                 if(clear)
                 {
                     memset(path->pt, 0, PAGE_SIZE);
@@ -643,7 +641,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
             }
         }
                 
-        path->crt_len += PAGE_SIZE;
+        path->virt_off += PAGE_SIZE;
     }
 
     return(used_pf);
@@ -658,9 +656,9 @@ static int pagemgr_check_page_path(pagemgr_path_t *path)
 {
     virt_addr_t virt    = 0;
     
-    while(path->crt_len < path->req_len)
+    while(path->virt_off < path->req_len)
     {
-        virt = path->virt + path->crt_len;
+        virt = path->virt + path->virt_off;
 
         if(page_manager.pml5_support)
         {
@@ -705,12 +703,10 @@ static int pagemgr_check_page_path(pagemgr_path_t *path)
 
             if(path->pd[path->pdt_ix].fields.present == 0)
                 return(1);
-
-            path->pt = (pte_bits_t*)PAGE_STRUCT_TEMP_MAP(path->pd[path->pdt_ix].bits,
-                                            PAGE_TEMP_REMAP_PT);
         }     
-        
-        path->crt_len += PAGE_SIZE;
+
+
+        path->virt_off += PAGE_SIZE;
     }
     return(0);
 }
@@ -721,9 +717,9 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
     phys_size_t used_pf     = 0;
     virt_addr_t virt        = 0;
     
-    while(used_pf < count && path->crt_len < path->req_len)
+    while(used_pf < count && path->virt_off < path->req_len)
     {
-        virt = path->virt + path->crt_len;
+        virt = path->virt + path->virt_off;
 
         if(page_manager.pml5_support)
         {
@@ -765,21 +761,21 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
         
         if(path->pt[path->pt_ix].fields.present == 0)
         {
-          
             path->pt[path->pt_ix].bits = phys + used_pf * PAGE_SIZE;
+
             path->pt[path->pt_ix].fields.present = 1;
         }
         
         /* Any attempt to apply attributes to a non-existent page
          * will cause the function to exit 
          */
-        path->crt_len += PAGE_SIZE;
         
         if(pagemgr_attr_translate(&path->pt[path->pt_ix], path->attr))
         {
             return(0);
         }
-        
+        pagemgr_invalidate(virt);
+        path->virt_off += PAGE_SIZE;
         used_pf++;
     }
     
@@ -789,17 +785,14 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
 static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void *pv)
 {
     pagemgr_path_t *path      = (pagemgr_path_t*)pv;
-    phys_addr_t     crt_phys  = 0;
-    phys_size_t     crt_count = 0;
-    virt_addr_t     virt      = 0;
+    phys_addr_t     start_phys  = 0;
+    phys_size_t     page_count  = 0;
+    phys_addr_t     page_phys   = 0;
+    virt_addr_t     virt        = 0;
 
-    /* Clear the values */
-    *phys = 0;
-    *count = 0;
-
-    while(path->crt_len < path->req_len)
+    while(path->virt_off < path->req_len)
     {
-        virt = path->virt + path->crt_len;
+        virt = path->virt + path->virt_off;
 
         if(page_manager.pml5_support)
         {
@@ -836,58 +829,72 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
         }
        
         path->pt_ix    = VIRT_TO_PT_INDEX(virt);
-        path->crt_len += PAGE_SIZE;
-#if 0
+        page_phys = PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits);
+  
+  //  if(path->req_len != 4096ull*1024ull*1024ull)
+              //  kprintf("REL 0x%x -> 0x%x\n",virt, PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits));
+       
+        
+#if 1
         if(path->pt[path->pt_ix].fields.present)
         {
-            crt_count++;
-            crt_phys = PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits);
-            *phys = crt_phys;
-            *count = crt_count;
-            return(1);
-        }
-#endif
-        if(path->pt[path->pt_ix].fields.present)
-        {
-            if(crt_count == 0)
+            /* No pages in counter - set up starting address */
+            if(page_count == 0)
             {
-                crt_phys = PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits);
-                crt_count++;
+                start_phys = page_phys;
+                page_count = 1;
                 path->pt[path->pt_ix].bits = 0;
+
+                /* Make sure that this entry is flushed from TLB */
+                pagemgr_invalidate(virt);
+                path->virt_off += PAGE_SIZE;
+                continue;
             }
-            
-            else if(crt_phys + ((crt_count) * PAGE_SIZE) == 
-                   PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits))
+            /* See if this page is in chain with start_phys */
+            else if(page_phys == start_phys + page_count * PAGE_SIZE)
             {
-                crt_count++;
+                page_count++;
                 path->pt[path->pt_ix].bits = 0;
-                
+                /* Make sure that this entry is flushed from TLB */
+                pagemgr_invalidate(virt);
+
+                path->virt_off += PAGE_SIZE;
+                continue;
             }
+            /* Current page is not in the chain - let's sent
+             * what we got so far to the PHYSMM
+             */ 
             else
             {
-                *phys  = crt_phys;
-                *count = crt_count;
-                crt_count = 0;
-                crt_phys = 0;
+                *phys = start_phys;
+                *count = page_count;
                 return(1);
             }
         }
-
-        /* If virt == virt_end then the 
-         * loop will exit and the caller
-         * would receive 0 as return code and a
-         * non-zero page count
-         */ 
-        if(path->crt_len == path->req_len)
+        else
         {
-            *phys  = crt_phys;
-            *count = crt_count;
-            crt_count = 0;
-            crt_phys = 0;
-            return(0);
+            kprintf("STOP: VIRT 0x%x - BITS 0x%x\n", virt,path->pt[path->pt_ix].bits );
+            while(1);
         }
-    }
 
+#else
+        if(path->pt[path->pt_ix].bits)
+        {
+                start_phys = PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits);
+                page_count =1;
+                path->pt[path->pt_ix].bits = 0;
+                
+                *phys = start_phys;
+                *count = page_count;
+
+                pagemgr_invalidate(virt);
+                return(1);
+        }
+#endif
+
+    }
+    *phys = start_phys;
+    *count = page_count;
     return(0);
 }
 
@@ -901,25 +908,36 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
 static int pagemgr_build_page_path(pagemgr_path_t *path)
 {
     int        ret  =  0;
+    virt_size_t virt_off = 0;
+    /* Check if we have page path already built */
     PAGE_PATH_RESET(path);
 
-    /* Check if we have page path already built */
-
     ret = pagemgr_check_page_path(path);
+
+    virt_off = path->virt_off;
+    PAGE_PATH_RESET(path);
+    /* Restore the offset */
+    path->virt_off = virt_off;
 
     if(ret == 0)
     {   
         return(0);
     }
+   
+    /* 
+     * TODO: Preserve the state of path checking to improve
+     * path building 
+     */
+    /* save the offset before reseting the path */
 
-    PAGE_PATH_RESET(path);
-    
     ret = physmm->alloc(0, ALLOC_CB_STOP, pagemgr_alloc_pages_cb, (void*)path);
 
-    if(ret == -1 || path->req_len > path->crt_len)
+    if(ret == -1 || path->req_len > path->virt_off)
     {
         return(-1);
     }
+
+    PAGE_PATH_RESET(path);
 
     return(0);
 }
@@ -980,30 +998,36 @@ static virt_addr_t pagemgr_alloc(virt_addr_t virt, virt_size_t length, uint32_t 
     else
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
+    
     spinlock_lock_interrupt(&page_manager.lock);
 
-    if(pagemgr_build_page_path(&path) < 0)
+    ret = pagemgr_build_page_path(&path);
+
+    if(ret < 0)
     {
         spinlock_unlock_interrupt(&page_manager.lock);
         return(0);
-    }
-
-    path.virt     = virt;
+    }   
 
     PAGE_PATH_RESET(&path);
-    
+
     pg_frames = length / PAGE_SIZE;
     
-    ret = physmm->alloc(pg_frames, 0, (alloc_cb)pagemgr_alloc_or_map_cb, (void*)&path);
-    
-    spinlock_unlock_interrupt(&page_manager.lock);
+    ret = physmm->alloc(pg_frames, 0, (alloc_cb)pagemgr_alloc_or_map_cb, (void*)&path);    
     
     if(ret < 0)
     {
-        pagemgr_free(virt, path.crt_len);
+        kprintf("NO MORE BMP\n");
+        spinlock_unlock_interrupt(&page_manager.lock);
+        pagemgr_free(virt, path.virt_off);
         return(0);
     }
 
+    spinlock_unlock_interrupt(&page_manager.lock);
+#if 0
+    if(length!=4096ull*1024ull*1024ull)
+        pagemgr_verify_pages(virt,length);
+#endif
     return(virt);
 }
 
@@ -1018,6 +1042,7 @@ static int pagemgr_attr_change(virt_addr_t vaddr, virt_size_t len, uint32_t attr
     path.virt     = vaddr;
     path.req_len  = len;
     path.attr     = attr;
+    path.check = 1;
     pg_frames = len / PAGE_SIZE;
 
     if(page_manager.pml5_support)
@@ -1028,7 +1053,7 @@ static int pagemgr_attr_change(virt_addr_t vaddr, virt_size_t len, uint32_t attr
                                                 PAGE_TEMP_REMAP_PML4);
 
     PAGE_PATH_RESET(&path);
-
+    
     spinlock_lock_interrupt(&page_manager.lock);
     
     ret = pagemgr_alloc_or_map_cb(0, pg_frames, &path) == pg_frames;
@@ -1069,8 +1094,18 @@ static int pagemgr_free(virt_addr_t vaddr, virt_size_t len)
     }
 
     PAGE_PATH_RESET(&path);
+    
     physmm->dealloc(pagemgr_free_or_unmap_cb, &path);
 
+#if 0
+    if(stop)
+    {
+        kprintf("---------------MEMORY CORRUPTED---------------------\n");
+        physmm_dump_bitmaps();
+
+        while(1);
+    }
+#endif
     spinlock_unlock_interrupt(&page_manager.lock);
 
     return(0);
@@ -1082,7 +1117,6 @@ static int pagemgr_unmap(virt_addr_t vaddr, virt_size_t len)
     pagemgr_path_t path;
     phys_addr_t dummy_phys  = 0;
     phys_size_t dummy_count = 0;
-    
     memset(&path,0,sizeof(path));
 
     path.virt    = vaddr;
@@ -1114,12 +1148,33 @@ static int pagemgr_unmap(virt_addr_t vaddr, virt_size_t len)
     return(0);
 }
 
+void pagemgr_verify_pages(virt_addr_t v, virt_size_t len)
+{
+    pagemgr_path_t p;
+    memset(&p, 0, sizeof(pagemgr_path_t));
+
+    p.virt = v;
+    p.req_len = len;
+    p.check = 1;
+    if(page_manager.pml5_support)
+        p.pml5 = (pml5e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
+                                                PAGE_TEMP_REMAP_PML5);
+    else
+        p.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
+                                                PAGE_TEMP_REMAP_PML4);
+    PAGE_PATH_RESET(&p);
+    
+    pagemgr_check_page_path(&p);
+    return(0);
+}
+
+
 pagemgr_t * pagemgr_get(void)
 {
     return(&pagemgr_if);
 }
 
-static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
+static int pagemgr_page_fault_handler(void *pv, virt_size_t error_code)
 {
     virt_addr_t fault_address = read_cr2();
     
