@@ -674,6 +674,21 @@ static phys_mm_region_t *physmm_find_contig
     return(NULL);
 }
 
+#if 0
+static phys_size_t physmm_find_avail_pf(phys_mm_avail_desc_t *desc)
+{
+    phys_size_t index = 0;
+
+    if(desc->avail_pf == 0)
+        return((phys_size_t)~0);
+
+    for(index = 0; index < desc->; index++)
+    {
+        
+    }
+}
+#endif
+
 /* 
  * physmm_alloc_pf
  * --------------------------
@@ -730,7 +745,13 @@ static int physmm_alloc_pf
             continue;
         
         desc   = rgn[i].virt_pv;
-       // pf_ix  = desc->avail_pos;
+
+        if(desc->avail_pos >= desc->pf_count)
+            desc->avail_pos = 0;
+
+        pf_ix  = desc->avail_pos;
+
+
         //kprintf("AVAIL_POS %d\n",desc->avail_pos);
         while(pf_ix     < desc->pf_count && 
               marked_pg < pages          && 

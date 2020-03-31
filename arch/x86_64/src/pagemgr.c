@@ -637,6 +637,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 {
                     memset(path->pt, 0, PAGE_SIZE);
                     clear = 0;
+                    pagemgr_invalidate(virt);
                 }
             }
         }
@@ -703,9 +704,8 @@ static int pagemgr_check_page_path(pagemgr_path_t *path)
 
             if(path->pd[path->pdt_ix].fields.present == 0)
                 return(1);
-        }     
 
-
+        }    
         path->virt_off += PAGE_SIZE;
     }
     return(0);
@@ -914,8 +914,12 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
 
     ret = pagemgr_check_page_path(path);
 
+    /* save the offset before reseting the path */
     virt_off = path->virt_off;
+
+    /* Reset the path */
     PAGE_PATH_RESET(path);
+
     /* Restore the offset */
     path->virt_off = virt_off;
 
@@ -923,12 +927,6 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
     {   
         return(0);
     }
-   
-    /* 
-     * TODO: Preserve the state of path checking to improve
-     * path building 
-     */
-    /* save the offset before reseting the path */
 
     ret = physmm->alloc(0, ALLOC_CB_STOP, pagemgr_alloc_pages_cb, (void*)path);
 
@@ -937,6 +935,7 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
         return(-1);
     }
 
+    /* Reset the path */
     PAGE_PATH_RESET(path);
 
     return(0);
@@ -1012,7 +1011,7 @@ static virt_addr_t pagemgr_alloc(virt_addr_t virt, virt_size_t length, uint32_t 
     PAGE_PATH_RESET(&path);
 
     pg_frames = length / PAGE_SIZE;
-    
+  
     ret = physmm->alloc(pg_frames, 0, (alloc_cb)pagemgr_alloc_or_map_cb, (void*)&path);    
     
     if(ret < 0)
@@ -1156,6 +1155,7 @@ void pagemgr_verify_pages(virt_addr_t v, virt_size_t len)
     p.virt = v;
     p.req_len = len;
     p.check = 1;
+
     if(page_manager.pml5_support)
         p.pml5 = (pml5e_bits_t*)PAGE_STRUCT_TEMP_MAP(page_manager.page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML5);
