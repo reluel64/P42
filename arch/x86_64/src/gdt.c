@@ -112,7 +112,7 @@ int gdt_init(void)
 
     gdt_entry_encode(0,-1, flags, &gdt[4]);
 
-    /* TSS descriptor*/
+    /* TSS descriptor (0x28) */
     flags = (GDT_TYPE_SET(GDT_SYSTEM_TSS)              | 
             GDT_GRANULARITY_SET(0x1)                   |
             GDT_DPL_SET(0x0)                           |

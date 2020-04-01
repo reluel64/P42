@@ -643,7 +643,6 @@ void PREFIX(free)(void* ptr)
 #endif
         }
 
-return(0);
         if (min->magic == LIBALLOC_DEAD)
         {
 #if defined DEBUG || defined INFO

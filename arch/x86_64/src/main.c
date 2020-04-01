@@ -50,62 +50,8 @@ void kmain()
 
     if(lapic_init())
     {
-       kprintf("ERROR\n");
         return;
     }
 
-#if 0
-pagemgr_t *pg = pagemgr_get();
-
-
-    kprintf("------------------DUMP BEFORE------------------\n");
-    physmm_dump_bitmaps();
-    void *pp = vmmgr_alloc(0,4096ull*1024ull*1024ull,0);
-
-    if(pp == NULL)
-    {
-        kprintf("FAILED\n");
-        while(1);
-    }
-
-    vmmgr_free(pp,4096ull*1024ull*1024ull);
-
-kprintf("------------------DUMP AFTER------------------\n");
-    physmm_dump_bitmaps();
-
-uint64_t i = 1024ull*1024ull;
-    for( ;i<=4096ull*1024ull*1024ull ; i+=1024ull*1024ull )
-    {
-        void *x = NULL;
-        uint64_t v = kmalloc(i);
-        if(v== NULL)
-        {   
-        kprintf("V = 0x%x\n",v);
-           break;
-        }
-        else
-        {
-         //  kprintf("Alloc OK 0x%x 0x%x\n", v, i);
-        }
-       // vmmgr_list_entries();
-        // vmmgr_change_attrib(ALIGN_UP(v, PAGE_SIZE), i - PAGE_SIZE, ~VMM_ATTR_WRITABLE);
-        // memset(v, 0xff,i);
-        kfree(v);
-       
-        x = v;
-    }
-    kprintf("------------------DUMP DEAD------------------\n");
-    kprintf("DEAD 0x%x\n",i);
-    #endif
-#if 1
-    for(uint64_t i = 0; i < 512; i++)
-    {
-        void *v = vmmgr_alloc(0, PAGE_SIZE * i,0);
-
-        vmmgr_reserve(v, PAGE_SIZE * i, 64);
-    }
-    #endif
-    vmmgr_list_entries();
-   // physmm_dump_bitmaps();
-    while(1);
+    acpi_init();
 }

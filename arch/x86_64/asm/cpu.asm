@@ -71,6 +71,10 @@ out 0xa1, al
 out 0x21, al
 ret
 
+__wbinvd:
+    wbinvd
+    ret
+
 [BITS 32]
 
 enable_pml5:
@@ -84,6 +88,8 @@ enable_wp:
     or eax, (1 << 16)
     mov cr0, eax
     ret
+
+
 
 
 global disable_pic

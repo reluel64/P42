@@ -96,9 +96,9 @@ typedef struct
     uint32_t              rsrvd_regions;
     uint32_t              avail_regions;
     phys_addr_t           rgn_paddr;
-    phys_addr_t           rgn_vaddr;
+    virt_addr_t           rgn_vaddr;
     phys_addr_t           desc_paddr;
-    phys_addr_t           desc_vaddr;
+    virt_addr_t           desc_vaddr;
     phys_size_t           desc_len;
     phys_size_t           rgn_len;
     phys_size_t           rgn_area_len;
@@ -106,8 +106,8 @@ typedef struct
     phys_addr_t           kernel_phys_base;
     phys_addr_t           kernel_phys_end;
     phys_size_t           kernel_size;
-    phys_addr_t           kernel_virt_base;
-    phys_addr_t           kernel_virt_end;
+    virt_addr_t           kernel_virt_base;
+    virt_addr_t           kernel_virt_end;
     memory_map_entry_t    kernel_segment;
 }phys_mm_root_t;
 
@@ -989,7 +989,6 @@ static int physmm_free_pf(free_cb cb, void *pv)
                 else
                 {
                    kprintf("ALREADY FREE 0x%x\n",phys);
-                   
                 }
 
                 pf_count_ix++;
@@ -1015,7 +1014,7 @@ void physmm_dump_bitmaps(void)
     phys_mm_region_t *region  = NULL;
     phys_mm_avail_desc_t *desc = NULL;
     uint64_t regions = 0;
-    if(physmm_root.rgn_vaddr == NULL)
+    if(physmm_root.rgn_vaddr == 0)
         return;
     regions = REGION_COUNT(physmm_root.rgn_len);
     region = (phys_mm_region_t*)physmm_root.rgn_vaddr;

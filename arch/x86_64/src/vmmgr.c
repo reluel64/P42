@@ -154,8 +154,6 @@ int vmmgr_init(void)
     vmmgr_reserve((virt_addr_t)rh,
                         PAGE_SIZE,
                         VMM_RES_RSRVD);
-
-    vmmgr_list_entries();
 }
 
 
@@ -201,7 +199,7 @@ static void *vmmgr_alloc_tracking(void)
     from_slot->base   += PAGE_SIZE;
     from_slot->length -= PAGE_SIZE;
 
-    memset(addr, 0, PAGE_SIZE);
+    memset((void*)addr, 0, PAGE_SIZE);
 
     return((void*)addr);
 }

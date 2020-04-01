@@ -86,7 +86,7 @@ static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
 static int         pagemgr_temp_unmap(virt_addr_t vaddr);
 static virt_addr_t pagemgr_alloc(virt_addr_t virt, virt_size_t length, uint32_t attr);
 static virt_addr_t pagemgr_map(virt_addr_t virt, phys_addr_t phys, virt_size_t length, uint32_t attr);
-static int         pagemgr_page_fault_handler(void *pv, phys_size_t error_code);
+static int         pagemgr_page_fault_handler(void *pv, uint64_t error_code);
 static int         pagemgr_attr_change(virt_addr_t vaddr, virt_size_t len, uint32_t attr);
 static int         pagemgr_free(virt_addr_t vaddr, virt_size_t len);
 static int         pagemgr_unmap(virt_addr_t vaddr, virt_size_t len);
@@ -1165,7 +1165,7 @@ void pagemgr_verify_pages(virt_addr_t v, virt_size_t len)
     PAGE_PATH_RESET(&p);
     
     pagemgr_check_page_path(&p);
-    return(0);
+    
 }
 
 
@@ -1174,7 +1174,7 @@ pagemgr_t * pagemgr_get(void)
     return(&pagemgr_if);
 }
 
-static int pagemgr_page_fault_handler(void *pv, virt_size_t error_code)
+static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
 {
     virt_addr_t fault_address = read_cr2();
     

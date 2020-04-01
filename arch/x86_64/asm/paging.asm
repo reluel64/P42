@@ -37,7 +37,3 @@ read_cr2:
 __invlpg:
     invlpg [rdi]
     ret
-
-__wbinvd:
-    wbinvd
-    ret
