@@ -184,7 +184,7 @@ static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
         pte->fields.user_supervisor = !!(attr & PAGE_USER);
         pte->fields.write_through   = !!(attr & PAGE_WRITE_THROUGH);
         pte->fields.cache_disable   = !!(attr & PAGE_NO_CACHE);
-        pte->fields.xd              =  !(attr & PAGE_EXECUTABLE);
+        pte->fields.xd              =  !(attr & PAGE_EXECUTABLE) && page_manager.do_nx;
         return(0);
     }
 

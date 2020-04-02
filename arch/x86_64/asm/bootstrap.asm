@@ -257,5 +257,5 @@ no_64_msg               db "NO 64-bit", 0x0
       
 section .bss
 kstack_base: 
-    resb 16384
+    resb 65536
 kstack_top:

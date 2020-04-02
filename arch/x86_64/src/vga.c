@@ -21,6 +21,7 @@ static vga_t vga;
 
 void vga_init()
 {
+    pagemgr_t *pg = pagemgr_get();
     vga.base = (uint16_t*)vmmgr_map(FB_PHYS_MEM, 0, FB_LEN, VMM_ATTR_WRITABLE);
     vga.col = 0;
     vga.row = 0;
@@ -29,9 +30,9 @@ void vga_init()
 void vga_scroll()
 {
     uint16_t *current_line = vga.base;
-    uint16_t *next_line = current_line + (VGA_MAX_ROW * VGA_MAX_COL * sizeof(uint16_t));
+    uint16_t *next_line = current_line + (VGA_MAX_ROW * VGA_MAX_COL);
 
-    for(uint16_t r = 0; r < VGA_MAX_ROW ; r--)
+    for(uint16_t r = 0; r < VGA_MAX_ROW ; r++)
     {
         
         memcpy(current_line, next_line, sizeof(uint16_t) * VGA_MAX_COL);
@@ -41,7 +42,7 @@ void vga_scroll()
         next_line+=VGA_MAX_COL;
     }
 
-    vga.row = (vga.row > VGA_MAX_ROW ? (vga.row - VGA_MAX_ROW) : 0);
+    vga.row = (vga.row > VGA_MAX_ROW ? (vga.row - VGA_MAX_ROW -1) : 0);
     vga.col = 0;
 }
 
@@ -50,6 +51,7 @@ void vga_print(uint8_t *buf, uint8_t color, uint64_t len)
     uint16_t vga_ch = (uint16_t)color << 8; /* set the color now */
     uint8_t ch = 0;
     uint16_t pos;
+
     if(color == 0x0)
         color = 0x7;
     for(uint64_t i = 0; i < len && buf[i] != 0; i++)
@@ -95,6 +97,8 @@ int  vga_print_ch(uint8_t ch)
     /* This is a newline character
      * so we must increase the row and move the col to 0
      */
+    if(vga.base == 0)
+        return;
     if(ch == '\n')
     {
         vga.row++;
@@ -179,14 +183,14 @@ int kprintf(char *fmt,...)
                     str = va_arg(lst, char*);
                     for(int i = 0; str[i]; i++)
                     {
-                        write_serial(str[i]);
+                        write_console(str[i]);
                     }
                     break;
                 }
                 case 'c':
                 {
                     ch = va_arg(lst, int);
-                    write_serial(ch);
+                    write_console(ch);
                     break;
                 }
                 case 'd':
@@ -196,13 +200,13 @@ int kprintf(char *fmt,...)
                     itoa(num, nbuf, fmt[1]== 'd'? 10 : 16);
                     for(int i = 0; nbuf[i]; i++)
                     {
-                        write_serial(nbuf[i]);
+                        write_console(nbuf[i]);
                     }
                     break;
                 }
 
                 default:
-                 write_serial(fmt[1]);
+                 write_console(fmt[1]);
                 break;
 
             }
@@ -210,7 +214,7 @@ int kprintf(char *fmt,...)
         }
         else
         {
-        write_serial(fmt[0]);
+        write_console(fmt[0]);
         }
         fmt++;
     }

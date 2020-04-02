@@ -86,14 +86,15 @@ void vmmgr_list_entries()
     }
 #endif
 }
-
+extern uint64_t max_linear_address();
+extern uint64_t has_pml5();
 int vmmgr_init(void)
 {
     vmmgr_rsrvd_mem_hdr_t *rh         = NULL;
     vmmgr_free_mem_hdr_t *fh          = NULL;
 
 
-    kprintf("Initializing Virtual Memory Manager\n");
+    kprintf("Initializing Virtual Memory Manager MAX ADDR  %d PML5 %d\n",max_linear_address(), has_pml5());
     memset(&vmem_mgr, 0, sizeof(vmmgr_t));
 
     vmem_mgr.vmmgr_base = VMMGR_BASE;
@@ -116,8 +117,8 @@ int vmmgr_init(void)
     kprintf("rsrvd_start 0x%x\n",rh);
     kprintf("free_start 0x%x\n",fh);
 
-    memset(rh, 0, sizeof(PAGE_SIZE));
-    memset(fh, 0, sizeof(PAGE_SIZE));
+    memset(rh, 0, PAGE_SIZE);
+    memset(fh, 0, PAGE_SIZE);
 
     linked_list_add_head(&vmem_mgr.rsrvd_mem, &rh->node);
     linked_list_add_head(&vmem_mgr.free_mem, &fh->node);
@@ -136,7 +137,7 @@ int vmmgr_init(void)
 
     fh->avail = vmem_mgr.free_ent_per_page ;
     rh->avail = vmem_mgr.rsrvd_ent_per_page;
-
+ 
     vmmgr_reserve( (phys_addr_t)&KERNEL_VMA           +
                    (phys_addr_t)&BOOTSTRAP_END        ,
                    (phys_addr_t)&KERNEL_VMA_END -
@@ -154,6 +155,7 @@ int vmmgr_init(void)
     vmmgr_reserve((virt_addr_t)rh,
                         PAGE_SIZE,
                         VMM_RES_RSRVD);
+    return(0);
 }
 
 
@@ -189,7 +191,11 @@ static void *vmmgr_alloc_tracking(void)
                 from_slot = fdesc;
         }
         fn = next_fn;
+
     }
+
+    if(from_slot == NULL)
+        return(NULL);
 
     addr = pagemgr->alloc(from_slot->base, PAGE_SIZE, PAGE_WRITABLE);
 
@@ -564,6 +570,7 @@ static int vmmgr_put_free_mem(vmmgr_free_mem_t *fmem)
         fh = (vmmgr_free_mem_hdr_t*)fn;
 
         /* Nothing here, advance */
+
         if(fh->avail == 0)
         {
             if(next_fn == NULL)
@@ -588,6 +595,7 @@ static int vmmgr_put_free_mem(vmmgr_free_mem_t *fmem)
             }
 
             fn = next_fn;
+            continue;
         }
 
         for(uint16_t i = 0; i < vmem_mgr.free_ent_per_page; i++)
@@ -666,12 +674,13 @@ int vmmgr_reserve(virt_addr_t virt, virt_size_t len, uint32_t type)
 
         if(next_fn == NULL)
         {
-          //  kprintf("Not enough space!!!\n");
+            kprintf("Not enough space!!!\n");
             break;
         }
-
+ 
         fn = next_fn;
     }
+    
     vmmgr_add_reserved(&rsrvd);
     return(0);
 }

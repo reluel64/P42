@@ -31,7 +31,7 @@ void kmain()
     /* Initialize Virtual Memory Manager */
     if(vmmgr_init() != 0)
         return;
-
+     
     /* Initialize Physical Memory manager */
     if(physmm_init() != 0)
         return;
@@ -45,6 +45,7 @@ void kmain()
     if(pagemgr_install_handler() != 0)
         return;
   
+ 
     vga_init();
     disable_pic();
 
@@ -52,6 +53,7 @@ void kmain()
     {
         return;
     }
-
+    
     acpi_init();
+    acpi_read_tables();
 }

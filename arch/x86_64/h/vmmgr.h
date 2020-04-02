@@ -46,14 +46,14 @@ typedef struct
 {
     list_node_t node;
     uint16_t avail;
-    vmmgr_rsrvd_mem_t rsrvd[1];
+    vmmgr_rsrvd_mem_t rsrvd[0];
 }vmmgr_rsrvd_mem_hdr_t;
 
 typedef struct
 {
     list_node_t node;
     uint16_t avail;
-    vmmgr_free_mem_t fmem[1];
+    vmmgr_free_mem_t fmem[0];
 }vmmgr_free_mem_hdr_t;
 
 int vmmgr_change_attrib(virt_addr_t virt, virt_size_t len, uint32_t attr);
