@@ -12,8 +12,8 @@ typedef struct _list_node_t
 
 typedef struct
 {
-    size_t count;
     list_node_t list;
+    size_t count;
 }list_head_t;
 
 int linked_list_init(list_head_t *lh);

@@ -11,6 +11,7 @@ typedef struct
     uint64_t length;
     uint32_t type;
     uint32_t extended;
+    uint32_t domain;
 }memory_map_entry_t;
 
 int mem_map_iter

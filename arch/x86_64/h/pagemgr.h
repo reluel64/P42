@@ -2,7 +2,7 @@
 #define pagemgr_h
 
 #include <stdint.h>
-#include <physmm.h>
+#include <pfmgr.h>
 #include <vmmgr.h>
 #include <defs.h>
 #define REMAP_TABLE_VADDR (0xFFFFFFFFFFE00000)
@@ -28,4 +28,5 @@ pagemgr_t * pagemgr_get(void);
 int pagemgr_init(void);
 virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr);
 int pagemgr_install_handler(void);
+uint64_t page_manager_get_base(void);
 #endif

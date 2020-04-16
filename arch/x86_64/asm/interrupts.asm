@@ -19,6 +19,7 @@ global isr_no_ec_sz_end
 global isr_ec_sz_start
 global isr_ec_sz_end
 global _geti
+global _flush_gdt
 extern isr_dispatcher
 ; ASM stub for ISRs that do not have 
 ; error codes
@@ -183,7 +184,7 @@ _lidt:
 ; RDI is the address of the structure that 
 ; holds the linear address and the limit
 _lgdt:
-    lgdt[rdi]
+    lgdt [rdi]
     ret
 
 ; Load the Task State Segment register
@@ -191,4 +192,19 @@ _lgdt:
 ; describes the TSS in GDT
 _ltr:
     ltr di
+    ret
+
+
+_flush_gdt:
+    mov ax, 0x10
+    mov ss, ax
+    mov ds, ax
+    mov es, ax
+    mov gs, ax
+    mov fs, ax
+    push 0x8
+    push .flush_done
+    retfq
+
+.flush_done:
     ret

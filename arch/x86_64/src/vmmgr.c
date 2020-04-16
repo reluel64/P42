@@ -5,7 +5,6 @@
 #include <paging.h>
 #include <pagemgr.h>
 #include <vmmgr.h>
-#include <physmm.h>
 #include <stddef.h>
 #include <utils.h>
 
@@ -86,15 +85,14 @@ void vmmgr_list_entries()
     }
 #endif
 }
-extern uint64_t max_linear_address();
-extern uint64_t has_pml5();
+
 int vmmgr_init(void)
 {
     vmmgr_rsrvd_mem_hdr_t *rh         = NULL;
     vmmgr_free_mem_hdr_t *fh          = NULL;
 
 
-    kprintf("Initializing Virtual Memory Manager MAX ADDR  %d PML5 %d\n",max_linear_address(), has_pml5());
+    kprintf("Initializing Virtual Memory Manager MAX ADDR  %d PML5 %d\n");
     memset(&vmem_mgr, 0, sizeof(vmmgr_t));
 
     vmem_mgr.vmmgr_base = VMMGR_BASE;
@@ -111,11 +109,13 @@ int vmmgr_init(void)
                                                 PAGE_SIZE,
                                                 PAGE_WRITABLE);
 
+    kprintf("rsrvd_start 0x%x\n",rh);
+    kprintf("free_start 0x%x\n",fh);
+
     if(rh == NULL || fh == NULL)
         return(-1);
 
-    kprintf("rsrvd_start 0x%x\n",rh);
-    kprintf("free_start 0x%x\n",fh);
+
 
     memset(rh, 0, PAGE_SIZE);
     memset(fh, 0, PAGE_SIZE);
@@ -680,7 +680,7 @@ int vmmgr_reserve(virt_addr_t virt, virt_size_t len, uint32_t type)
  
         fn = next_fn;
     }
-    
+
     vmmgr_add_reserved(&rsrvd);
     return(0);
 }

@@ -204,7 +204,7 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
 
         if(intr->isr_ix == index && intr->ih != NULL)
         {
-            kprintf("IP 0x%x\n",ip);
+           
             status = intr->ih(intr->pv, error_code);
             
             if(status == 0)

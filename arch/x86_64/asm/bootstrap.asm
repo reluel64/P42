@@ -19,10 +19,11 @@ global halt
 extern kmain
 extern BOOT_PAGING
 extern BOOT_PAGING_LENGTH
+
+
 [BITS 32]
 
-section .bootstrap_text
-align 0x1000
+section .multiboot
 multiboot:
 
     magic:          dd 0x1BADB002   ;magic
@@ -37,6 +38,10 @@ multiboot:
     width           dd 0x0
     height          dd 0x0
     depth           dd 0x0
+
+section .bootstrap_text
+align 0x1000
+
 
 ; Small printing routine
 

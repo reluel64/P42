@@ -1,7 +1,7 @@
 #include <liballoc.h>
 #include <vmmgr.h>
 #include <pagemgr.h>
-#include <physmm.h>
+#include <pfmgr.h>
 
 /**  Durand's Amazing Super Duper Memory functions.  */
 

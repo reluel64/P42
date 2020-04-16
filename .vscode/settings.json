@@ -15,6 +15,9 @@
         "liballoc.h": "c",
         "spinlock.h": "c",
         "stdbool.h": "c",
-        "gdt.h": "c"
+        "gdt.h": "c",
+        "io.h": "c",
+        "acpi.h": "c",
+        "random": "c"
     }
 }

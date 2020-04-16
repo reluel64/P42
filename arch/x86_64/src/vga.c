@@ -23,6 +23,8 @@ void vga_init()
 {
     pagemgr_t *pg = pagemgr_get();
     vga.base = (uint16_t*)vmmgr_map(FB_PHYS_MEM, 0, FB_LEN, VMM_ATTR_WRITABLE);
+
+
     vga.col = 0;
     vga.row = 0;
 }
@@ -183,14 +185,14 @@ int kprintf(char *fmt,...)
                     str = va_arg(lst, char*);
                     for(int i = 0; str[i]; i++)
                     {
-                        write_console(str[i]);
+                        write_serial(str[i]);
                     }
                     break;
                 }
                 case 'c':
                 {
                     ch = va_arg(lst, int);
-                    write_console(ch);
+                    write_serial(ch);
                     break;
                 }
                 case 'd':
@@ -200,13 +202,13 @@ int kprintf(char *fmt,...)
                     itoa(num, nbuf, fmt[1]== 'd'? 10 : 16);
                     for(int i = 0; nbuf[i]; i++)
                     {
-                        write_console(nbuf[i]);
+                        write_serial(nbuf[i]);
                     }
                     break;
                 }
 
                 default:
-                 write_console(fmt[1]);
+                 write_serial(fmt[1]);
                 break;
 
             }
@@ -214,7 +216,7 @@ int kprintf(char *fmt,...)
         }
         else
         {
-        write_console(fmt[0]);
+        write_serial(fmt[0]);
         }
         fmt++;
     }

@@ -211,5 +211,9 @@ typedef struct
     
 }madt_t;
 
+
+
+
 int acpi_init(void);
+int acpi_read_table(void);
 #endif

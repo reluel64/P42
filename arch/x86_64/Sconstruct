@@ -1,0 +1,17 @@
+import os
+
+env=Environment(ENV = {'PATH' : os.environ['PATH']},
+                CCFLAGS = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel',
+                LINKFLAGS = '-T linker.ld -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
+                CC = 'x86_64-elf-gcc',
+                CPPPATH = 'h',
+                ASFLAGS = '-felf64',
+                tools=['default', 'nasm'],
+
+                ) 
+                
+env.Program(target = 'test.bin', source=[Glob('src/*.c'), Glob('asm/*.asm')])
+
+#obj_list= env.Object( Glob('src/*.c'))
+#env.Object( Glob('asm/*.asm'))
+

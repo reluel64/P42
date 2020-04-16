@@ -1,19 +1,22 @@
-KERNEL_VMA  = 0xFFFFFFFF80000000;
-KERNEL_LMA  = 0x1000000;
-BOOT_PAGING = 0x100000;
+KERNEL_VMA         = 0xFFFFFFFF80000000;
+KERNEL_LMA         = 0x1000000;
+BOOT_PAGING        = 0x100000;
 BOOT_PAGING_LENGTH = 0x203000;
-BOOT_PAGING_END = BOOT_PAGING + BOOT_PAGING_LENGTH;
+BOOT_PAGING_END    = BOOT_PAGING + BOOT_PAGING_LENGTH;
+AP_START           = 0x7c00;
 
 ENTRY(kernel_init)
 
 SECTIONS
 {
+
     . = KERNEL_LMA;
 
     BOOTSTRAP_START = .;
 
     .bootstrap_text : AT(ADDR(.bootstrap_text))
     {
+        *(.multiboot)
         *(.bootstrap_text)
         . = ALIGN(4096);
     }
@@ -52,6 +55,7 @@ SECTIONS
     {
         _rodata = .;
         *(.rodata*)
+         *(.ap_init)
         . = ALIGN(4096);
         _rodata_end = .;
     }
@@ -89,4 +93,7 @@ SECTIONS
     KERNEL_VMA_END = .;
     KERNEL_LMA_END = . - KERNEL_VMA;
     KERNEL_IMAGE_LEN =  KERNEL_LMA_END - KERNEL_LMA;
+
+    
+
 }

@@ -4,7 +4,7 @@
  * structures
  */
 
-#include <physmm.h>
+
 #include <stdint.h>
 #include <paging.h>
 #include <utils.h>
@@ -43,6 +43,7 @@ typedef struct
     uint8_t check;
 }pagemgr_path_t;
 
+extern uint32_t page_base;
 
 /* defines */
 
@@ -80,7 +81,7 @@ extern void        __wbinvd();
 /* locals */
 static pagemgr_root_t page_manager = {0};
 static pagemgr_t      pagemgr_if   = {0};
-static physmm_t       *physmm      = NULL;
+static pfmgr_t       *pfmgr        = NULL;
 
 static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
 static int         pagemgr_temp_unmap(virt_addr_t vaddr);
@@ -154,11 +155,10 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
 }
 
 
-
 static phys_size_t pagemgr_boot_alloc_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
     phys_addr_t *pf = (phys_addr_t*)pv;
-    
+  
     if(*pf != 0)
         return(0);
     
@@ -171,8 +171,8 @@ static phys_addr_t pagemgr_boot_alloc_pf()
 {
     phys_addr_t pf = 0;
 
-    physmm->alloc(1, 0, pagemgr_boot_alloc_cb, &pf);
-
+    pfmgr->alloc(1, 0, pagemgr_boot_alloc_cb, &pf);
+//    kprintf("FRAME AT 0x%x\n",pf);
     return(pf);
 }
 
@@ -212,7 +212,7 @@ static int pagemgr_build_init_pagetable(void)
     uint16_t     pte_ix       = -1;
     uint8_t      krnl_tbl_ok  = 0;
     uint8_t      pml5_support = page_manager.pml5_support;
-
+    
     /* setup the top most page table */    
     work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(page_manager.page_phys_base);
     memset(work_ptr, 0, PAGE_SIZE);
@@ -222,7 +222,7 @@ static int pagemgr_build_init_pagetable(void)
     {
         if(step == PAGE_KERNEL_MAP_STEP)
         {
-            vbase     = (phys_addr_t)&KERNEL_VMA + paddr;
+            vbase   = (phys_addr_t)&KERNEL_VMA     + paddr;
             req_len = (phys_addr_t)&KERNEL_VMA_END - vbase;
         }
         else
@@ -400,12 +400,12 @@ static int pagemgr_build_init_pagetable(void)
 int pagemgr_init(void)
 {
     kprintf("Initializing Page Manager\n");
-    physmm = physmm_get();
+    pfmgr = pfmgr_get();
     memset(&page_manager, 0, sizeof(pagemgr_t));
     spinlock_init(&page_manager.lock);
     
     page_manager.page_phys_base = pagemgr_boot_alloc_pf();
-
+    kprintf("PHYS_BASE 0x%x\n",page_manager.page_phys_base);
     /* Check if we support No-Execute and if we do,
      * enable it 
      */ 
@@ -528,7 +528,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
     uint8_t         clear   = 0;
     virt_addr_t     virt    = 0;
     pagemgr_path_t *path    = (pagemgr_path_t*)pv;
-    
+
     while((used_pf < count) && (path->virt_off < path->req_len))
     {
         virt = path->virt + path->virt_off;
@@ -542,6 +542,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 if(path->pml5[path->pml5_ix].fields.present == 0)
                 {
                     path->pml5[path->pml5_ix].bits = phys + used_pf * PAGE_SIZE;
+                  
                     path->pml5[path->pml5_ix].fields.read_write = 1;
                     path->pml5[path->pml5_ix].fields.present    = 1;
                     used_pf++;
@@ -569,6 +570,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 if(path->pml4[path->pml4_ix].fields.present == 0)
                 {
                     path->pml4[path->pml4_ix].bits = phys + used_pf * PAGE_SIZE;
+                    
                     path->pml4[path->pml4_ix].fields.read_write = 1;
                     path->pml4[path->pml4_ix].fields.present    = 1;
                     used_pf++;
@@ -595,6 +597,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 if(path->pdpt[path->pdpt_ix].fields.present == 0)
                 {
                     path->pdpt[path->pdpt_ix].bits = phys + used_pf * PAGE_SIZE;
+                    
                     path->pdpt[path->pdpt_ix].fields.read_write = 1;
                     path->pdpt[path->pdpt_ix].fields.present    = 1;
                     used_pf++;
@@ -622,6 +625,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 {
                     
                     path->pd[path->pdt_ix].bits = phys + used_pf * PAGE_SIZE;
+                    
                     path->pd[path->pdt_ix].fields.read_write = 1;
                     path->pd[path->pdt_ix].fields.present    = 1;
                     used_pf++;
@@ -641,7 +645,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 }
             }
         }
-                
+       
         path->virt_off += PAGE_SIZE;
     }
 
@@ -704,8 +708,8 @@ static int pagemgr_check_page_path(pagemgr_path_t *path)
 
             if(path->pd[path->pdt_ix].fields.present == 0)
                 return(1);
-
         }    
+
         path->virt_off += PAGE_SIZE;
     }
     return(0);
@@ -834,7 +838,7 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
   //  if(path->req_len != 4096ull*1024ull*1024ull)
               //  kprintf("REL 0x%x -> 0x%x\n",virt, PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits));
        
-        
+      
 #if 1
         if(path->pt[path->pt_ix].fields.present)
         {
@@ -851,7 +855,7 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
                 continue;
             }
             /* See if this page is in chain with start_phys */
-            else if(page_phys == start_phys + page_count * PAGE_SIZE)
+            else if(page_phys == (start_phys + (page_count * PAGE_SIZE)))
             {
                 page_count++;
                 path->pt[path->pt_ix].bits = 0;
@@ -868,6 +872,7 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
             {
                 *phys = start_phys;
                 *count = page_count;
+                //  kprintf("START 0x%x COUNT %d\n",start_phys, page_count);
                 return(1);
             }
         }
@@ -878,7 +883,7 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
         }
 
 #else
-        if(path->pt[path->pt_ix].bits)
+        if(path->pt[path->pt_ix].fields.present)
         {
                 start_phys = PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits);
                 page_count =1;
@@ -886,13 +891,14 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
                 
                 *phys = start_phys;
                 *count = page_count;
-
+                 path->virt_off += PAGE_SIZE;
                 pagemgr_invalidate(virt);
                 return(1);
         }
 #endif
 
     }
+  //  kprintf("START 0x%x COUNT %d\n",start_phys, page_count);
     *phys = start_phys;
     *count = page_count;
     return(0);
@@ -928,7 +934,7 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
         return(0);
     }
 
-    ret = physmm->alloc(0, ALLOC_CB_STOP, pagemgr_alloc_pages_cb, (void*)path);
+    ret = pfmgr->alloc(0x1000, ALLOC_CB_STOP, pagemgr_alloc_pages_cb, (void*)path);
 
     if(ret == -1 || path->req_len > path->virt_off)
     {
@@ -999,7 +1005,7 @@ static virt_addr_t pagemgr_alloc(virt_addr_t virt, virt_size_t length, uint32_t 
                                                 PAGE_TEMP_REMAP_PML4);
     
     spinlock_lock_interrupt(&page_manager.lock);
-
+    
     ret = pagemgr_build_page_path(&path);
 
     if(ret < 0)
@@ -1011,9 +1017,9 @@ static virt_addr_t pagemgr_alloc(virt_addr_t virt, virt_size_t length, uint32_t 
     PAGE_PATH_RESET(&path);
 
     pg_frames = length / PAGE_SIZE;
-  
-    ret = physmm->alloc(pg_frames, 0, (alloc_cb)pagemgr_alloc_or_map_cb, (void*)&path);    
-    
+
+    ret = pfmgr->alloc(pg_frames, 0, (alloc_cb)pagemgr_alloc_or_map_cb, (void*)&path);    
+
     if(ret < 0)
     {
         kprintf("NO MORE BMP\n");
@@ -1094,7 +1100,7 @@ static int pagemgr_free(virt_addr_t vaddr, virt_size_t len)
 
     PAGE_PATH_RESET(&path);
     
-    physmm->dealloc(pagemgr_free_or_unmap_cb, &path);
+    pfmgr->dealloc(pagemgr_free_or_unmap_cb, &path);
 
 #if 0
     if(stop)
@@ -1172,6 +1178,11 @@ void pagemgr_verify_pages(virt_addr_t v, virt_size_t len)
 pagemgr_t * pagemgr_get(void)
 {
     return(&pagemgr_if);
+}
+
+uint64_t page_manager_get_base(void)
+{
+    return page_manager.page_phys_base;
 }
 
 static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
