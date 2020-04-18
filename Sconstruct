@@ -1,23 +1,40 @@
 import os
 import shutil
-VariantDir('build/src','src',duplicate=0 )
-VariantDir('build/asm','asm',duplicate=0 )
+obj_list = []
+root_dir = Dir('.').abspath
+linker_script = 'arch/x86_64/linker.ld'
 
 env=Environment(
                 ENV       = {'PATH' : os.environ['PATH']},
                 CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel',
-                LINKFLAGS = '-T linker.ld -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
+                LINKFLAGS = '-T ' + linker_script + ' -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
                 CC        = 'x86_64-elf-gcc',
-                CPPPATH   = 'h',
+                CPPPATH   = root_dir + "/h",
                 ASFLAGS   = '-felf64',
                 tools     =['default', 'nasm'],
                )
 
-direc = env.Dir('TestDir')
 
+
+build_scripts = [
+                'kernel/Sconscript',
+                'mm/Sconscript',
+                'utils/Sconscript',
+                'arch/x86_64/Sconscript',
+                ]
+
+objects = SConscript(build_scripts, exports = 'env')
+
+
+for obj in objects:
+    for o in obj:
+        obj_list.append(o)
+
+
+Export('env')
 kernel = env.Program(
                     target = 'kernel.bin', 
-                    source=[Glob('build/src/*.c'), Glob('build/asm/*.asm')]
+                    source=obj_list
                     )
 
 env.Install('/media/alex/4D7E-2E98', kernel)

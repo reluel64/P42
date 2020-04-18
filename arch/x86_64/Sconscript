@@ -1,0 +1,17 @@
+return_obj = []
+
+Import('env')
+VariantDir('build/src','src',duplicate=0 )
+VariantDir('build/asm','asm',duplicate=0 )
+
+obj = env.Object(
+                    [Glob('build/src/*.c'),
+                    Glob('build/asm/*.asm')]
+                    )
+
+
+
+for o in obj:
+    return_obj.append(File(o))
+
+Return('return_obj')

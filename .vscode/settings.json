@@ -18,6 +18,7 @@
         "gdt.h": "c",
         "io.h": "c",
         "acpi.h": "c",
-        "random": "c"
+        "random": "c",
+        "Sconstruct":"Python"
     }
 }
