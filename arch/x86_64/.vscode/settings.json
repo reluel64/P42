@@ -1,6 +1,0 @@
-{
-    "files.associations": {
-        "descriptors.h": "c",
-        "multiboot.h": "c"
-    }
-}

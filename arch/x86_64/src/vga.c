@@ -100,7 +100,7 @@ int  vga_print_ch(uint8_t ch)
      * so we must increase the row and move the col to 0
      */
     if(vga.base == 0)
-        return;
+        return(0);
     if(ch == '\n')
     {
         vga.row++;
@@ -124,100 +124,4 @@ int  vga_print_ch(uint8_t ch)
     vga.base[pos] = (vga_ch | ch);
     vga.col++;
 
-}
-
-
-static char * itoa(unsigned long value, char * str, int base)
-{
-     char * rc;
-    char * ptr;
-    char * low;
-    // Check for supported base.
-    if ( base < 2 || base > 36 )
-    {
-        *str = '\0';
-        return str;
-    }
-    rc = ptr = str;
-    // Set '-' for negative decimals.
-    if ( value < 0 && base == 10 )
-    {
-        *ptr++ = '-';
-    }
-    // Remember where the numbers start.
-    low = ptr;
-    // The actual conversion.
-    do
-    {
-        // Modulo is negative for negative value. This trick makes abs() unnecessary.
-        *ptr++ = "zyxwvutsrqponmlkjihgfedcba9876543210123456789abcdefghijklmnopqrstuvwxyz"[35 + value % base];
-        value /= base;
-    } while ( value );
-    // Terminating the string.
-    *ptr-- = '\0';
-    // Invert the numbers.
-    while ( low < ptr )
-    {
-        char tmp = *low;
-        *low++ = *ptr;
-        *ptr-- = tmp;
-    }
-    return rc;
-}
-
-
-int kprintf(char *fmt,...)
-{
-    va_list lst;
-    va_start(lst,fmt);
-    char *str = NULL;
-    char ch = 0;
-    char nbuf[64];
-    uint64_t num = 0;
-    while(fmt[0]!= '\0')
-    {
-        if(fmt[0] == '%')
-        {
-            switch(fmt[1])
-            {
-                case 's':
-                {
-                    str = va_arg(lst, char*);
-                    for(int i = 0; str[i]; i++)
-                    {
-                        write_serial(str[i]);
-                    }
-                    break;
-                }
-                case 'c':
-                {
-                    ch = va_arg(lst, int);
-                    write_serial(ch);
-                    break;
-                }
-                case 'd':
-                case 'x':
-                {
-                    num = va_arg(lst,uint64_t);
-                    itoa(num, nbuf, fmt[1]== 'd'? 10 : 16);
-                    for(int i = 0; nbuf[i]; i++)
-                    {
-                        write_serial(nbuf[i]);
-                    }
-                    break;
-                }
-
-                default:
-                 write_serial(fmt[1]);
-                break;
-
-            }
-            fmt++;
-        }
-        else
-        {
-        write_serial(fmt[0]);
-        }
-        fmt++;
-    }
 }

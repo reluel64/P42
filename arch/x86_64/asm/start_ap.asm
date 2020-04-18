@@ -69,16 +69,16 @@ align 16
 GDT64:
     NULL64:     dq      0x00
     KCODE64:    dd      0x00
-              db      0x00
-              db      0x9A
-              db      0xA0
-              db      0x0
+                db      0x00
+                db      0x9A
+                db      0xA0
+                db      0x0
 
     KDATA64:    dd      0x00
-              db      0x00
-              db      0x92
-              db      0xA0
-              db      0x0
+                db      0x00
+                db      0x92
+                db      0xA0
+                db      0x0
 
 align 16
 GDT_PTR64:

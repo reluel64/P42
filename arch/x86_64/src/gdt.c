@@ -130,21 +130,14 @@ int gdt_init(void)
     gdt_root.gdt_ptr.len  = MAX_GDT_TABLE_SIZE - 1; 
 
     _lgdt(&gdt_root.gdt_ptr);
-    extern void _ti();
-      _ltr(TSS_SEGMENT);
+    _ltr(TSS_SEGMENT);
    _flush_gdt();
 
-  // _ti();
-  
-   // _test_interrupt();
-kprintf("GDT 0x%x TSS 0x%x\n",gdt_root.gdt, gdt_root.tss);
+    kprintf("GDT 0x%x TSS 0x%x\n",gdt_root.gdt, gdt_root.tss);
     return(0);
 }
 
-
-
-
 virt_addr_t gdt_base_get(void)
 {
-    return(&gdt_root.gdt_ptr);
+    return((virt_addr_t)&gdt_root.gdt_ptr);
 }
