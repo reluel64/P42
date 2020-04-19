@@ -1,0 +1,30 @@
+return_obj = []
+
+
+Import('env')
+#VariantDir('build','.',duplicate=0 )
+
+local_env = env.Clone(CPPPATH   = Dir('include').abspath)
+
+
+print local_env['CPPPATH']
+
+obj = local_env.Object(
+                    [Glob('components/dispatcher/*.c'),
+                    Glob('components/events/*.c'),
+                    Glob('components/executer/*.c'),
+                    Glob('components/hardware/*.c'),
+                    Glob('components/namespace/*.c'),
+                    Glob('components/utilities/*.c'),
+                    Glob('components/tables/*.c'),
+                    Glob('components/parser/*.c'),
+                    Glob('components/resources/*.c'),
+                    Glob('os_specific/service_layers/osp42.c')]
+                )
+
+
+for o in obj:
+    return_obj.append(File(o))
+
+Return('return_obj')
+

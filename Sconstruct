@@ -1,7 +1,7 @@
 import os
 import shutil
 obj_list = []
-root_dir = Dir('.').abspath
+
 linker_script = 'arch/x86_64/linker.ld'
 
 env=Environment(
@@ -9,33 +9,32 @@ env=Environment(
                 CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel',
                 LINKFLAGS = '-T ' + linker_script + ' -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
                 CC        = 'x86_64-elf-gcc',
-                CPPPATH   = root_dir + "/h",
+                CPPPATH   = [Dir("h"), Dir('acpica-unix2-20200326/include')] ,
                 ASFLAGS   = '-felf64',
                 tools     =['default', 'nasm'],
                )
-
-
-
+               
 build_scripts = [
                 'kernel/Sconscript',
                 'mm/Sconscript',
                 'utils/Sconscript',
                 'arch/x86_64/Sconscript',
+                'acpica-unix2-20200326/Sconscript'
                 ]
 
 objects = SConscript(build_scripts, exports = 'env')
-
 
 for obj in objects:
     for o in obj:
         obj_list.append(o)
 
-
 Export('env')
+
 kernel = env.Program(
                     target = 'kernel.bin', 
                     source=obj_list
                     )
 
+print Dir("h").path
 env.Install('/media/alex/4D7E-2E98', kernel)
 env.Alias('install','/media/alex/4D7E-2E98')

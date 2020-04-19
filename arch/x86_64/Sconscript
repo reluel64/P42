@@ -9,8 +9,6 @@ obj = env.Object(
                     Glob('build/asm/*.asm')]
                     )
 
-
-
 for o in obj:
     return_obj.append(File(o))
 

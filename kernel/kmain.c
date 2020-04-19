@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <vga.h>
 #include <serial.h>
 #include <utils.h>
 #include <pfmgr.h>
@@ -9,7 +8,7 @@
 #include <isr.h>
 #include <liballoc.h>
 #include <spinlock.h>
-
+#include <acpi.h>
 int apic_timer_start(uint32_t timeout);
 
 uint8_t *apic_base ;extern void physmm_dump_bitmaps(void);
@@ -73,22 +72,23 @@ kfree(p);
 kprintf("FreeDone\n");
 
 uint64_t iter= 0;
-#if 1
+#if 0
     for(uint64_t i = 1024*1024; i< 0x500000000;i+=1024*1024)
     {
-        void *p = kmalloc(1024*1024);
+        void *p = kmalloc(i);
         iter ++;
     
         if(p == NULL)
             break;
-       // kprintf("ALLOC_OK ITER  0x%x -> 0x%x\n",i, p);    
+        kprintf("ALLOC_OK ITER  0x%x -> 0x%x\n",i, p);    
         //pg->dealloc(0xffff800001000000, i);
         kfree(p);
     }
 
      #endif   
 
-  while(1);
+
+AcpiOsInitialize();
 
 kprintf("DONE\n");
 //    extern int wake_cpu();

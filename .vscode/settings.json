@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "Sconscript": "python",
         "stddef.h": "c",
         "stdint.h": "c",
         "memory": "cpp",
@@ -19,6 +20,7 @@
         "io.h": "c",
         "acpi.h": "c",
         "random": "c",
-        "Sconstruct":"Python"
+        "Sconstruct": "python",
+        "pfmgr.h": "c"
     }
 }
