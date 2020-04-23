@@ -4,10 +4,10 @@ return_obj = []
 Import('env')
 #VariantDir('build','.',duplicate=0 )
 
-local_env = env.Clone(CPPPATH   = Dir('include').abspath)
+local_env = env.Clone()
 
 
-print local_env['CPPPATH']
+
 
 obj = local_env.Object(
                     [Glob('components/dispatcher/*.c'),

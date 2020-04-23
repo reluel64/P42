@@ -45,6 +45,8 @@
  * These interfaces are required in order to compile the ASL compiler and the
  * various ACPICA tools under Linux or other Unix-like system.
  */
+#include <vmmgr.h>
+#include <liballoc.h>
 #include "acpi.h"
 #include "accommon.h"
 #include "amlcode.h"
@@ -205,10 +207,7 @@ ACPI_STATUS
 AcpiOsInitialize (
     void)
 {
-    ACPI_STATUS            Status;
-
-
-
+    ACPI_STATUS            Status = AE_OK;
 
     OsEnterLineEditMode ();
 
@@ -247,7 +246,10 @@ ACPI_PHYSICAL_ADDRESS
 AcpiOsGetRootPointer (
     void)
 {
-    return (0);
+   	ACPI_PHYSICAL_ADDRESS  Ret;
+	Ret = 0;
+	AcpiFindRootPointer(&Ret);
+	return Ret;
 }
 #endif
 
@@ -592,13 +594,38 @@ AcpiOsGetLine (
  *
  *****************************************************************************/
 
+
+#define ALIGN_UP(value,align) (((value) + (align - 1)) & ~(align - 1))
+#define ALIGN_DOWN(value,align) ((value) & (~(align - 1)))
 void *
 AcpiOsMapMemory (
     ACPI_PHYSICAL_ADDRESS   where,
     ACPI_SIZE               length)
 {
+    
 
-    return (ACPI_TO_POINTER ((ACPI_SIZE) where));
+    phys_size_t align_addr = 0;
+    phys_size_t diff = 0;
+    virt_addr_t ret_addr = 0;
+    #if 0
+    align_addr = ALIGN_DOWN(where, PAGE_SIZE);
+    diff = where - align_addr;
+
+    /* compensate base difference */
+    length += diff; 
+
+    if(length % PAGE_SIZE)
+        length = ALIGN_UP(length, PAGE_SIZE);
+
+  //  ret_addr = (virt_addr_t) vmmgr_map(align_addr, 0, length, PAGE_WRITABLE);
+     ret_addr = pagemgr_boot_temp_map_big(align_addr, length);
+    ret_addr += diff;
+#else
+     //   kprintf("MAP 0x%x -> 0x%x\n", where, length);
+    ret_addr = pagemgr_boot_temp_map_big(where, length);
+#endif
+
+    return ((void*)ret_addr);
 }
 
 
@@ -621,7 +648,28 @@ AcpiOsUnmapMemory (
     void                    *where,
     ACPI_SIZE               length)
 {
+    #if 0
+    virt_addr_t  addr = (virt_addr_t)where;
+    virt_addr_t align_addr = 0;
+    virt_size_t diff = 0;
+    kprintf("UNMAP\n");
+    int status = 0;
 
+    align_addr = ALIGN_DOWN(addr, PAGE_SIZE);
+    diff = addr - align_addr;
+
+    /* compensate base difference */
+    length += diff; 
+
+    if(length % PAGE_SIZE)
+        length = ALIGN_UP(length, PAGE_SIZE);
+
+    //status = (virt_addr_t) vmmgr_unmap((void*)align_addr, length);
+     pagemgr_boot_temp_unmap_big(align_addr, length);
+    #endif
+    //return;
+    pagemgr_boot_temp_unmap_big(where, length);
+   // kprintf("UNMAP 0x%x -> 0x%x\n", where, length);
     return;
 }
 #endif
@@ -1540,3 +1588,4 @@ AcpiOsWaitEventsComplete (
 {
     return;
 }
+

@@ -1,0 +1,13 @@
+qemu-system-x86_64 -machine pc-q35-2.8 -cpu Skylake-Server -smp 1,sockets=4,maxcpus=4 \
+-numa node,nodeid=0 \
+-numa node,nodeid=1 \
+-numa node,nodeid=2 \
+-numa node,nodeid=3 \
+-numa cpu,node-id=0,socket-id=0 \
+-numa cpu,node-id=1,socket-id=1 \
+-numa cpu,node-id=2,socket-id=2 \
+-numa cpu,node-id=3,socket-id=3 \
+-drive format=raw,file='/mnt/F0F0492EF048FBFA/Disk Image of sdc (2020-04-22 2025).img',cache=none -m 16G -chardev stdio,mux=on,id=char0 \
+-mon chardev=char0,mode=readline \
+-serial chardev:char0 \
+-serial chardev:char0

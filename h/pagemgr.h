@@ -27,6 +27,9 @@ typedef struct
 pagemgr_t * pagemgr_get(void);
 int pagemgr_init(void);
 virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr);
+virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, phys_size_t len);
+virt_addr_t pagemgr_boot_temp_unmap_big(phys_addr_t vaddr, phys_size_t len);
+void pagemgr_boot_temp_map_init(void);
 int pagemgr_install_handler(void);
 uint64_t page_manager_get_base(void);
 #endif

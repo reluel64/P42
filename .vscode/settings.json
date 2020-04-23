@@ -21,6 +21,11 @@
         "acpi.h": "c",
         "random": "c",
         "Sconstruct": "python",
-        "pfmgr.h": "c"
+        "pfmgr.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "utility": "c",
+        "types.h": "c"
     }
 }

@@ -29,7 +29,7 @@ void kmain()
 {
     /* Init polling console */
     init_serial();
-
+    pagemgr_boot_temp_map_init();
 
     pfmgr_early_init();
 
@@ -61,15 +61,7 @@ void kmain()
     if(lapic_init())
         return;
 
-pagemgr_t *pg = pagemgr_get();
-kprintf("ALLOC\n");
-void *p = kmalloc(0x500000000);
-if(p != NULL)
-{
-kprintf("ALLOC_DONE\n");
-kfree(p);
-}
-kprintf("FreeDone\n");
+
 
 uint64_t iter= 0;
 #if 0
@@ -87,11 +79,44 @@ uint64_t iter= 0;
 
      #endif   
 
+#if 0
+#define ACPI_MAX_INIT_TABLES   512
+static ACPI_TABLE_DESC      TableArray[ACPI_MAX_INIT_TABLES];
 
-AcpiOsInitialize();
+memset(TableArray, 0, sizeof(TableArray));
+
+ACPI_STATUS sts = AcpiInitializeTables(TableArray, ACPI_MAX_INIT_TABLES, TRUE);
+
+uint8_t *hdr = NULL;
+sts = AcpiGetTable(ACPI_SIG_SRAT,1,&hdr);
+kprintf("STATUS %d\n",sts);
+
+
+kprintf("TABLE_SIZE %d\n",sizeof(TableArray));
+
+kprintf("TESTSATRING\n");
+ACPI_TABLE_HEADER *phdr = hdr;
+ACPI_SUBTABLE_HEADER *sub = hdr + sizeof(ACPI_TABLE_SRAT) + sizeof(ACPI_SRAT_CPU_AFFINITY) *4;
+ACPI_SRAT_MEM_AFFINITY *mem = sub;
+
+kprintf("LENGTH %d\n",sub->Type);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[0].Header.Type, mem[0].ProximityDomain, mem[0].BaseAddress, mem[0].Length);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[1].Header.Type, mem[1].ProximityDomain, mem[1].BaseAddress, mem[1].Length);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[2].Header.Type, mem[2].ProximityDomain, mem[2].BaseAddress, mem[2].Length);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[3].Header.Type, mem[3].ProximityDomain, mem[3].BaseAddress, mem[3].Length);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[4].Header.Type, mem[4].ProximityDomain, mem[4].BaseAddress, mem[4].Length);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[5].Header.Type, mem[5].ProximityDomain, mem[5].BaseAddress, mem[5].Length);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[6].Header.Type, mem[6].ProximityDomain, mem[6].BaseAddress, mem[6].Length);
+kprintf("TYPE %d DOMAIN %d BASE 0x%x LEN 0x%x\n",mem[7].Header.Type, mem[7].ProximityDomain, mem[7].BaseAddress, mem[7].Length);
+
+
+while(1);
+sts = AcpiLoadTables();
 
 kprintf("DONE\n");
 //    extern int wake_cpu();
 
   //  wake_cpu();
+  #endif
 }
+

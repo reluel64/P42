@@ -155,6 +155,156 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
 }
 
 
+void pagemgr_boot_temp_map_init(void)
+{
+    virt_addr_t page_table;
+    virt_addr_t *page;
+    page_table = (virt_addr_t)&BOOT_PAGING;
+
+    page = (virt_addr_t*)(page_table + 0x3000 + 511 * PAGE_SIZE );
+
+    memset(page, 0, PAGE_SIZE);
+}
+
+virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, phys_size_t len)
+{
+    uint16_t   offset = 0;
+    virt_addr_t   virt_addr = 0;
+    virt_addr_t   page_table = 0;
+    virt_addr_t  *page = NULL;
+    uint16_t pages  = 0;
+    uint16_t free_start = 0;
+
+    int found = 0;
+
+    offset = phys_addr % PAGE_SIZE;
+    phys_addr -= offset;
+
+    len+=offset;
+
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
+
+    if(page_manager.remap_table_vaddr == 0)
+    {
+         page_table = (virt_addr_t)&BOOT_PAGING;
+         virt_addr =  (virt_addr_t)&KERNEL_VMA   |
+                       PDT_INDEX_TO_VIRT(511)    |
+                       PT_INDEX_TO_VIRT(0);
+
+        page = (virt_addr_t*)(page_table + 0x3000 + 511 * PAGE_SIZE );
+
+        /* Start to lookup */
+
+        for(int i = 0; i < 510; i++)
+        {
+            if(page[i] == 0)
+            {
+                if(free_start == 0)
+                    free_start = i;
+
+                pages++;
+
+                if(pages * PAGE_SIZE >= len)
+                {
+                    found = 1;
+                    break;
+                }
+            }
+            else
+            {
+                free_start = 0;
+            }
+        }
+        
+        if(found == 0)
+        {
+            kprintf("NOT FOUND %x %x\n", free_start, pages);
+            return(0);
+        }
+
+        for(uint16_t i = free_start; i < 510; i++)
+        {
+            
+            page[i] = (phys_addr + PAGE_SIZE * (i - free_start)) | 0x1B;
+           // kprintf("ADDR 0x%x\n",(phys_addr + PAGE_SIZE * (i - free_start)));
+            __invlpg(virt_addr + PAGE_SIZE * i);
+
+            if(--pages == 0)
+                break;            
+        }
+    }
+    else
+    {
+        kprintf("NOT IMPLEMENTED \n");
+        while(1);
+        #if 0
+        virt_addr = pagemgr_temp_map(phys_addr, 0);
+       
+        for(uint16_t i = 1; i < 510; i++)
+            pagemgr_temp_map(phys_addr + PAGE_SIZE * i, i);
+            #endif
+    }
+  
+    return((virt_addr + free_start * PAGE_SIZE) + offset);
+}
+
+
+virt_addr_t pagemgr_boot_temp_unmap_big(phys_addr_t vaddr, phys_size_t len)
+{
+    uint16_t   offset = 0;
+    virt_addr_t   virt_addr = 0;
+    virt_addr_t   page_table = 0;
+    virt_addr_t  *page = NULL;
+    uint16_t ix  = 0;
+    offset = vaddr % PAGE_SIZE;
+    vaddr -= offset;
+    
+    len+=offset;
+
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
+    if(vaddr == 0)
+    {
+        kprintf("ERROR\n");
+        while(1);
+    }
+
+    if(page_manager.remap_table_vaddr == 0)
+    {
+         page_table = (virt_addr_t)&BOOT_PAGING;
+         virt_addr =  (virt_addr_t)&KERNEL_VMA   |
+                       PDT_INDEX_TO_VIRT(511)    |
+                       PT_INDEX_TO_VIRT(0);
+
+        page = (virt_addr_t*)(page_table + 0x3000 + 511 * PAGE_SIZE );
+        ix = (vaddr - virt_addr) / PAGE_SIZE;
+
+        if(ix > 512)
+            {
+                kprintf("VADDR 0x%x - > VIRT 0x%x\n",vaddr,virt_addr);
+            }
+       // kprintf("IX %d\n", ix);
+        for(uint32_t i = 0; i < len; i += PAGE_SIZE)
+        {
+
+            /* mark the page as present and writeable */
+            page[ix++] = 0;
+            __invlpg(vaddr);
+            vaddr += PAGE_SIZE;
+        }
+    }
+    else
+    {
+       kprintf("Unimplemented\n");
+       while(1);
+    }
+  
+    return(0);
+}
+
 static phys_size_t pagemgr_boot_alloc_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
     phys_addr_t *pf = (phys_addr_t*)pv;
