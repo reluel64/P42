@@ -11,6 +11,10 @@ global has_nx
 global read_cr2
 global write_cr2
 global __wbinvd
+global __use_pml5
+
+
+
 reload_pages:
     mov rax, cr3
     mov cr3, rax
@@ -37,3 +41,24 @@ read_cr2:
 __invlpg:
     invlpg [rdi]
     ret
+
+__use_pml5:
+    xor eax, eax
+    xor ecx, ecx
+    mov eax, 0x7
+    cpuid
+    test ecx, (1 << 16)
+    jz no_pml5
+
+    mov rcx, cr4
+
+    test rcx, (1 << 12)
+    jz no_pml5
+    
+    mov rax, 1
+    ret
+    
+    no_pml5:
+        mov rax, 0
+        ret
+    

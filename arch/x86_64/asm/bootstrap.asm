@@ -1,15 +1,15 @@
 ;P42 x86_64 Kernel bootstrap
 ;---------------------------------------------------------
-%define MAGIC_VAL                0x1BADB002
 %define KERNEL_VMA               0xFFFFFFFF80000000
-%define KERNEL_PHYSICAL_ADDRESS  0x1000000
+%define MAGIC_VAL                0x1BADB002
 %define PAGE_PRESENT             (1 << 0)
 %define PAGE_WRITE               (1 << 1)
 %define MULTIBOOT_SIG            0x2BADB002
-%define PML4_ADDR                (BOOT_PAGING)
-%define PDPT_ADDR                (BOOT_PAGING + 0x1000)
-%define PDT_ADDR                 (BOOT_PAGING + 0x2000)
-%define PT_ADDR                  (BOOT_PAGING + 0x3000)
+%define PML5_ADDR				 (BOOT_PAGING)
+%define PML4_ADDR                (BOOT_PAGING + 0x1000)
+%define PDPT_ADDR                (BOOT_PAGING + 0x2000)
+%define PDT_ADDR                 (BOOT_PAGING + 0x3000)
+%define PT_ADDR                  (BOOT_PAGING + 0x4000)
 
 global kernel_init
 global from_multiboot
@@ -19,6 +19,7 @@ global halt
 extern kmain
 extern BOOT_PAGING
 extern BOOT_PAGING_LENGTH
+
 
 
 [BITS 32]
@@ -133,7 +134,22 @@ kernel_init:
     xor eax, eax
     cld
     rep stosb
+	
+;Check if we support PML5
+    xor eax, eax
+    xor ecx, ecx
+    mov eax, 0x7
+    cpuid
+    test ecx, (1 << 16)
+	jz	fill_pml4
+	
+;Fill PML5	
+    mov edi, PML5_ADDR
+    mov dword [edi],                PML4_ADDR + PAGE_PRESENT + PAGE_WRITE
+    mov dword [edi + (511 * 0x8)],  PML4_ADDR + PAGE_PRESENT + PAGE_WRITE
+	
 
+fill_pml4:
     ;2) Fill  PML4T
     mov edi, PML4_ADDR
     mov dword [edi],                PDPT_ADDR + PAGE_PRESENT + PAGE_WRITE
@@ -176,7 +192,23 @@ kernel_init:
     mov cr0, eax
 
 ;Load CR3 with the PML4
-    mov edx, BOOT_PAGING   ;Point CR3 at the PML4.
+
+    xor eax, eax
+    xor ecx, ecx
+    mov eax, 0x7
+    cpuid
+    test ecx, (1 << 16)
+	jz	load_pml4
+
+
+load_pml5:
+    mov edx, PML5_ADDR   ;Point CR3 at the PML5
+    jmp set_pg_base
+load_pml4:
+    mov edx, PML4_ADDR
+
+
+set_pg_base:
     mov cr3, edx
  
     mov eax, cr4
@@ -189,7 +221,19 @@ kernel_init:
     or eax, 0x00000100                ; Set the LME bit.
     wrmsr
 
+	xor eax, eax
+    xor ecx, ecx
+    mov eax, 0x7
+    cpuid
+    test ecx, (1 << 16)
+	jz	enable_paging
 
+; otherwise enable PML5 and then paging
+	mov eax, cr4
+    or eax, (1 << 12)
+    mov cr4, eax
+
+enable_paging:
     mov ebx, cr0                      ; Activate long mode -
     or ebx,0x80000001                 ; - by enabling paging and protection simultaneously.
   
@@ -202,8 +246,8 @@ kernel_init:
 [BITS 64]
 
 enter_64_bit:
-mov rcx, kernel_higher_half
-jmp rcx
+	mov rcx, kernel_higher_half
+	jmp rcx
 
 section .text
 

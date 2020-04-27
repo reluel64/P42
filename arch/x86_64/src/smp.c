@@ -21,6 +21,11 @@ typedef struct
     virt_addr_t stack;
 }cpu_entry_t;
 
+typedef struct
+{
+    list_head_t cpus;
+}smp_t;
+
 int smp_init(void)
 {
     ACPI_STATUS        status = AE_OK;
