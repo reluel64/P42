@@ -10,7 +10,7 @@
 extern void _sti();
 extern void _cli();
 extern int _geti();
-
+extern void __pause();
 void spinlock_init(spinlock_t *s)
 {
     s->int_status = 0;
@@ -19,7 +19,10 @@ void spinlock_init(spinlock_t *s)
 
 void spinlock_lock(spinlock_t *s)
 {
-    while(!__sync_bool_compare_and_swap(&s->lock, 0, 1));
+    while(!__sync_bool_compare_and_swap(&s->lock, 0, 1))
+    {
+        __pause();
+    }
 }
 
 int spinlock_try_lock(spinlock_t *s)

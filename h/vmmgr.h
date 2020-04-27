@@ -27,7 +27,8 @@ typedef struct
     uint16_t    free_ent_per_page;
     uint16_t    rsrvd_ent_per_page;
     virt_addr_t vmmgr_base; /* base address where we will keep the structures */
-}vmmgr_t;
+    pagemgr_ctx_t pagemgr;
+}vmmgr_ctx_t;
 
 typedef struct
 {
@@ -56,12 +57,12 @@ typedef struct
     vmmgr_free_mem_t fmem[0];
 }vmmgr_free_mem_hdr_t;
 
-int vmmgr_change_attrib(virt_addr_t virt, virt_size_t len, uint32_t attr);
-void *vmmgr_map(phys_addr_t phys, virt_addr_t virt, virt_size_t len, uint32_t attr);
-void *vmmgr_alloc(virt_addr_t virt, virt_size_t len, uint32_t attr);
-int vmmgr_unmap(void *vaddr, virt_size_t len);
-int vmmgr_free(void *vaddr, virt_size_t len);
-int vmmgr_reserve(virt_addr_t virt, virt_size_t len, uint32_t type);
+int vmmgr_change_attrib(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len, uint32_t attr);
+void *vmmgr_map(vmmgr_ctx_t *ctx, phys_addr_t phys, virt_addr_t virt, virt_size_t len, uint32_t attr);
+void *vmmgr_alloc(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len, uint32_t attr);
+int vmmgr_unmap(vmmgr_ctx_t *ctx, void *vaddr, virt_size_t len);
+int vmmgr_free(vmmgr_ctx_t *ctx, void *vaddr, virt_size_t len);
+int vmmgr_reserve(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len, uint32_t type);
 int vmmgr_init(void);
 
 #endif

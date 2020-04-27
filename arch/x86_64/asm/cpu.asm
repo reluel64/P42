@@ -8,6 +8,7 @@ global enable_wp
 global read_lapic_base
 global write_lapic_base
 global __wbinvd
+global __pause
 ; Check page 15 from 
 ; https://software.intel.com/sites/default/files/managed/2b/80/5-level_paging_white_paper.pdf
 
@@ -74,6 +75,10 @@ ret
 
 __wbinvd:
     wbinvd
+    ret
+
+__pause:
+    pause
     ret
 
 [BITS 32]

@@ -838,7 +838,6 @@ void* PREFIX(realloc)(void* p, size_t size)
     return ptr;
 }
 
-pagemgr_t *pm = NULL;
 
 /** This function is supposed to lock the memory data structures. It
  * could be as simple as disabling interrupts or acquiring a spinlock.
@@ -872,13 +871,8 @@ int liballoc_unlock()
  */
 void* liballoc_alloc(size_t pages)
 {
-    //kprintf("ALLOC BEGIN\n");
-    void *v = vmmgr_alloc(0, pages * PAGE_SIZE, VMM_ATTR_WRITABLE);
-    if(pm == NULL)
-    {
-        pm = pagemgr_get();
-    }
-    //kprintf("ALLOC DONE\n");
+
+    void *v = vmmgr_alloc(NULL, 0, pages * PAGE_SIZE, VMM_ATTR_WRITABLE);
 
     return(v);
 }
@@ -894,14 +888,10 @@ void* liballoc_alloc(size_t pages)
 int liballoc_free(void*p,size_t pages)
 {
     int ret = 0;
-    if(pm == NULL)
-    {
-        pm = pagemgr_get();
-    }
 
-    ret = vmmgr_free(p, pages * PAGE_SIZE);
-
+    ret = vmmgr_free(NULL, p, pages * PAGE_SIZE);
     return(ret);
 }
   
+
 

@@ -129,7 +129,7 @@ int lapic_init(void)
 {
     lapic_register_t *reg = NULL;
     lapic_root.bsp_lapic_phys = read_lapic_base() & ~(uint64_t)0xFFF;
-    lapic_root.bsp_lapic_virt = (uint64_t)vmmgr_map(lapic_root.bsp_lapic_phys,
+    lapic_root.bsp_lapic_virt = (uint64_t)vmmgr_map(NULL, lapic_root.bsp_lapic_phys,
                                         0, 
                                         sizeof(lapic_register_t),
                                         VMM_ATTR_NO_CACHE | 
@@ -220,6 +220,7 @@ extern virt_addr_t gdt_base;
 extern virt_addr_t gdt_base_get();
 
 extern void        __wbinvd();
+#if 0
 int wake_cpu()
 {
     pagemgr_t *pg = pagemgr_get();
@@ -284,3 +285,5 @@ void apic_add_to_list(void)
 {
 
 }
+
+#endif

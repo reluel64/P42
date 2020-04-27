@@ -54,7 +54,7 @@
 #include "acdebug.h"
 
 #define _COMPONENT          ACPI_OS_SERVICES
-        ACPI_MODULE_NAME    ("osunixxf")
+        ACPI_MODULE_NAME    ("osp42")
 
 
 /* Upcalls to AcpiExec */
@@ -65,11 +65,62 @@ AeTableOverride (
     ACPI_TABLE_HEADER       **NewTable);
 
 typedef void* (*PTHREAD_CALLBACK) (void *);
-
+static uint8_t mem_mgr_ready = 0;
 /* Buffer used by AcpiOsVprintf */
 
 #define ACPI_VPRINTF_BUFFER_SIZE    512
 #define _ASCII_NEWLINE              '\n'
+
+#define ALIGN_UP(value,align) (((value) + (align - 1)) & ~(align - 1))
+#define ALIGN_DOWN(value,align) ((value) & (~(align - 1)))
+
+static void *acpi_map(phys_addr_t addr, phys_size_t size, uint32_t attr)
+{
+    phys_size_t align_addr = 0;
+    phys_size_t diff = 0;
+    virt_addr_t ret_addr = 0;
+
+    align_addr = ALIGN_DOWN(addr, PAGE_SIZE);
+    diff = addr - align_addr;
+
+    /* compensate base difference */
+    size += diff; 
+
+    if(size % PAGE_SIZE)
+        size = ALIGN_UP(size, PAGE_SIZE);
+
+    ret_addr = (virt_addr_t) vmmgr_map(NULL, align_addr, 0, size, attr);
+    
+    ret_addr += diff;
+
+    return((void*)ret_addr);
+
+}
+
+static int acpi_unmap(virt_addr_t addr, virt_size_t size)
+{
+    virt_addr_t align_addr = 0;
+    virt_size_t diff = 0;
+    int status = 0;
+
+    align_addr = ALIGN_DOWN(addr, PAGE_SIZE);
+    diff = addr - align_addr;
+
+    /* compensate base difference */
+    size += diff; 
+
+    if(size % PAGE_SIZE)
+        size = ALIGN_UP(size, PAGE_SIZE);
+
+    status = (virt_addr_t) vmmgr_unmap(NULL, (void*)align_addr, size);
+
+    return(status);
+}
+
+int acpi_mem_mgr_on()
+{
+    mem_mgr_ready = 1;
+}
 
 /* Terminal support for AcpiExec only */
 
@@ -211,6 +262,7 @@ AcpiOsInitialize (
 
     OsEnterLineEditMode ();
 
+
     if (ACPI_FAILURE (Status))
     {
         return (Status);
@@ -223,7 +275,6 @@ ACPI_STATUS
 AcpiOsTerminate (
     void)
 {
-
     OsExitLineEditMode ();
     return (AE_OK);
 }
@@ -594,36 +645,17 @@ AcpiOsGetLine (
  *
  *****************************************************************************/
 
-
-#define ALIGN_UP(value,align) (((value) + (align - 1)) & ~(align - 1))
-#define ALIGN_DOWN(value,align) ((value) & (~(align - 1)))
 void *
 AcpiOsMapMemory (
     ACPI_PHYSICAL_ADDRESS   where,
     ACPI_SIZE               length)
 {
-    
-
-    phys_size_t align_addr = 0;
-    phys_size_t diff = 0;
     virt_addr_t ret_addr = 0;
-    #if 0
-    align_addr = ALIGN_DOWN(where, PAGE_SIZE);
-    diff = where - align_addr;
 
-    /* compensate base difference */
-    length += diff; 
-
-    if(length % PAGE_SIZE)
-        length = ALIGN_UP(length, PAGE_SIZE);
-
-  //  ret_addr = (virt_addr_t) vmmgr_map(align_addr, 0, length, PAGE_WRITABLE);
-     ret_addr = pagemgr_boot_temp_map_big(align_addr, length);
-    ret_addr += diff;
-#else
-     //   kprintf("MAP 0x%x -> 0x%x\n", where, length);
-    ret_addr = pagemgr_boot_temp_map_big(where, length);
-#endif
+    if(mem_mgr_ready)
+        ret_addr = (virt_addr_t)acpi_map(where, length, PAGE_WRITABLE|PAGE_WRITE_THROUGH|PAGE_NO_CACHE);
+    else
+        ret_addr = pagemgr_boot_temp_map_big(where, length);
 
     return ((void*)ret_addr);
 }
@@ -648,28 +680,10 @@ AcpiOsUnmapMemory (
     void                    *where,
     ACPI_SIZE               length)
 {
-    #if 0
-    virt_addr_t  addr = (virt_addr_t)where;
-    virt_addr_t align_addr = 0;
-    virt_size_t diff = 0;
-    kprintf("UNMAP\n");
-    int status = 0;
-
-    align_addr = ALIGN_DOWN(addr, PAGE_SIZE);
-    diff = addr - align_addr;
-
-    /* compensate base difference */
-    length += diff; 
-
-    if(length % PAGE_SIZE)
-        length = ALIGN_UP(length, PAGE_SIZE);
-
-    //status = (virt_addr_t) vmmgr_unmap((void*)align_addr, length);
-     pagemgr_boot_temp_unmap_big(align_addr, length);
-    #endif
-    //return;
-    pagemgr_boot_temp_unmap_big(where, length);
-   // kprintf("UNMAP 0x%x -> 0x%x\n", where, length);
+    if(mem_mgr_ready)
+        acpi_unmap((virt_addr_t)where, length);
+    else
+        pagemgr_boot_temp_unmap_big((virt_addr_t)where, length);
     return;
 }
 #endif
@@ -691,10 +705,11 @@ void *
 AcpiOsAllocate (
     ACPI_SIZE               size)
 {
-    void                    *Mem;
+    void                    *Mem = NULL;
 
+    if(mem_mgr_ready)
+        Mem = (void *) kmalloc ((size_t) size);
 
-    Mem = (void *) kmalloc ((size_t) size);
     return (Mem);
 }
 
@@ -741,8 +756,8 @@ void
 AcpiOsFree (
     void                    *mem)
 {
-
-    kfree (mem);
+    if(mem_mgr_ready)
+        kfree (mem);
 }
 
 
@@ -812,7 +827,7 @@ AcpiOsCreateSemaphore (
     ACPI_HANDLE         *OutHandle)
 {
    
-
+    kprintf("%s\n",__FUNCTION__);
 
     if (!OutHandle)
     {
@@ -915,6 +930,7 @@ AcpiOsWaitSemaphore (
     UINT16              MsecTimeout)
 {
     ACPI_STATUS         Status = AE_OK;
+    
 #if 0
     sem_t               *Sem = (sem_t *) Handle;
     int                 RetVal;
@@ -1083,7 +1099,7 @@ ACPI_STATUS
 AcpiOsCreateLock (
     ACPI_SPINLOCK           *OutHandle)
 {
-
+kprintf("%s\n",__FUNCTION__);
     return (AcpiOsCreateSemaphore (1, 1, OutHandle));
 }
 
@@ -1100,6 +1116,7 @@ ACPI_CPU_FLAGS
 AcpiOsAcquireLock (
     ACPI_HANDLE             Handle)
 {
+    
     AcpiOsWaitSemaphore (Handle, 1, 0xFFFF);
     return (0);
 }
@@ -1135,7 +1152,7 @@ AcpiOsInstallInterruptHandler (
     ACPI_OSD_HANDLER        ServiceRoutine,
     void                    *Context)
 {
-
+kprintf("%d - 0x%x - %s\n", InterruptNumber, ServiceRoutine,__FUNCTION__);
     return (AE_OK);
 }
 

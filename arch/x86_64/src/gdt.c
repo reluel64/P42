@@ -64,8 +64,8 @@ int gdt_init(void)
     tss64_entry_t *tss = NULL;
     memset(&gdt_root, 0, sizeof(gdt_t));
     kprintf("GDT INIT\n");
-    gdt_root.gdt = (gdt_entry_t*)vmmgr_alloc(0, MAX_GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
-    gdt_root.tss = (tss64_entry_t*) vmmgr_alloc(0, sizeof(tss64_entry_t),VMM_ATTR_WRITABLE);
+    gdt_root.gdt = (gdt_entry_t*)vmmgr_alloc(NULL, 0, MAX_GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
+    gdt_root.tss = (tss64_entry_t*) vmmgr_alloc(NULL, 0, sizeof(tss64_entry_t),VMM_ATTR_WRITABLE);
 
     if(gdt_root.gdt == NULL || gdt_root.tss == NULL)
         return(-1);

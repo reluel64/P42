@@ -7,7 +7,7 @@
 #include <utils.h>
 #include <memory_map.h>
 #include <pagemgr.h>
-
+#include <vmmgr.h>
 typedef struct 
 {
     phys_addr_t busy_start;
@@ -149,7 +149,8 @@ static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
     phys_addr_t track_addr = 0;
     phys_addr_t track_len = 0;
 
-    if(e->type != MEMORY_USABLE)
+    if(e->type != MEMORY_USABLE || 
+      !(e->flags & MEMORY_ENABLED))
         return;
 
     memset(&local_freer, 0, sizeof(pfmgr_free_range_t));
@@ -730,7 +731,7 @@ static int pfmgr_free(free_cb cb, void *pv)
         addr = 0;
         to_free_pf = 0;
         again = cb(&addr, &to_free_pf, pv);
-        //kprintf("TO_FREE 0x%x - %d\n",addr,to_free_pf);
+        
         /* Get the range */
         if(pfmgr_addr_to_free_range(addr, to_free_pf, &freer) != 0)
         {
@@ -765,7 +766,7 @@ void pfmgr_early_init(void)
     pfmgr_interface.alloc = pfmgr_early_alloc_pf;
 
     kprintf("KERNEL_BEGIN 0x%x KERNEL_END 0x%x\n",_KERNEL_LMA, _KERNEL_LMA_END);
-    kprintf("busy 0x%x\n",base.physb_start);
+   
 }
 
 int pfmgr_init(void)
@@ -781,7 +782,7 @@ int pfmgr_init(void)
     do
     {
         hdr = (pfmgr_range_header_t*)pagemgr_boot_temp_map(phys);
-        hdr = vmmgr_map(phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
+        hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
                                                   VMM_ATTR_WRITABLE |
                                                   VMM_ATTR_WRITE_THROUGH);
 
@@ -804,7 +805,7 @@ int pfmgr_init(void)
           ((hdr->next - base.physb_start % PAGE_SIZE) == 0))
         {
             hdr = (pfmgr_range_header_t*)pagemgr_boot_temp_map(phys);
-            hdr = vmmgr_map(phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
+            hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
                                                       VMM_ATTR_WRITABLE |
                                                       VMM_ATTR_WRITE_THROUGH);
 

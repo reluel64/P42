@@ -5,6 +5,9 @@
 #define MEMORY_ACPI_NVS         0x4
 #define MEMORY_BAD              0x5
 
+#define MEMORY_ENABLED          0x1
+
+
 typedef struct 
 {
     uint64_t base;
@@ -12,6 +15,7 @@ typedef struct
     uint32_t type;
     uint32_t extended;
     uint32_t domain;
+    uint32_t flags;
 }memory_map_entry_t;
 
 int mem_map_iter

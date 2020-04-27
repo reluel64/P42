@@ -3,8 +3,9 @@
 
 #include <stdint.h>
 #include <pfmgr.h>
-#include <vmmgr.h>
+#include <types.h>
 #include <defs.h>
+#include <spinlock.h>
 #define REMAP_TABLE_VADDR (0xFFFFFFFFFFE00000)
 #define REMAP_TABLE_SIZE  (0x200000)
 
@@ -17,19 +18,25 @@
 
 typedef struct
 {
-    virt_addr_t (*alloc)   (virt_addr_t vaddr, virt_size_t len, uint32_t attr);
-    virt_addr_t (*map)     (virt_addr_t vaddr, phys_addr_t paddr, virt_size_t len, uint32_t attr);
-    int      (*attr)    (virt_addr_t vaddr, virt_size_t len, uint32_t attr);
-    int      (*dealloc) (virt_addr_t vaddr, virt_size_t len);
-    int      (*unmap)   (virt_addr_t vaddr, virt_size_t len);
-}pagemgr_t;
+     phys_addr_t page_phys_base; /* physical location of the first
+                                  * level of paging
+                                  */ 
+    spinlock_t  lock;
+}pagemgr_ctx_t;
 
-pagemgr_t * pagemgr_get(void);
-int pagemgr_init(void);
+
+int pagemgr_init(pagemgr_ctx_t *ctx);
 virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr);
-virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, phys_size_t len);
-virt_addr_t pagemgr_boot_temp_unmap_big(phys_addr_t vaddr, phys_size_t len);
+virt_addr_t pagemgr_boot_temp_map_big(virt_addr_t phys_addr, virt_size_t len);
+int pagemgr_boot_temp_unmap_big(virt_addr_t vaddr, virt_size_t len);
 void pagemgr_boot_temp_map_init(void);
 int pagemgr_install_handler(void);
 uint64_t page_manager_get_base(void);
+
+virt_addr_t pagemgr_alloc(pagemgr_ctx_t *ctx, virt_addr_t virt, virt_size_t length, uint32_t attr);
+virt_addr_t pagemgr_map(pagemgr_ctx_t *ctx, virt_addr_t virt, phys_addr_t phys, virt_size_t length, uint32_t attr);
+int         pagemgr_attr_change(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len, uint32_t attr);
+int         pagemgr_free(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
+int         pagemgr_unmap(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
+
 #endif

@@ -21,8 +21,7 @@ static vga_t vga;
 
 void vga_init()
 {
-    pagemgr_t *pg = pagemgr_get();
-    vga.base = (uint16_t*)vmmgr_map(FB_PHYS_MEM, 0, FB_LEN, VMM_ATTR_WRITABLE);
+    vga.base = (uint16_t*)vmmgr_map(NULL, FB_PHYS_MEM, 0, FB_LEN, VMM_ATTR_WRITABLE);
 
 
     vga.col = 0;

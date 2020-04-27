@@ -84,13 +84,13 @@ int isr_init(void)
 
     memset(&isr, 0, sizeof(isr_root_t));
 
-    isr.idt = vmmgr_alloc(0, IDT_TABLE_SIZE,VMM_ATTR_WRITABLE);
+    isr.idt = vmmgr_alloc(NULL, 0, IDT_TABLE_SIZE,VMM_ATTR_WRITABLE);
 
     if(isr.idt == NULL)
         return(-1);
 
-    isr.handlers = vmmgr_alloc(0, MAX_HANDLERS * sizeof(interrupt_t), 
-                    VMM_ATTR_WRITABLE);
+    isr.handlers = vmmgr_alloc(NULL, 0, MAX_HANDLERS * sizeof(interrupt_t), 
+                                VMM_ATTR_WRITABLE);
 
     if(isr.handlers == NULL)
         return(-1);

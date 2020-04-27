@@ -24,7 +24,7 @@ start_ap_begin:
     jmp 0x0: 0x8000 + start_ap - start_ap_begin
 
 start_ap:
-
+    ; set up segment registers 
     mov ax, 0x0
     mov ss, ax
     mov ds, ax
@@ -32,7 +32,7 @@ start_ap:
     mov fs, ax
     mov gs, ax
 
-    ;Load CR3 with the PML4
+    ;Load CR3 with the PML4 (it was set by the BSP)
     mov edx, [0x8000 + page_base - start_ap_begin]   ;Point CR3 at the PML4.
     mov cr3, edx
  
