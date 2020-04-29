@@ -135,6 +135,7 @@ int lapic_init(void)
                                         VMM_ATTR_NO_CACHE | 
                                         VMM_ATTR_WRITE_THROUGH |
                                         VMM_ATTR_WRITABLE);
+                                        
     kprintf("APIC BASE 0x%x\n",lapic_root.bsp_lapic_phys);
     if(lapic_root.bsp_lapic_virt == 0)
         return(-1);

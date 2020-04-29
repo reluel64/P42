@@ -70,11 +70,10 @@ __pause:
     pause
     ret
 
-[BITS 32]
 enable_wp:
-    mov eax, cr0
+    mov rax, cr0
     or eax, (1 << 16)
-    mov cr0, eax
+    mov cr0, rax
     ret
 
 global disable_pic

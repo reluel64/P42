@@ -167,12 +167,12 @@ void pagemgr_boot_temp_map_init(void)
 
 virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
 {
-    uint16_t   offset = 0;
-    virt_addr_t   virt_addr = 0;
-    virt_addr_t   page_table = 0;
-    virt_addr_t  *page = NULL;
-    uint16_t pages  = 0;
-    uint16_t free_start = 0;
+    uint16_t     offset = 0;
+    virt_addr_t  virt_addr = 0;
+    virt_addr_t  page_table = 0;
+    virt_addr_t *page = NULL;
+    uint16_t     pages  = 0;
+    uint16_t     free_start = 0;
 
     int found = 0;
 
@@ -323,7 +323,7 @@ static phys_addr_t pagemgr_boot_alloc_pf()
     phys_addr_t pf = 0;
 
     pfmgr->alloc(1, 0, pagemgr_boot_alloc_cb, &pf);
-//    kprintf("FRAME AT 0x%x\n",pf);
+
     return(pf);
 }
 
@@ -590,16 +590,17 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     spinlock_init(&ctx->lock);
 
     ctx->page_phys_base = pagemgr_boot_alloc_pf();
+
     kprintf("PHYS_BASE 0x%x\n",ctx->page_phys_base);
 
     if(ctx->page_phys_base == 0)
         return(-1);
     
-   // kprintf("USE_PML5 %d\n",);
-    page_manager.pml5_support=__use_pml5();
+    page_manager.pml5_support= __use_pml5();
+
     if(pagemgr_build_init_pagetable(ctx) == -1)
         return(-1);
-    kprintf("PAGE_DONE\n");
+
     pagemgr_cpu_init();
 
     write_cr3(ctx->page_phys_base);
@@ -790,9 +791,6 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                                                PAGE_TEMP_REMAP_PT);
                 }
 
-
-                //kprintf("path->pd[path->pdt_ix].bits 0x%x\n",path->pd[path->pdt_ix].bits);
-
                 if(clear)
                 {
                     memset(path->pt, 0, PAGE_SIZE);
@@ -801,7 +799,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 }
             }
         }
-       
+
         path->virt_off += PAGE_SIZE;
     }
 
@@ -931,9 +929,8 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
          */
         
         if(pagemgr_attr_translate(&path->pt[path->pt_ix], path->attr))
-        {
             return(0);
-        }
+
         pagemgr_invalidate(virt);
         path->virt_off += PAGE_SIZE;
         used_pf++;
@@ -944,11 +941,11 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
 
 static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void *pv)
 {
-    pagemgr_path_t *path      = (pagemgr_path_t*)pv;
-    phys_addr_t     start_phys  = 0;
-    phys_size_t     page_count  = 0;
-    phys_addr_t     page_phys   = 0;
-    virt_addr_t     virt        = 0;
+    pagemgr_path_t *path       = (pagemgr_path_t*)pv;
+    phys_addr_t     start_phys = 0;
+    phys_size_t     page_count = 0;
+    phys_addr_t     page_phys  = 0;
+    virt_addr_t     virt       = 0;
 
     while(path->virt_off < path->req_len)
     {
@@ -991,7 +988,6 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
         path->pt_ix    = VIRT_TO_PT_INDEX(virt);
         page_phys = PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits);
       
-#if 1
         if(path->pt[path->pt_ix].fields.present)
         {
             /* No pages in counter - set up starting address */
@@ -1024,7 +1020,6 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
             {
                 *phys = start_phys;
                 *count = page_count;
-                //  kprintf("START 0x%x COUNT %d\n",start_phys, page_count);
                 return(1);
             }
         }
@@ -1033,26 +1028,11 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
             kprintf("STOP: VIRT 0x%x - BITS 0x%x\n", virt,path->pt[path->pt_ix].bits );
             while(1);
         }
-
-#else
-        if(path->pt[path->pt_ix].fields.present)
-        {
-                start_phys = PAGE_MASK_ADDRESS(path->pt[path->pt_ix].bits);
-                page_count =1;
-                path->pt[path->pt_ix].bits = 0;
-                
-                *phys = start_phys;
-                *count = page_count;
-                 path->virt_off += PAGE_SIZE;
-                pagemgr_invalidate(virt);
-                return(1);
-        }
-#endif
-
     }
-  //  kprintf("START 0x%x COUNT %d\n",start_phys, page_count);
+
     *phys = start_phys;
     *count = page_count;
+
     return(0);
 }
 
@@ -1082,16 +1062,12 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
     path->virt_off = virt_off;
 
     if(ret == 0)
-    {   
         return(0);
-    }
 
     ret = pfmgr->alloc(PAGE_SIZE, ALLOC_CB_STOP, pagemgr_alloc_pages_cb, (void*)path);
 
     if(ret == -1 || path->req_len > path->virt_off)
-    {
         return(-1);
-    }
 
     /* Reset the path */
     PAGE_PATH_RESET(path);
@@ -1102,14 +1078,14 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
 virt_addr_t pagemgr_map
 (
     pagemgr_ctx_t *ctx,
-    virt_addr_t virt, 
-    phys_addr_t phys, 
-    virt_size_t length, 
-    uint32_t attr
+    virt_addr_t    virt, 
+    phys_addr_t    phys, 
+    virt_size_t    length, 
+    uint32_t       attr
 )
 {
     pagemgr_path_t path;
-    int            ret = 0;
+    int            ret       = 0;
     phys_size_t    pg_frames = 0;
 
     memset(&path, 0, sizeof(pagemgr_path_t));
@@ -1194,10 +1170,7 @@ virt_addr_t pagemgr_alloc
     }
 
     spinlock_unlock_interrupt(&ctx->lock);
-#if 0
-    if(length!=4096ull*1024ull*1024ull)
-        pagemgr_verify_pages(virt,length);
-#endif
+
     return(virt);
 }
 

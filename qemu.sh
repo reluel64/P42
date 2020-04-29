@@ -1,4 +1,4 @@
-qemu-system-x86_64 -machine pc-q35-2.8 -cpu Icelake-Server -smp 32,sockets=4,maxcpus=32 \
+qemu-system-x86_64 -machine pc-q35-2.8 -cpu Icelake-Server,+x2apic -smp 32,sockets=4,maxcpus=32 \
 -numa node,nodeid=0 \
 -numa node,nodeid=1 \
 -numa node,nodeid=2 \

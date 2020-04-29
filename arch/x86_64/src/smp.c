@@ -4,6 +4,7 @@
 #include <linked_list.h>
 #include <acpi.h>
 #include <utils.h>
+#include <liballoc.h>
 typedef struct
 {
     
@@ -23,18 +24,135 @@ typedef struct
 
 typedef struct
 {
-    list_head_t cpus;
+    list_head_t enabled;
+    list_head_t avail;
+    
 }smp_t;
 
-int smp_init(void)
+static smp_t smp;
+
+int smp_add_cpu_entry(uint32_t apic_id, uint8_t en, cpu_entry_t **cpu_out)
 {
-    ACPI_STATUS        status = AE_OK;
-    ACPI_TABLE_MADT   *madt = NULL;
-    ACPI_TABLE_SRAT   *srat = NULL;
-    ACPI_SRAT_CPU_AFFINITY *cpu_aff = NULL;
-    ACPI_SUBTABLE_HEADER *subhdr = NULL;
-    ACPI_MADT_LOCAL_APIC *lapic = NULL;
+    cpu_entry_t *cpu  = NULL;
+    cpu_entry_t *next_cpu = NULL;
+    list_head_t *head = NULL;
+
+    if(en == 1)
+        head = &smp.enabled;
+    else
+        head = &smp.avail;
+
+    cpu = (cpu_entry_t*)linked_list_first(head);
+
+    /* Check if the CPU is added to the list */
+    while(cpu)
+    {
+        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
+
+        if(cpu->apic_id == apic_id)
+        {
+            *cpu_out = cpu;
+            return(1);
+        }
+        cpu = next_cpu;
+    }
+
+    cpu = kmalloc(sizeof(cpu_entry_t));
+
+    if(cpu == NULL)
+        return(-1);
+
+    memset(cpu, 0, sizeof(cpu_entry_t));
+
+    linked_list_add_tail(head, &cpu->node);
     
+    cpu->apic_id = apic_id;
+    *cpu_out = cpu; 
+    return(0);
+}
+
+
+int smp_remove_cpu_entry
+(
+    uint32_t apic_id, 
+    uint8_t en, 
+    cpu_entry_t **cpu_out
+)
+{
+    cpu_entry_t *cpu  = NULL;
+    cpu_entry_t *next_cpu = NULL;
+    list_head_t *head = NULL;
+
+    if(en == 1)
+        head = &smp.enabled;
+    else
+        head = &smp.avail;
+
+    cpu = (cpu_entry_t*)linked_list_first(head);
+
+    /* Check if the CPU is added to the list */
+    while(cpu)
+    {
+        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
+
+        if(cpu->apic_id == apic_id)
+        {
+            linked_list_remove(head, &cpu->node);
+            *cpu_out = cpu;
+            return(0);
+        }
+        cpu = next_cpu;
+    }
+
+    return(-1);
+}
+
+int smp_get_cpu_entry
+(
+    uint32_t apic_id, 
+    uint8_t en, 
+    cpu_entry_t **cpu_out
+)
+{
+    cpu_entry_t *cpu  = NULL;
+    cpu_entry_t *next_cpu = NULL;
+    list_head_t *head = NULL;
+
+    if(en == 1)
+        head = &smp.enabled;
+    else
+        head = &smp.avail;
+
+    cpu = (cpu_entry_t*)linked_list_first(head);
+
+    /* Check if the CPU is added to the list */
+    while(cpu)
+    {
+        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
+
+        if(cpu->apic_id == apic_id)
+        {
+            *cpu_out = cpu;
+            return(0);
+        }
+        cpu = next_cpu;
+    }
+    return(-1);
+}
+
+
+int smp_init_table(void)
+{
+    ACPI_STATUS             status  = AE_OK;
+    ACPI_TABLE_MADT        *madt    = NULL;
+    ACPI_TABLE_SRAT        *srat    = NULL;
+    ACPI_SRAT_CPU_AFFINITY *cpu_aff = NULL;
+    ACPI_SUBTABLE_HEADER   *subhdr  = NULL;
+    ACPI_MADT_LOCAL_APIC  *lapic    = NULL;
+    cpu_entry_t            *cpu     = NULL;
+
+    memset(&smp, 0, sizeof(smp_t));
+
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
     if(ACPI_FAILURE(status))
@@ -43,45 +161,60 @@ int smp_init(void)
         return(-1);
     }
 
-    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); i< madt->Header.Length;i+=subhdr->Length)
+    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
+        i< madt->Header.Length;
+        i+=subhdr->Length)
     {
+        subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
 
-        subhdr = (uint8_t*)madt + i;
+        kprintf("TYPE %d\n", subhdr->Type);
 
-        if(subhdr->Type != ACPI_MADT_TYPE_LOCAL_APIC)
-            continue;
-        
-        lapic = (ACPI_MADT_LOCAL_APIC*)subhdr;
+        if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_APIC)
+        {
+            lapic = (ACPI_MADT_LOCAL_APIC*)subhdr;
 
-        kprintf("APIC_ID 0x%x\n",lapic->Id);
+            if((lapic->LapicFlags & 0x1) || lapic->LapicFlags & 0x2)
+            {
+                if(smp_add_cpu_entry(lapic->Id, TRUE, &cpu))
+                {
+                    kprintf("FAILED to add APIC %d\n",lapic->Id);
+                }
+            }
+        }
     }
 
-
     AcpiPutTable((ACPI_TABLE_HEADER*)madt);
-
-    kprintf("HELLO\n");
 
     status = AcpiGetTable(ACPI_SIG_SRAT, 0, (ACPI_TABLE_HEADER**)&srat);
 
     if(ACPI_FAILURE(status))
     {
-        kprintf("MADT table not available\n");
-        return(-1);
+        kprintf("SRAT table not available\n");
+        return(0);
     }
 
-    for(phys_size_t i = sizeof(ACPI_TABLE_SRAT); i< srat->Header.Length;i+=subhdr->Length)
+    for(phys_size_t i = sizeof(ACPI_TABLE_SRAT); 
+        i< srat->Header.Length;
+        i+=subhdr->Length)
     {
 
-        subhdr = (uint8_t*)srat + i;
-        
+        subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)srat + i);
+
         if(subhdr->Type != ACPI_SRAT_TYPE_CPU_AFFINITY)
             continue;
         
         cpu_aff = (ACPI_SRAT_CPU_AFFINITY*)subhdr;
 
-        kprintf("APIC_ID 0x%x CLOCK 0x%x Proximity %d\n",cpu_aff->ApicId, cpu_aff->ClockDomain, cpu_aff->ProximityDomainLo);
+        if(smp_get_cpu_entry(cpu_aff->ApicId, TRUE, &cpu) == 0)
+        {
+            cpu->domain = (uint32_t)cpu_aff->ProximityDomainLo          | 
+                          (uint32_t)cpu_aff->ProximityDomainHi[0] << 8  | 
+                          (uint32_t)cpu_aff->ProximityDomainHi[1] << 16 |
+                          (uint32_t)cpu_aff->ProximityDomainHi[2] << 24;
+        }
     }
 
-    kprintf("HELLO\n");
-
+    AcpiPutTable((ACPI_TABLE_HEADER*)srat);
+    
+    return(0);
 }
