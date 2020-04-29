@@ -10,9 +10,9 @@ typedef struct
     tss64_entry_t *tss;
 }gdt_t;
 
-extern void _lgdt(void *gdt);
-extern void _ltr(uint64_t segment);
-extern void _flush_gdt(void);
+extern void __lgdt(void *gdt);
+extern void __ltr(uint64_t segment);
+extern void __flush_gdt(void);
 static gdt_t gdt_root;
 
 #define GDT_ENTRY_SIZE (sizeof(gdt_entry_t))
@@ -129,9 +129,9 @@ int gdt_init(void)
     gdt_root.gdt_ptr.addr = (uint64_t)gdt;
     gdt_root.gdt_ptr.len  = MAX_GDT_TABLE_SIZE - 1; 
 
-    _lgdt(&gdt_root.gdt_ptr);
-    _ltr(TSS_SEGMENT);
-   _flush_gdt();
+    __lgdt(&gdt_root.gdt_ptr);
+    __ltr(TSS_SEGMENT);
+    __flush_gdt();
 
     kprintf("GDT 0x%x TSS 0x%x\n",gdt_root.gdt, gdt_root.tss);
     return(0);

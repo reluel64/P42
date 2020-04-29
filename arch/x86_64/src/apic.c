@@ -3,58 +3,6 @@
 #include <linked_list.h>
 #include <isr.h>
 #include <utils.h>
-#define LOCAL_APIC_ID                      (0x020)
-#define LOCAL_APIC_VERSION                 (0x030)
-#define TASK_PRIORITY_REGISTER             (0x080)
-#define ARBITRATION_PRIORITY_REGISTER      (0x090)
-#define PROCESSOR_PRIORITY_REGISTER        (0x0A0)
-#define EOI_REGISTER                       (0x0B0)
-#define REMOTE_READ_REGISTER               (0x0C0)
-#define LOGICAL_DESTINATION_REGISTER       (0x0D0)
-#define DESTINATION_FORMAT_REGISTER        (0x0E0)
-#define SPURIOUS_INTERRUPT_REGISTER        (0x0F0)
-
-#define IN_SERVICE_REGISTER_0_31           (0x100)
-#define IN_SERVICE_REGISTER_32_63          (0x110)
-#define IN_SERVICE_REGISTER_64_95          (0x120)
-#define IN_SERVICE_REGISTER_96_127         (0x130)
-#define IN_SERVICE_REGISTER_128_159        (0x140)
-#define IN_SERVICE_REGISTER_160_191        (0x150)
-#define IN_SERVICE_REGISTER_192_223        (0x160)
-#define IN_SERVICE_REGISTER_224_244        (0x170)
-
-#define TRIGGER_MODE_REGISTER_0_31         (0x180)
-#define TRIGGER_MODE_REGISTER_32_63        (0x190)
-#define TRIGGER_MODE_REGISTER_64_95        (0x1A0)
-#define TRIGGER_MODE_REGISTER_96_127       (0x1B0)
-#define TRIGGER_MODE_REGISTER_128_159      (0x1C0)
-#define TRIGGER_MODE_REGISTER_160_191      (0x1D0)
-#define TRIGGER_MODE_REGISTER_192_223      (0x1E0)
-#define TRIGGER_MODE_REGISTER_224_255      (0x1F0)
-
-#define INTERRUPT_REQUEST_REGISTER_0_31    (0x200)
-#define INTERRUPT_REQUEST_REGISTER_63      (0x210)
-#define INTERRUPT_REQUEST_REGISTER_64_95   (0x220)
-#define INTERRUPT_REQUEST_REGISTER_127     (0x230)
-#define INTERRUPT_REQUEST_REGISTER_159     (0x240)
-#define INTERRUPT_REQUEST_REGISTER_191     (0x250)
-#define INTERRUPT_REQUEST_REGISTER_223     (0x260)
-#define INTERRUPT_REQUEST_REGISTER_224_244 (0x270)
-
-#define ERROR_STATUS_REGISTER              (0x280)
-#define LVT_CMCI_REGISTER                  (0x2F0)
-#define INTERRUPT_COMMAND_REGISTER_0_31    (0x300)
-#define INTERRUPT_COMMAND_REGISTER_32_64   (0x310)
-#define LVT_TIMER_REGISTER                 (0x320)
-#define LVT_THERMAL_SENSOR_REGISTER        (0x330)
-#define LVT_PERF_MONITOR_REGISTER          (0x340)
-#define LVT_LINT0_REGISTER                 (0x350)
-#define LVT_LINT1_REGISTER                 (0x360)
-#define LVT_LINT_ERROR_REGISTER            (0x370)
-
-#define TIMER_INITIAL_COUNT_REGISTER       (0x380)
-#define TIMER_CURRENT_COUNT_REGISTER       (0x390)
-#define TIMER_DIVIDE_CONFIG_REGISTER       (0x3E0)
 
 
 #define LVT_ERROR_VECTOR (239)
@@ -101,7 +49,7 @@ typedef struct
     uint32_t timer_div  [4];
     uint32_t rsrvd_8    [4];
 
-}__attribute__((packed)) lapic_register_t;
+}__attribute__((packed)) apic_t;
 
 typedef struct
 {
@@ -124,7 +72,7 @@ static int lapic_spurious_isr(void *pv, uint64_t error_code);
 
 extern void _sti();
 extern void _cli();
-
+#if 0
 int lapic_init(void)
 {
     lapic_register_t *reg = NULL;
@@ -220,8 +168,8 @@ extern uint8_t     cpu_on;
 extern virt_addr_t gdt_base;
 extern virt_addr_t gdt_base_get();
 
-extern void        __wbinvd();
-#if 0
+
+
 int wake_cpu()
 {
     pagemgr_t *pg = pagemgr_get();

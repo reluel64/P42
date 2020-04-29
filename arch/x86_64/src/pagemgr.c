@@ -67,16 +67,16 @@ extern uint32_t page_base;
                                   ((path))->virt_off  =  (virt_size_t)0;
 /* externs */
 
-extern phys_addr_t read_cr3(void);
-extern void        write_cr3(phys_addr_t phys_addr);
+extern phys_addr_t __read_cr3(void);
+extern void        __write_cr3(phys_addr_t phys_addr);
 extern void        __invlpg(virt_addr_t address);
-extern uint8_t     has_pml5(void);
-extern uint8_t     has_nx(void);
-extern void        enable_pml5();
-extern void        enable_nx();
-extern void        enable_wp();
-extern virt_addr_t read_cr2();
-extern void        write_cr2(virt_addr_t cr2);
+extern uint8_t     __has_nx(void);
+extern uint8_t     __pml5_is_enabled(void);
+extern void        __enable_nx();
+extern void        __enable_wp();
+
+extern virt_addr_t __read_cr2();
+extern void        __write_cr2(virt_addr_t cr2);
 extern void        __wbinvd();
 /* locals */
 static pagemgr_root_t page_manager = {0};
@@ -553,9 +553,9 @@ void pagemgr_cpu_init(void)
     /* Check if we support No-Execute and if we do,
      * enable it 
      */ 
-    if(has_nx())
+    if(__has_nx())
     {
-        enable_nx();
+        __enable_nx();
         page_manager.do_nx = 1;
     }
     #if 0
@@ -577,7 +577,7 @@ void pagemgr_cpu_init(void)
      * since trying to do this will trigger a GPF
      */
 
-    enable_wp();
+    __enable_wp();
 }
 
 /* This should be called only once */
@@ -596,14 +596,14 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     if(ctx->page_phys_base == 0)
         return(-1);
     
-    page_manager.pml5_support= __use_pml5();
+    page_manager.pml5_support = __pml5_is_enabled();
 
     if(pagemgr_build_init_pagetable(ctx) == -1)
         return(-1);
 
     pagemgr_cpu_init();
 
-    write_cr3(ctx->page_phys_base);
+    __write_cr3(ctx->page_phys_base);
 
     return(0);
 }
@@ -1300,7 +1300,7 @@ int pagemgr_unmap
 
 static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
 {
-    virt_addr_t fault_address = read_cr2();
+    virt_addr_t fault_address = __read_cr2();
     
     kprintf("ADDRESS 0x%x ERROR 0x%x\n",fault_address, error_code);
 

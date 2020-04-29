@@ -1,13 +1,13 @@
 ; Port based I/O routines 
 
-global read_port_b
-global write_port_b
-global read_port_w
-global write_port_w
-global read_port_dw
-global write_port_dw
+global __inb
+global __outb
+global __inw
+global __outw
+global __ind
+global __outd
 
-read_port_b:
+__inb:
     mov rdx, rdi ; port
     xor rax, rax
    
@@ -15,7 +15,7 @@ read_port_b:
 
     ret
 
-write_port_b:
+__outb:
     mov rdx, rdi
     mov rax, rsi
 
@@ -23,15 +23,15 @@ write_port_b:
     
     ret
 
-read_port_w:
+__inw:
     mov rdx, rdi ; port
     xor rax, rax
-   
-    in ax, dx
 
+    in ax, dx
+    
     ret
 
-write_port_w:
+__outw:
     mov rdx, rdi
     mov rax, rsi
 
@@ -39,7 +39,7 @@ write_port_w:
     
     ret
 
-read_port_dw:
+__ind:
     mov rdx, rdi ; port
     xor rax, rax
    
@@ -47,7 +47,7 @@ read_port_dw:
 
     ret
 
-write_port_dw:
+__outd:
     mov rdx, rdi
     mov rax, rsi
 

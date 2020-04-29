@@ -9,6 +9,7 @@
 #include <liballoc.h>
 #include <spinlock.h>
 #include <acpi.h>
+#include <pic.h>
 int apic_timer_start(uint32_t timeout);
 
 uint8_t *apic_base ;extern void physmm_dump_bitmaps(void);
@@ -79,6 +80,9 @@ static int acpi_init(void)
 
 }
 
+extern void _sgdt(gdt64_ptr_t *gdt);
+
+
 void kmain()
 {
     /* Init polling console */
@@ -107,12 +111,15 @@ void kmain()
     acpi_mem_mgr_on();
 
     vga_init();
-    disable_pic();
+    pic_disable();
 
-    if(lapic_init())
-        return;
+  //  if(lapic_init())
+   //     return;
 
-    smp_init();
+
+    
+
+  //  smp_init();
     /*acpi_init();*/
 
 

@@ -41,9 +41,9 @@ extern virt_addr_t isr_no_ec_sz_end;
 extern virt_addr_t isr_ec_sz_start;
 extern virt_addr_t isr_ec_sz_end;
 extern virt_addr_t dummy_interrupt;
-extern void _lidt(void *idtr);
-extern void _sti();
-extern void _cli();
+extern void __lidt(void *idtr);
+extern void __sti();
+extern void __cli();
 
 static int idt_entry_add
 (
@@ -80,7 +80,7 @@ int isr_init(void)
     
     kprintf("IDT INIT\n");
     /* diable interrupts while installing the IDT */
-    _cli();
+    __cli();
 
     memset(&isr, 0, sizeof(isr_root_t));
 
@@ -150,7 +150,7 @@ int isr_init(void)
     isr.idt_ptr.addr = (virt_addr_t)isr.idt;
     isr.idt_ptr.len = IDT_TABLE_SIZE - 1;
 
-    _lidt(&isr.idt_ptr);    
+    __lidt(&isr.idt_ptr);    
 
     return(0);
 }

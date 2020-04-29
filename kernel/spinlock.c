@@ -7,10 +7,11 @@
 #include <spinlock.h>
 #include <types.h>
 
-extern void _sti();
-extern void _cli();
-extern int _geti();
+extern void __sti();
+extern void __cli();
+extern int  __geti();
 extern void __pause();
+
 void spinlock_init(spinlock_t *s)
 {
     s->int_status = 0;
@@ -37,10 +38,10 @@ void spinlock_unlock(spinlock_t *s)
 
 void spinlock_lock_interrupt(spinlock_t *s)
 {
-    s->int_status = _geti();
+    s->int_status = __geti();
     
     if(s->int_status)
-        _cli();
+        __cli();
 
     spinlock_lock(s);
 }
@@ -50,22 +51,22 @@ void spinlock_unlock_interrupt(spinlock_t *s)
     spinlock_unlock(s);
     
     if(s->int_status)
-        _sti();
+        __sti();
 }
 
 int spinlock_try_lock_interrupt(spinlock_t *s)
 {
     int status = 0;
 
-     s->int_status = _geti();
+     s->int_status = __geti();
 
      if(s->int_status)
-        _cli();
+        __cli();
 
     status = spinlock_try_lock(s);
     
     if(status && s->int_status)
-        _sti();
+        __sti();
 
     return(status);    
 }

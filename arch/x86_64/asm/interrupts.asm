@@ -2,12 +2,11 @@
 ; We are using the assembler capability to define macros 
 ; so that we can save a lot of duplicate code being written
 
-global _cli
-global _sti
-global _lidt
-global _lgdt
-global _ltr
-global test_interrupt
+global __cli
+global __sti
+global __lidt
+global __lgdt
+global __ltr
 global interrupt_call
 global isr_handlers_fill
 global isr_no_ec_begin
@@ -18,8 +17,9 @@ global isr_no_ec_sz_start
 global isr_no_ec_sz_end
 global isr_ec_sz_start
 global isr_ec_sz_end
-global _geti
-global _flush_gdt
+global __geti
+global __sgdt
+global __flush_gdt
 extern isr_dispatcher
 ; ASM stub for ISRs that do not have 
 ; error codes
@@ -156,18 +156,18 @@ isr_ec_end:
 
 
 ; Disable the interrupts
-_cli:
+__cli:
     cli
     ret
 
 ; Enable the interrupts
-_sti:
+__sti:
     sti
     ret
 
 ; retrieves the status of the
 ; interrupt flag from EFLAGS
-_geti:
+__geti:
     pushfq
     pop rax
     and rax, 0x0200
@@ -176,26 +176,30 @@ _geti:
 ; Load the Interrupt Descriptor Table Register
 ; RDI is the address of the structure that 
 ; holds the linear address and the limit
-_lidt:
+__lidt:
     lidt[rdi]
     ret
 
 ; Load the Global Descriptor Table Register
 ; RDI is the address of the structure that 
 ; holds the linear address and the limit
-_lgdt:
+__lgdt:
     lgdt [rdi]
+    ret
+
+__sgdt:
+    sgdt [rdi]
     ret
 
 ; Load the Task State Segment register
 ; RDI is the offset of the segment that
 ; describes the TSS in GDT
-_ltr:
+__ltr:
     ltr di
     ret
 
 
-_flush_gdt:
+__flush_gdt:
     mov ax, 0x10
     mov ss, ax
     mov ds, ax
@@ -206,5 +210,5 @@ _flush_gdt:
     push .flush_done
     retfq
 
-.flush_done:
-    ret
+    .flush_done:
+        ret

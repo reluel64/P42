@@ -97,7 +97,7 @@ int vmmgr_init(void)
     if(pagemgr_init(&vmmgr_kernel_ctx.pagemgr) == -1)
         return(-1);
 
-    kprintf("Initializing Virtual Memory Manager PML5 %d\n",__use_pml5());
+    kprintf("Initializing Virtual Memory Manager\n");
    
     vmmgr_kernel_ctx.vmmgr_base = VMMGR_BASE;
 
