@@ -8,6 +8,9 @@
 #include <stddef.h>
 #include <utils.h>
 
+
+extern virt_size_t __max_linear_address(void);
+
 #define VIRT_START_IN_BLOCK(virt, fblock)  ((fblock)->base <= (virt)) && \
       (((fblock)->base + (fblock)->length) >= ((virt)))
 
@@ -91,15 +94,18 @@ int vmmgr_init(void)
 {
     vmmgr_rsrvd_mem_hdr_t *rh         = NULL;
     vmmgr_free_mem_hdr_t *fh          = NULL;
+    virt_addr_t           vmmgr_base  = 0;
 
     memset(&vmmgr_kernel_ctx, 0, sizeof(vmmgr_ctx_t));
 
     if(pagemgr_init(&vmmgr_kernel_ctx.pagemgr) == -1)
         return(-1);
 
-    kprintf("Initializing Virtual Memory Manager\n");
-   
-    vmmgr_kernel_ctx.vmmgr_base = VMMGR_BASE;
+    vmmgr_base = ~0ull - ((1ull << __max_linear_address() - 1) - 1);
+
+    kprintf("Initializing Virtual Memory Manager BASE - 0x%x\n",vmmgr_base);
+
+    vmmgr_kernel_ctx.vmmgr_base = vmmgr_base;
 
     linked_list_init(&vmmgr_kernel_ctx.free_mem);
     linked_list_init(&vmmgr_kernel_ctx.rsrvd_mem);
@@ -120,11 +126,10 @@ int vmmgr_init(void)
     if(rh == NULL || fh == NULL)
         return(-1);
 
-
-
+    kprintf("DONE\n");
     memset(rh, 0, PAGE_SIZE);
     memset(fh, 0, PAGE_SIZE);
-
+    
     linked_list_add_head(&vmmgr_kernel_ctx.rsrvd_mem, &rh->node);
     linked_list_add_head(&vmmgr_kernel_ctx.free_mem, &fh->node);
 
@@ -164,6 +169,8 @@ int vmmgr_init(void)
                   (virt_addr_t)rh,
                     PAGE_SIZE,
                     VMM_RES_RSRVD);
+
+    
     return(0);
 }
 
@@ -1033,7 +1040,6 @@ int vmmgr_change_attrib
     uint32_t attr
 )
 {
-    /* TODO: Check if range is not in freed regions */
     if(len == 0 || virt == 0)
         return(-1);
 

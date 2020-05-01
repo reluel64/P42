@@ -7,7 +7,10 @@ qemu-system-x86_64 -machine pc-q35-2.8 -cpu Icelake-Server,+x2apic -smp 32,socke
 -numa cpu,node-id=1,socket-id=1 \
 -numa cpu,node-id=2,socket-id=2 \
 -numa cpu,node-id=3,socket-id=3 \
--drive format=raw,file='/mnt/F0F0492EF048FBFA/Disk Image of sdc (2020-04-22 2025).img',cache=none -m 16G -chardev stdio,mux=on,id=char0 \
+-drive format=raw,file='/mnt/F0F0492EF048FBFA/Disk Image of sdc (2020-04-22 2025).img',cache=none -m 16G \
+-no-reboot \
+-no-shutdown \
+-chardev stdio,mux=on,id=char0 \
 -mon chardev=char0,mode=readline \
 -serial chardev:char0 \
 -serial chardev:char0

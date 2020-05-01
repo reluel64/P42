@@ -5,7 +5,6 @@
 #include <linked_list.h> 
 #include <pagemgr.h>
 #include <defs.h>
-#define VMMGR_BASE (0xffff800000000000)
 
 #define VIRTUAL_MEMORY_UNRESERVABLE (1 << 0)
 #define VMM_RES_KERNEL_IMAGE        (1 << 1)
@@ -13,6 +12,7 @@
 #define VMM_REMAP_TABLE             (1 << 3)
 #define VMM_RES_RSRVD               (1 << 4)
 #define VMM_RES_FREE                (1 << 5)
+#define VMM_ALLOW_SWAP              (1 << 6)
 
 #define VMM_ATTR_WRITABLE          PAGE_WRITABLE
 #define VMM_ATTR_USER              PAGE_USER

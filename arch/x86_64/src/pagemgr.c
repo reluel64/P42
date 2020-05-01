@@ -695,7 +695,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
             if(path->pml5_ix != VIRT_TO_PML5_INDEX(virt))
             {
                 path->pml5_ix = VIRT_TO_PML5_INDEX(virt);
-        
+    
                 if(path->pml5[path->pml5_ix].fields.present == 0)
                 {
                     path->pml5[path->pml5_ix].bits = phys + used_pf * PAGE_SIZE;
@@ -901,7 +901,6 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
         if(path->pdpt_ix != VIRT_TO_PDPT_INDEX(virt))
         {
             path->pdpt_ix = VIRT_TO_PDPT_INDEX(virt);
-
             path->pd = (pde_bits_t*)PAGE_STRUCT_TEMP_MAP(path->pdpt[path->pdpt_ix].bits,
                                             PAGE_TEMP_REMAP_PDT);
 
@@ -910,7 +909,6 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
         if(path->pdt_ix != VIRT_TO_PDT_INDEX(virt))
         {
             path->pdt_ix = VIRT_TO_PDT_INDEX(virt);
-
             path->pt = (pte_bits_t*)PAGE_STRUCT_TEMP_MAP(path->pd[path->pdt_ix].bits,
                                             PAGE_TEMP_REMAP_PT);
         }
@@ -920,7 +918,6 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
         if(path->pt[path->pt_ix].fields.present == 0)
         {
             path->pt[path->pt_ix].bits = phys + used_pf * PAGE_SIZE;
-
             path->pt[path->pt_ix].fields.present = 1;
         }
         

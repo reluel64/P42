@@ -134,7 +134,7 @@ typedef union pte_bits
     uint64_t bits;
 }__attribute__((packed))  pte_bits_t;
 
-#define VIRT_TO_PML5_INDEX(x)  (((x) >> 47) & 0x1FF)
+#define VIRT_TO_PML5_INDEX(x)  (((x) >> 48) & 0x1FF)
 #define VIRT_TO_PML4_INDEX(x)  (((x) >> 39) & 0x1FF)
 #define VIRT_TO_PDPT_INDEX(x) (((x) >> 30) & 0x1FF)
 #define VIRT_TO_PDT_INDEX(x)   (((x) >> 21) & 0x1FF)

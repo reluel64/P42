@@ -6,7 +6,7 @@ linker_script = 'arch/x86_64/linker.ld'
 
 env=Environment(
                 ENV       = {'PATH' : os.environ['PATH']},
-                CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=kernel',
+                CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=large',
                 LINKFLAGS = '-T ' + linker_script + ' -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
                 CC        = 'x86_64-elf-gcc',
                 CPPPATH   = [Dir("h"), Dir('acpica-unix2-20200326/include')] ,
