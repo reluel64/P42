@@ -5,22 +5,7 @@
 #include <acpi.h>
 #include <utils.h>
 #include <liballoc.h>
-typedef struct
-{
-    
-    list_node_t node;
-    uint32_t cluster_id;
-    uint32_t package_id;
-    uint32_t die_id;
-    uint32_t tile_id;
-    uint32_t module_id;
-    uint32_t core_id;
-    uint32_t smt_id;
-    uint32_t apic_id;
-    uint32_t domain;
-    phys_addr_t apic_address;
-    virt_addr_t stack;
-}cpu_entry_t;
+#include <cpu.h>
 
 typedef struct
 {
@@ -31,116 +16,7 @@ typedef struct
 
 static smp_t smp;
 
-int smp_add_cpu_entry(uint32_t apic_id, uint8_t en, cpu_entry_t **cpu_out)
-{
-    cpu_entry_t *cpu  = NULL;
-    cpu_entry_t *next_cpu = NULL;
-    list_head_t *head = NULL;
-
-    if(en == 1)
-        head = &smp.enabled;
-    else
-        head = &smp.avail;
-
-    cpu = (cpu_entry_t*)linked_list_first(head);
-
-    /* Check if the CPU is added to the list */
-    while(cpu)
-    {
-        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
-
-        if(cpu->apic_id == apic_id)
-        {
-            *cpu_out = cpu;
-            return(1);
-        }
-        cpu = next_cpu;
-    }
-
-    cpu = kmalloc(sizeof(cpu_entry_t));
-
-    if(cpu == NULL)
-        return(-1);
-
-    memset(cpu, 0, sizeof(cpu_entry_t));
-
-    linked_list_add_tail(head, &cpu->node);
-    
-    cpu->apic_id = apic_id;
-    *cpu_out = cpu; 
-    return(0);
-}
-
-
-int smp_remove_cpu_entry
-(
-    uint32_t apic_id, 
-    uint8_t en, 
-    cpu_entry_t **cpu_out
-)
-{
-    cpu_entry_t *cpu  = NULL;
-    cpu_entry_t *next_cpu = NULL;
-    list_head_t *head = NULL;
-
-    if(en == 1)
-        head = &smp.enabled;
-    else
-        head = &smp.avail;
-
-    cpu = (cpu_entry_t*)linked_list_first(head);
-
-    /* Check if the CPU is added to the list */
-    while(cpu)
-    {
-        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
-
-        if(cpu->apic_id == apic_id)
-        {
-            linked_list_remove(head, &cpu->node);
-            *cpu_out = cpu;
-            return(0);
-        }
-        cpu = next_cpu;
-    }
-
-    return(-1);
-}
-
-int smp_get_cpu_entry
-(
-    uint32_t apic_id, 
-    uint8_t en, 
-    cpu_entry_t **cpu_out
-)
-{
-    cpu_entry_t *cpu  = NULL;
-    cpu_entry_t *next_cpu = NULL;
-    list_head_t *head = NULL;
-
-    if(en == 1)
-        head = &smp.enabled;
-    else
-        head = &smp.avail;
-
-    cpu = (cpu_entry_t*)linked_list_first(head);
-
-    /* Check if the CPU is added to the list */
-    while(cpu)
-    {
-        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
-
-        if(cpu->apic_id == apic_id)
-        {
-            *cpu_out = cpu;
-            return(0);
-        }
-        cpu = next_cpu;
-    }
-    return(-1);
-}
-
-
+#if 0
 int smp_init_table(void)
 {
     ACPI_STATUS             status  = AE_OK;
@@ -218,3 +94,5 @@ int smp_init_table(void)
     
     return(0);
 }
+
+#endif

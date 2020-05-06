@@ -3,75 +3,27 @@
 #include <linked_list.h>
 #include <isr.h>
 #include <utils.h>
-
+#include <apic.h>
 
 #define LVT_ERROR_VECTOR (239)
 #define SPURIOUS_VECTOR (240)
 
-extern uint64_t read_lapic_base(void);
-extern void     write_lapic_base(uint64_t base);
+extern uint64_t __read_apic_base(void);
+extern void     __write_apic_base(uint64_t base);
+extern uint8_t  __check_x2apic(void);
+extern uint64_t  __max_physical_address();
+
 static int lapic_timer_isr(void *pv, uint64_t error_code);
 static int lapic_error_isr(void *pv, uint64_t error_code);
-typedef struct
-{
-    uint32_t rsrvd_0    [4];
-    uint32_t rsrvd_1    [4];
-    uint32_t      id    [4];
-    uint32_t version    [4];
-    uint32_t rsrvd_2    [4];
-    uint32_t rsrvd_3    [4];
-    uint32_t rsrvd_4    [4];
-    uint32_t rsrvd_5    [4];
-    uint32_t tpr        [4];
-    uint32_t apr        [4];
-    uint32_t ppr        [4];
-    uint32_t eoi        [4];
-    uint32_t rrd        [4];
-    uint32_t ldr        [4];
-    uint32_t dfrr       [4];
-    uint32_t sivr       [4];
-    uint32_t isr_1      [32];
-    uint32_t tmr        [32];
-    uint32_t irr        [32];
-    uint32_t esr        [4];
-    uint32_t rsrvd_6    [24];
-    uint32_t lvt_cmci   [4];
-    uint32_t icr        [8];
-    uint32_t lvt_timer  [4];
-    uint32_t lvt_therm  [4];
-    uint32_t lvt_perf   [4];
-    uint32_t lvt_lint0  [4];
-    uint32_t lvt_lint1  [4];
-    uint32_t lvt_err  [4];
-    uint32_t timer_icnt [4];
-    uint32_t timer_ccnt [4];
-    uint32_t rsrvd_7    [20];
-    uint32_t timer_div  [4];
-    uint32_t rsrvd_8    [4];
 
-}__attribute__((packed)) apic_t;
 
-typedef struct
-{
-    list_node_t node;
-    uint64_t  lapic_phys;
-    uint64_t  lapic_virt;
-}lapic_t;
-
-typedef struct 
-{
-    list_head_t lapic_head;
-    uint64_t bsp_lapic_phys;
-    uint64_t bsp_lapic_virt;
-}lapic_root_t;
-
-static lapic_root_t lapic_root;
 
 static int lapic_isr(void *pv, uint64_t error_code);
 static int lapic_spurious_isr(void *pv, uint64_t error_code);
 
-extern void _sti();
-extern void _cli();
+
+
+
 #if 0
 int lapic_init(void)
 {
@@ -236,3 +188,56 @@ void apic_add_to_list(void)
 }
 
 #endif
+
+
+uint32_t apic_id_get(void)
+{
+    uint32_t apic_id = 0;
+    apic_reg_t *reg = NULL;
+    uint64_t apic_phys_base = 0;
+    uint32_t map_size = 0;
+
+    apic_phys_base = __read_apic_base();
+    map_size  = ALIGN_UP(sizeof(apic_reg_t), PAGE_SIZE);
+
+    reg = vmmgr_map(NULL,apic_phys_base, 
+                    0, map_size, 
+                    VMM_ATTR_NO_CACHE);
+
+    if(reg != NULL)
+    {
+        apic_id = reg->id[0] >> 24;
+        vmmgr_unmap(NULL, (void*)reg, map_size);
+        return(apic_id);
+    }
+
+    return(-1);
+}
+
+uint8_t apic_is_bsp(void)
+{
+    uint64_t msr_val = 0;
+
+    msr_val = __read_apic_base();
+
+    msr_val = ((msr_val >> 8) & 0x1);
+
+    return(msr_val);
+}
+
+uint64_t apic_get_phys_addr(void)
+{
+    uint64_t apic_base = 0;
+    uint64_t max_phys_mask = 0;
+
+    apic_base = __read_apic_base();
+    max_phys_mask =  __max_physical_address();
+
+    max_phys_mask -= 1;
+    max_phys_mask =  ((1ull << max_phys_mask) - 1);
+
+    apic_base = apic_base & ~(uint64_t)0xFFF;
+    apic_base = apic_base & max_phys_mask;
+
+   return(apic_base);
+}

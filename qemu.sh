@@ -1,4 +1,4 @@
-qemu-system-x86_64 -machine pc-q35-2.8 -cpu Icelake-Server,+x2apic -smp 32,sockets=4,maxcpus=32 \
+qemu-system-x86_64 -machine q35 -cpu Icelake-Server,+x2apic -smp 32,sockets=4,maxcpus=32 \
 -numa node,nodeid=0 \
 -numa node,nodeid=1 \
 -numa node,nodeid=2 \
@@ -13,4 +13,5 @@ qemu-system-x86_64 -machine pc-q35-2.8 -cpu Icelake-Server,+x2apic -smp 32,socke
 -chardev stdio,mux=on,id=char0 \
 -mon chardev=char0,mode=readline \
 -serial chardev:char0 \
--serial chardev:char0
+-serial chardev:char0 \
+

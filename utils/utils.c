@@ -2,11 +2,43 @@
 #include <serial.h>
 #include <stdarg.h>
 #include <stdint.h>
-
+#include <utils.h>
 void *memset(void *ptr, int value, size_t num)
-{
-    for(size_t i = 0; i < num; i++)
-        ((char*)ptr)[i] = (char)value;
+{  
+    uint8_t *start = (uint8_t*)ptr;
+    size_t   pos   = 0;
+    
+    /* Zero unaligned memory byte by byte */
+    while((size_t)start % 2 && pos < num)
+    {
+        start[0] = (uint8_t)value;
+        start++;
+        pos++;
+    }
+
+    while(num - pos > sizeof(uint64_t))
+    {
+        *(uint64_t*)(&start[pos]) = value | (uint64_t)value << 32;
+        pos+=sizeof(uint64_t);
+    }
+
+    while(num - pos > sizeof(uint32_t))
+    {
+        *(uint32_t*)(&start[pos]) = value;
+        pos += sizeof(uint32_t);
+    }
+
+    while(num - pos > sizeof(uint16_t))
+    {
+        *(uint16_t*)(&start[pos]) = (uint16_t)value;
+        pos += sizeof(uint16_t);
+    }
+
+    while(num - pos > sizeof(uint8_t))
+    {
+        *(uint8_t*)(&start[pos]) = (uint8_t)value;
+        pos += sizeof(uint8_t);
+    }
 
     return(ptr);
 }

@@ -21,7 +21,7 @@ typedef struct _idt_entry
 
 typedef struct idt_ptr
 {
-    uint16_t len;
+    uint16_t limit;
     uint64_t addr;
 
 }__attribute__((packed)) idt64_ptr_t;

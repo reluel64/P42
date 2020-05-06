@@ -16,6 +16,9 @@ global from_multiboot
 global mem_map_sig
 global mem_map_addr
 global halt
+global kstack_base
+global kstack_top
+
 extern kmain
 extern BOOT_PAGING
 extern BOOT_PAGING_LENGTH
@@ -77,7 +80,7 @@ halt_cpu:
 
 kernel_init:
     cli
-    mov edx, kstack_top - KERNEL_VMA
+    mov edx, kstack_base - KERNEL_VMA
     mov ebp, kstack_base - KERNEL_VMA
     mov esp, edx
     mov [mem_map_sig], eax
@@ -261,7 +264,7 @@ kernel_higher_half:
     mov fs, rax
     mov gs, rax
     mov rbp, kstack_base
-    mov rsp, kstack_top 
+    mov rsp, kstack_base
     invlpg [0]
     call kmain
 
@@ -305,6 +308,6 @@ no_cpuid_msg            db "NO CPUID",  0x0
 no_64_msg               db "NO 64-bit", 0x0
       
 section .bss
-kstack_base: 
-    resb 65536
-kstack_top:
+kstack_top: 
+    resb 16384
+kstack_base:

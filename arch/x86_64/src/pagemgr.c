@@ -1300,6 +1300,7 @@ static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
     virt_addr_t fault_address = __read_cr2();
     
     kprintf("ADDRESS 0x%x ERROR 0x%x\n",fault_address, error_code);
+    while(1);
 
     return(0);
 }

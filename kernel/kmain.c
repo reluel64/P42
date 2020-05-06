@@ -113,12 +113,14 @@ void kmain()
     vga_init();
     pic_disable();
 
-  //  if(lapic_init())
-   //     return;
-
+    extern virt_addr_t __stack_pointer();
+    cpu_init();
+    /*kprintf("CHECKING APIC 0x%x\n", apic_is_bsp());*/
+    kprintf("HELLO TOP 0x%x\n",__stack_pointer());
 
     
-
+   // cpu_init();
+    
   //  smp_init();
     /*acpi_init();*/
 

@@ -198,7 +198,6 @@ __ltr:
     ltr di
     ret
 
-
 __flush_gdt:
     mov ax, 0x10
     mov ss, ax
@@ -207,8 +206,8 @@ __flush_gdt:
     mov gs, ax
     mov fs, ax
     push 0x8
-    push .flush_done
+    push flush_done
     retfq
 
-    .flush_done:
+    flush_done:
         ret

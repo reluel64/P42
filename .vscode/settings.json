@@ -26,6 +26,13 @@
         "string_view": "c",
         "initializer_list": "c",
         "utility": "c",
-        "types.h": "c"
-    }
+        "types.h": "c",
+        "apic.h": "c"
+    },
+
+    "editor.fontFamily": "Consolas",
+    "editor.fontSize": 13,
+    "files.autoSave": "onFocusChange",
+    "editor.trimAutoWhitespace": true,
+    "editor.renderWhitespace": "all"
 }

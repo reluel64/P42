@@ -126,7 +126,6 @@ int vmmgr_init(void)
     if(rh == NULL || fh == NULL)
         return(-1);
 
-    kprintf("DONE\n");
     memset(rh, 0, PAGE_SIZE);
     memset(fh, 0, PAGE_SIZE);
     
@@ -148,27 +147,36 @@ int vmmgr_init(void)
     fh->avail = vmmgr_kernel_ctx.free_ent_per_page ;
     rh->avail = vmmgr_kernel_ctx.rsrvd_ent_per_page;
  
+    /* Start reserving entries that 
+     * must remain in virtual memory 
+     * no matter what
+     * */
+
+    /* Reserve kernel image - only the higher half */
     vmmgr_reserve(&vmmgr_kernel_ctx,
-                  (phys_addr_t)&KERNEL_VMA           +
-                   (phys_addr_t)&BOOTSTRAP_END        ,
-                   (phys_addr_t)&KERNEL_VMA_END -
-                  ((phys_addr_t)&KERNEL_VMA   ),
+                  _KERNEL_VMA     + _BOOTSTRAP_END,
+                  _KERNEL_VMA_END - _KERNEL_VMA,
                    VMM_RES_KERNEL_IMAGE);
 
+    /* Reserve remapping table */
     vmmgr_reserve(&vmmgr_kernel_ctx,
-        REMAP_TABLE_VADDR,
-                        REMAP_TABLE_SIZE,
-                        VMM_REMAP_TABLE);
+                  REMAP_TABLE_VADDR,
+                  REMAP_TABLE_SIZE,
+                  VMM_REMAP_TABLE);
 
+    /* reserve head of tracking for free addresses */
     vmmgr_reserve(&vmmgr_kernel_ctx,
                   (virt_addr_t)fh,
-                        PAGE_SIZE,
-                        VMM_RES_FREE);
+                  PAGE_SIZE,
+                  VMM_RES_FREE);
 
+    /* reserve head of tracking for reserved addresses 
+     * Yes, that some kind of a chicken-egg situation
+     */
     vmmgr_reserve(&vmmgr_kernel_ctx,
                   (virt_addr_t)rh,
-                    PAGE_SIZE,
-                    VMM_RES_RSRVD);
+                  PAGE_SIZE,
+                  VMM_RES_RSRVD);
 
     
     return(0);
@@ -344,7 +352,7 @@ static int vmmgr_is_reserved(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len
     return(0);
 }
 
-#if 1
+
 static int vmmgr_is_free(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
 {
     list_node_t      *node      = NULL;
@@ -372,7 +380,8 @@ static int vmmgr_is_free(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
 
     return(0);
 }
-#endif
+
+
 static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
 {
     list_node_t           *rn        = NULL;
@@ -946,7 +955,7 @@ void *vmmgr_alloc
     if(rem.length != 0)
     {
         vmmgr_put_free_mem(ctx, &rem);
-    }
+    }      
 
     return((void*)ret_addr);
 }

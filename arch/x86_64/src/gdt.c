@@ -21,7 +21,7 @@ static gdt_t gdt_root;
 
 static int gdt_entry_encode
 (
-    uint64_t base, 
+    uint64_t base,
     uint32_t limit,
     uint32_t flags,
     gdt_entry_t *gdt_entry
@@ -48,7 +48,7 @@ static int gdt_entry_encode
     gdt_entry->avl         = ((flags >> 12) & 0x1);
     gdt_entry->_long       = ((flags >> 13) & 0x1);
     gdt_entry->def_op_sz   = ((flags >> 14) & 0x1);
-    gdt_entry->granularity = ((flags >> 15) & 0x1); 
+    gdt_entry->granularity = ((flags >> 15) & 0x1);
 
     /* set limits */
     gdt_entry->limit_low = ((limit) & 0xffff);
@@ -90,7 +90,7 @@ int gdt_init(void)
             GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
             GDT_PRESENT_SET(0x1)                       |
             GDT_GRANULARITY_SET(0x1));
- 
+
     gdt_entry_encode(0,~0, flags, &gdt[2]);
 
     /* User Code (0x18)*/
@@ -113,21 +113,21 @@ int gdt_init(void)
     gdt_entry_encode(0,-1, flags, &gdt[4]);
 
     /* TSS descriptor (0x28) */
-    flags = (GDT_TYPE_SET(GDT_SYSTEM_TSS)              | 
+    flags = (GDT_TYPE_SET(GDT_SYSTEM_TSS)              |
             GDT_GRANULARITY_SET(0x1)                   |
             GDT_DPL_SET(0x0)                           |
             GDT_DESC_TYPE_SET(GDT_DESC_TYPE_SYSTEM)    |
             GDT_PRESENT_SET(0x1));
 
     tss->io_map = sizeof(tss);
-    
+
     gdt_entry_encode((uint64_t)tss,sizeof(tss)-1, flags, &gdt[5]);
+
     /* Yes, TSS takes two GDT entrties */
    ((uint64_t*)gdt)[6] = (((uint64_t)tss) >> 32);
 
-
-    gdt_root.gdt_ptr.addr = (uint64_t)gdt;
-    gdt_root.gdt_ptr.len  = MAX_GDT_TABLE_SIZE - 1; 
+    gdt_root.gdt_ptr.addr  = (uint64_t)gdt;
+    gdt_root.gdt_ptr.limit = MAX_GDT_TABLE_SIZE - 1;
 
     __lgdt(&gdt_root.gdt_ptr);
     __ltr(TSS_SEGMENT);

@@ -99,7 +99,7 @@ typedef struct tss64
 
 typedef struct gdt_ptr
 {
-    uint16_t len;
+    uint16_t limit;
     uint64_t addr;
 
 }__attribute__((packed)) gdt64_ptr_t;
