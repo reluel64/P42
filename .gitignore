@@ -1,3 +1,6 @@
 *.o
 *.bin
 *.vscode
+kernel.bin.txt
+.sconsign.dblite
+diss.txt
