@@ -33,7 +33,12 @@ static inline int vmmgr_split_free_block
     virt_size_t          len,
     vmmgr_free_mem_t    *rem
 );
-static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd);
+
+static int vmmgr_add_reserved
+(
+    vmmgr_ctx_t *ctx, 
+    vmmgr_rsrvd_mem_t *rsrvd
+);
 
 
 void vmmgr_list_entries()
@@ -302,29 +307,6 @@ static inline int vmm_is_in_range
 
     return(0);
 }
-
-static inline virt_addr_t vmmgr_near_addr
-(
-    virt_addr_t base,
-    virt_size_t len,
-    virt_addr_t req_base,
-    virt_size_t req_len
-)
-{
-    virt_size_t diff = 0;
-
-    if(base > req_base)
-    {
-        diff = base - req_base;
-
-        if(vmm_is_in_range(base,len - diff, req_base + diff, req_len))
-            return(req_base + diff);
-
-    }
-
-    return(-1);
-}
-
 
 static int vmmgr_is_reserved(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
 {

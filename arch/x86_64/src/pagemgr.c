@@ -13,14 +13,14 @@
 #include <spinlock.h>
 #include <vmmgr.h>
 
-typedef struct 
+typedef struct pagemgr_root_t
 {
     virt_addr_t remap_table_vaddr;
     uint8_t     pml5_support;
-    uint8_t     do_nx;
+    uint8_t     nx_support;
 }pagemgr_root_t;
 
-
+/* TODO: SUPPORT GUARD PAGES */
 
 typedef struct
 {
@@ -41,7 +41,6 @@ typedef struct
     uint8_t check;
 }pagemgr_path_t;
 
-extern uint32_t page_base;
 
 /* defines */
 
@@ -107,6 +106,21 @@ static int         pagemgr_page_fault_handler(void *pv, uint64_t error_code);
  * yet installed
  */ 
 
+
+int pagemgr_install_handler(void)
+{
+    return(isr_install(pagemgr_page_fault_handler, &page_manager, 14));
+}
+
+uint8_t pagemgr_pml5_support(void)
+{
+    return(page_manager.pml5_support);
+}
+
+uint8_t pagemgr_nx_support(void)
+{
+    return(page_manager.nx_support);
+}
 
 /*
  * This routine maps 8KB of memory from the 
@@ -284,10 +298,10 @@ int pagemgr_boot_temp_unmap_big(virt_addr_t vaddr, virt_size_t len)
         ix = (vaddr - virt_addr) / PAGE_SIZE;
 
         if(ix > 512)
-            {
-                kprintf("VADDR 0x%x - > VIRT 0x%x\n",vaddr,virt_addr);
-            }
-       // kprintf("IX %d\n", ix);
+        {
+            kprintf("VADDR 0x%x - > VIRT 0x%x\n",vaddr,virt_addr);
+        }
+
         for(uint32_t i = 0; i < len; i += PAGE_SIZE)
         {
 
@@ -335,7 +349,8 @@ static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
         pte->fields.user_supervisor = !!(attr & PAGE_USER);
         pte->fields.write_through   = !!(attr & PAGE_WRITE_THROUGH);
         pte->fields.cache_disable   = !!(attr & PAGE_NO_CACHE);
-        pte->fields.xd              =  !(attr & PAGE_EXECUTABLE) && page_manager.do_nx;
+        pte->fields.xd              =  !(attr & PAGE_EXECUTABLE) && 
+                                        page_manager.nx_support;
         return(0);
     }
 
@@ -488,7 +503,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
             {
                 pte.bits = paddr;
 
-                pte.fields.xd = page_manager.do_nx & 0x1;
+                pte.fields.xd = page_manager.nx_support & 0x1;
         
                 /* code must be read-only and executable */
                 if(vaddr >= (virt_addr_t)&_code && vaddr <=(virt_addr_t)&_code_end)
@@ -509,7 +524,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
             /* create the remapping table (last 2MB) */
             else if(step == PAGE_REMAP_STEP)
             {
-                pte.fields.xd = page_manager.do_nx & 0x1;
+                pte.fields.xd = page_manager.nx_support & 0x1;
                 
                 /* Set the first entry of the page
                  * table to point to the page table itself 
@@ -548,38 +563,6 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
     return(0);
 }
 
-void pagemgr_cpu_init(void)
-{
-    /* Check if we support No-Execute and if we do,
-     * enable it 
-     */ 
-    if(__has_nx())
-    {
-        __enable_nx();
-        page_manager.do_nx = 1;
-    }
-    #if 0
-    /* Check PML5 support */
-    if(has_pml5() || page_manager.pml5_support)
-    {
-        kprintf("ENABLE PML5\n");
-        page_manager.pml5_support = 1;
-        enable_pml5();
-        
-        while(1);
-    }
-
-#endif
-    /* enable write protection -  
-     * do not allow the kernel to write to pages that
-     * are marked as read-only
-     * This allows us to detect any attempt to write to read-only pages
-     * since trying to do this will trigger a GPF
-     */
-
-    __enable_wp();
-}
-
 /* This should be called only once */
 
 int pagemgr_init(pagemgr_ctx_t *ctx)
@@ -597,20 +580,23 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
         return(-1);
     
     page_manager.pml5_support = __pml5_is_enabled();
+    page_manager.nx_support   = __has_nx();
 
     if(pagemgr_build_init_pagetable(ctx) == -1)
         return(-1);
 
-    pagemgr_cpu_init();
+    /* If we support NX, enable it */
+    if(page_manager.nx_support)
+        __enable_nx();
 
+    /* Enable Write protection
+     * for read-only pages
+     */
+     
+    __enable_wp();
     __write_cr3(ctx->page_phys_base);
 
     return(0);
-}
-
-int pagemgr_install_handler(void)
-{
-    return(isr_install(pagemgr_page_fault_handler, &page_manager, 14));
 }
 
 static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
@@ -879,6 +865,22 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
     {
         virt = path->virt + path->virt_off;
 
+        if(path->attr & PAGE_GUARD)
+        {
+            if(path->virt_off == 0)
+            {
+                pagemgr_invalidate(virt);
+                path->virt_off += PAGE_SIZE;
+                continue;
+            }
+            else if(path->virt_off + PAGE_SIZE >= path->req_len)
+            {
+                path->virt_off += PAGE_SIZE;
+                pagemgr_invalidate(virt);
+                break;
+            }
+        }
+
         if(page_manager.pml5_support)
         {
             if(path->pml5_ix != VIRT_TO_PML5_INDEX(virt))
@@ -1020,7 +1022,7 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
                 return(1);
             }
         }
-        else
+        else if(page_phys != 0)
         {
             kprintf("STOP: VIRT 0x%x - BITS 0x%x\n", virt,path->pt[path->pt_ix].bits );
             while(1);

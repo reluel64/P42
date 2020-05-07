@@ -15,8 +15,10 @@
 #define PAGE_WRITE_THROUGH (1 << 2)
 #define PAGE_NO_CACHE      (1 << 3)
 #define PAGE_EXECUTABLE    (1 << 4)
+#define PAGE_GUARD         (1 << 5)
 
-typedef struct
+
+typedef struct pagemgr_ctx_t
 {
      phys_addr_t page_phys_base; /* physical location of the first
                                   * level of paging
@@ -38,5 +40,7 @@ virt_addr_t pagemgr_map(pagemgr_ctx_t *ctx, virt_addr_t virt, phys_addr_t phys, 
 int         pagemgr_attr_change(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len, uint32_t attr);
 int         pagemgr_free(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
 int         pagemgr_unmap(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
+uint8_t     pagemgr_nx_support(void);
+uint8_t     pagemgr_pml5_support(void);
 
 #endif

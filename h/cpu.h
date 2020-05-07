@@ -23,6 +23,6 @@ typedef struct cpu_entry_t
 #define APIC_ID_PACKAGE(x) (((x) >> 24) & 0xF)
 #define APIC_ID_CLUSTER(x) (((x) >> 28) & 0xF)
 
-int cpu_init(void);
+int cpu_setup(void);
 
 #endif

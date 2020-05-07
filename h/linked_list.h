@@ -4,13 +4,13 @@
 
 #include <stdint.h>
 #include <stddef.h>
-typedef struct _list_node_t
+typedef struct list_node_t
 {
-    struct _list_node_t *prev;
-    struct _list_node_t *next;
+    struct list_node_t *prev;
+    struct list_node_t *next;
 }list_node_t;
 
-typedef struct
+typedef struct list_head_t
 {
     list_node_t list;
     size_t count;

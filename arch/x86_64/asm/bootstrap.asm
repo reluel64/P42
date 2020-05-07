@@ -12,7 +12,6 @@
 %define PT_ADDR                  (BOOT_PAGING + 0x4000)
 
 global kernel_init
-global from_multiboot
 global mem_map_sig
 global mem_map_addr
 global halt

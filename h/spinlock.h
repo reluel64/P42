@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct
+typedef struct spinlock_t
 {
     volatile int lock;
     volatile int int_status;

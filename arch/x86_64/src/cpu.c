@@ -5,6 +5,9 @@
 #include <liballoc.h>
 #include <vmmgr.h>
 
+#define CPU_TRAMPOLINE_LOCATION_START 0x8000
+
+
 static list_head_t cpu_list = {.list.next = NULL, 
                                .list.prev = NULL,
                                .count = 0};
@@ -16,15 +19,26 @@ extern void __cpu_switch_stack
     virt_addr_t *old_base
 );
 
-extern virt_addr_t __get_rbp();
-extern void __set_rbp(virt_addr_t rbp);
-
-extern uint64_t kstack_base;
-extern uint64_t kstack_top;
+extern phys_addr_t __read_cr3(void);
 extern virt_addr_t __stack_pointer(void);
+extern void        halt();
+
+extern virt_addr_t kstack_base;
+extern virt_addr_t kstack_top;
+
+extern virt_addr_t __start_ap_begin;
+extern virt_addr_t __start_ap_end;
+extern virt_addr_t __start_ap_pt_base;
+extern virt_addr_t __start_ap_pml5_on;
+extern virt_addr_t __start_ap_nx_on;
+extern virt_addr_t __start_ap_stack;
+
+
 
 #define _BSP_STACK_TOP ((virt_addr_t)&kstack_top)
 #define _BSP_STACK_BASE ((virt_addr_t)&kstack_base)
+#define _TRAMPOLINE_BEGIN ((virt_addr_t)&__start_ap_begin)
+#define _TRAMPOLINE_END ((virt_addr_t)&__start_ap_end)
 
 int cpu_add_entry
 (
@@ -128,8 +142,6 @@ int cpu_get_entry
     return(-1);
 }
 
-
-
 static void cpu_stack_relocate
 (
     virt_addr_t *new_stack_base, 
@@ -147,7 +159,7 @@ static void cpu_stack_relocate
     /* Save the stack pointer to know
     *  how much we need to copy
     * */
-    sp     = (virt_addr_t*)__stack_pointer();
+    sp = (virt_addr_t*)__stack_pointer();
 
     /* Calculate how many entries are from top to base */
     stack_entries = (old_stack_base - sp);
@@ -158,7 +170,9 @@ static void cpu_stack_relocate
     kprintf("old_stack_base 0x%x old_stack_top 0x%x\n",old_stack_base, old_stack_top);
     /* Adjust stack content */
 
-    /* Copy the content from the old stack to the new stack */
+    /* Copy the content from the old stack to the new stack 
+     * and do any necessary adjustments
+     */
 
     for(virt_size_t i = 0; i < stack_entries; i++)
     {
@@ -175,10 +189,10 @@ static void cpu_stack_relocate
                 /* adjust stack frames */
                 if((ov[0] >= (virt_addr_t)old_stack_top  ) && 
                    (ov[0] <= (virt_addr_t)old_stack_base ))
-                   {
-                       nv[0] = (virt_addr_t)(new_stack_base - 
-                             (old_stack_base - (virt_addr_t*)ov[0]));
-                   }
+                {
+                    nv[0] = (virt_addr_t)(new_stack_base - 
+                            (old_stack_base - (virt_addr_t*)ov[0]));
+                }
            }
            else
            {
@@ -191,13 +205,57 @@ static void cpu_stack_relocate
     }
 
     __cpu_switch_stack(new_stack_base, 
-                                       new_stack_top,
-                                       old_stack_base
-                                       );
+                       new_stack_top,
+                       old_stack_base
+                      );
 
 }
 
-int cpu_init(void)
+
+virt_addr_t *cpu_prepare_trampoline(virt_addr_t *stack_base)
+{
+    virt_size_t tr_size  = 0;
+    uint8_t     *tr_code  = NULL;
+    phys_addr_t *pt_base  = 0;
+    uint8_t     *pml5_on = NULL;
+    uint8_t     *nx_on = NULL;
+    virt_addr_t *stack = NULL;
+    
+    tr_size = _TRAMPOLINE_END - _TRAMPOLINE_BEGIN;
+
+    tr_code = (uint8_t*)vmmgr_map(NULL, 
+                                 CPU_TRAMPOLINE_LOCATION_START,
+                                 0x0,
+                                 tr_size,
+                                 VMM_ATTR_EXECUTABLE |
+                                 VMM_ATTR_WRITABLE);
+    
+    if(tr_code == NULL)
+        return(NULL);
+    
+    /* Save some common stuff so we will place it into the 
+     * relocated trampoline code
+     */
+    memset(tr_code, 0, tr_size);
+    memcpy(tr_code, (const void*)_TRAMPOLINE_BEGIN, tr_size);
+
+    /* Compute addresses where we will place the
+     * the data for trampoline code
+     */
+
+    pml5_on = ((virt_addr_t)&__start_ap_pml5_on - _TRAMPOLINE_BEGIN) + tr_code;
+    nx_on   = ((virt_addr_t)&__start_ap_nx_on   - _TRAMPOLINE_BEGIN) + tr_code;
+    pt_base = ((virt_addr_t)&__start_ap_pt_base - _TRAMPOLINE_BEGIN) + tr_code;
+    stack   = ((virt_addr_t)&__start_ap_stack   - _TRAMPOLINE_BEGIN) + tr_code;
+
+
+    pml5_on[0] = pagemgr_pml5_support();
+    nx_on[0]   = pagemgr_nx_support();
+    pt_base[0] = __read_cr3();
+    stack[0]   = (virt_addr_t)stack_base;
+}
+
+int cpu_setup(void)
 {
     uint8_t      cpu_is_bsp = 0;
     uint32_t     cpu_id     = 0;
@@ -223,41 +281,49 @@ int cpu_init(void)
     }
 
     cpu->apic_address = apic_get_phys_addr();
-    
+
     if(cpu_is_bsp)
     {
-#if 0
-        cpu->stack_bottom = _BSP_STACK_BASE;
-        cpu->stack_top    = _BSP_STACK_TOP;
+        /* TODO: USE GUARD PAGES */
+        cpu->stack_top = (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
+                                                  stack_size, 
+                                                  VMM_ATTR_WRITABLE | 
+                                                  VMM_GUARD_MEMORY);
 
-        vmmgr_change_attrib(NULL, cpu->stack_bottom, stack_size, ~VMM_ATTR_EXECUTABLE);
-#else
-        cpu->stack_top = (virt_addr_t)vmmgr_alloc(NULL, 0x0, stack_size, VMM_ATTR_WRITABLE);
         cpu->stack_bottom = cpu->stack_top + stack_size;
         memset((void*)cpu->stack_top, 0, stack_size);
-
-        cpu_stack_relocate((virt_addr_t*)cpu->stack_bottom,
-                         (virt_addr_t*)_BSP_STACK_BASE);
-#endif
     }
     else
     {
-        cpu->stack_bottom = (virt_addr_t)vmmgr_alloc(NULL, 0x0, stack_size, VMM_ATTR_WRITABLE);
-        cpu->stack_top = cpu->stack_bottom + stack_size;
-        memset((void*)cpu->stack_bottom, 0,stack_size);
+        cpu->stack_top = (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
+                                                  stack_size, 
+                                                  VMM_ATTR_WRITABLE | 
+                                                  VMM_GUARD_MEMORY);
+
+        cpu->stack_bottom = cpu->stack_top + stack_size;
+        memset((void*)cpu->stack_top, 0, stack_size);
     }
 
-    uint64_t rsp =cpu->stack_top;
-
-    for(uint64_t *ptr = rsp; ptr < cpu->stack_bottom ; ptr++)
+    
+    if(cpu_is_bsp)
     {
-        if(ptr[0] >= cpu->stack_top && ptr[0] <= cpu->stack_bottom )
-        {
-            kprintf("FRAME 0x%x OFFSET 0x%x\n",ptr[0], cpu->stack_bottom - ptr[0]);
-        }
+        cpu_stack_relocate((virt_addr_t*)cpu->stack_bottom,
+                           (virt_addr_t*)_BSP_STACK_BASE);
+    }
+    else
+    {
+        cpu_prepare_trampoline(cpu->stack_bottom);
     }
 
-
-    kprintf("RSP 0x%x\n", rsp);
     return(0);
+}
+
+
+void cpu_entry_point(void)
+{
+    kprintf("Started CPU %d\n",apic_id_get());
+    while(1)
+    {
+        halt();
+    }
 }

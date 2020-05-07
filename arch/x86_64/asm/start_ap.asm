@@ -1,27 +1,20 @@
 ;Appilication Processor startup code
-
-
-global start_ap_begin
-global start_ap_end
-global page_base
-global gdt_base
-global cpu_on
+global __start_ap_begin
+global __start_ap_end
+global __start_ap_pt_base
+global __start_ap_pml5_on
+global __start_ap_nx_on
+global __start_ap_stack
+global cpu_entry_point
 section .ap_init
-%define BOOT_PAGING        0x20000000
-%define BOOT_PAGING_LENGTH  0x203000
-%define PAGE_PRESENT             (1 << 0)
-%define PAGE_WRITE               (1 << 1)
-%define PML4_ADDR                (BOOT_PAGING)
-%define PDPT_ADDR                (BOOT_PAGING + 0x1000)
-%define PDT_ADDR                 (BOOT_PAGING + 0x2000)
-%define PT_ADDR                  (BOOT_PAGING + 0x3000)
+
 [BITS 16]
 
-start_ap_begin:
+__start_ap_begin:
 
     cli
     cld
-    jmp 0x0: 0x8000 + start_ap - start_ap_begin
+    jmp 0x0: 0x8000 + start_ap - __start_ap_begin
 
 start_ap:
     ; set up segment registers 
@@ -33,7 +26,7 @@ start_ap:
     mov gs, ax
 
     ;Load CR3 with the PML4 (it was set by the BSP)
-    mov edx, [0x8000 + page_base - start_ap_begin]   ;Point CR3 at the PML4.
+    mov edx, [0x8000 + __start_ap_pt_base - __start_ap_begin]   ;Point CR3 at the PML4.
     mov cr3, edx
  
     mov eax, cr4
@@ -51,9 +44,9 @@ start_ap:
   
     mov cr0, ebx                    
 
-lgdt[0x8000 + GDT_PTR64 - start_ap_begin]
+lgdt[0x8000 + GDT_PTR64 - __start_ap_begin]
  
-jmp 0x8:(0x8000 + start_64 - start_ap_begin)
+jmp 0x8:(0x8000 + start_64 - __start_ap_begin)
 
 
 [BITS 64]
@@ -83,23 +76,30 @@ GDT64:
 align 16
 GDT_PTR64:
     dw GDT_PTR64 - GDT64 - 1
-    dd 0x8000 + GDT64 - start_ap_begin
-
-page_base dq 0x0
-gdt_base  dq 0x0
-cpu_on    db 0x0
-start_ap_end:
+    dd 0x8000 + GDT64 - __start_ap_begin
 
 
+; define data
+__start_ap_pt_base dq 0x0
+__start_ap_cpu_on  db 0x0
+__start_ap_pml5_on db 0x0
+__start_ap_nx_on   db 0x0
+__start_ap_stack   dq 0x0
 
+__start_ap_end:
+
+; We're running now with the big boys
 [BITS 64]
 
 section .text
 
 ap_start_higher:
-mov rax, 0x8000 + cpu_on - start_ap_begin
-mov [rax], byte 0x1
-hlt
+    
+    call cpu_entry_point
+
+;mov rax, 0x8000 + cpu_on - __start_ap_begin
+;mov [rax], byte 0x1
+call halt
 
 
 

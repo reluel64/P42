@@ -13,6 +13,7 @@
 #define VMM_RES_RSRVD               (1 << 4)
 #define VMM_RES_FREE                (1 << 5)
 #define VMM_ALLOW_SWAP              (1 << 6)
+#define VMM_GUARD_MEMORY            (1 << 7)
 
 #define VMM_ATTR_WRITABLE          PAGE_WRITABLE
 #define VMM_ATTR_USER              PAGE_USER
@@ -20,7 +21,8 @@
 #define VMM_ATTR_NO_CACHE          PAGE_NO_CACHE
 #define VMM_ATTR_EXECUTABLE        PAGE_EXECUTABLE
 
-typedef struct
+
+typedef struct vmmgr_ctx_t
 {
     list_head_t free_mem;  /* free memory ranges */
     list_head_t rsrvd_mem;  /* reserved memory ranges */
@@ -30,27 +32,27 @@ typedef struct
     pagemgr_ctx_t pagemgr;
 }vmmgr_ctx_t;
 
-typedef struct
+typedef struct vmmgr_free_mem_t
 {
     virt_addr_t base;
     virt_size_t length;
 }vmmgr_free_mem_t;
 
-typedef struct
+typedef struct vmmgr_rsrvd_mem_t
 {
     virt_addr_t base;
     virt_size_t length;
     uint32_t  type;
 }vmmgr_rsrvd_mem_t;
 
-typedef struct
+typedef struct vmmgr_rsrvd_mem_hdr_t
 {
     list_node_t node;
     uint16_t avail;
     vmmgr_rsrvd_mem_t rsrvd[0];
 }vmmgr_rsrvd_mem_hdr_t;
 
-typedef struct
+typedef struct vmmgr_free_mem_hdr_t
 {
     list_node_t node;
     uint16_t avail;

@@ -44,5 +44,5 @@ typedef struct apic_reg_t
 
 uint8_t apic_is_bsp(void);
 uint32_t apic_id_get(void);
-
+uint64_t apic_get_phys_addr(void);
 #endif

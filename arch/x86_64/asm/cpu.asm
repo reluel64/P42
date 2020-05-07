@@ -94,6 +94,11 @@ __has_smt:
     ret
 
 
+
+
+
+
+
 ;RDI -> new stack base
 ;RSI -> new stack top
 ;RDX -> old stack base
@@ -109,21 +114,10 @@ __cpu_switch_stack:
     sub rax, rbp    ; calculate offset from base
     mov rbp, rdi    ; set rbp to the base of the new stack
     sub rbp, rax    ; subtract offset from rbp
-
-    ; adjust the offset from [RBP]
-   ; mov rax, qword [rbp] ; get the content of rbp
-   ; mov rcx, rdx         ; save the old base on RAX
-   ; sub rcx, rax         ; calculate offset from base
-   ; mov rax, rdi        
-   ; sub rax, rcx         ; calculate new address
-   ; mov qword [rbp], rax ;save new address
-
-    ;sub rbp, 8
-    mov rax, rbp
-    
     ret
     
 __stack_pointer:
     mov rax, rsp
     add rax, 8 ; compensate the push made for this call
     ret
+
