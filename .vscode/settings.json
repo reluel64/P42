@@ -34,5 +34,5 @@
     "editor.fontSize": 13,
     "files.autoSave": "onFocusChange",
     "editor.trimAutoWhitespace": true,
-    "editor.renderWhitespace": "all"
+    "editor.renderWhitespace": "all",
 }

@@ -3,7 +3,9 @@
 #include <linked_list.h>
 #include <isr.h>
 #include <utils.h>
+#include <cpu.h>
 #include <apic.h>
+#include <liballoc.h>
 
 #define LVT_ERROR_VECTOR (239)
 #define SPURIOUS_VECTOR (240)
@@ -189,6 +191,30 @@ void apic_add_to_list(void)
 
 #endif
 
+static int apic_spurious_handler(void *pv, uint64_t error)
+{
+    return(0);
+}
+
+static int apic_lvt_error_handler(void *pv, uint64_t error)
+{
+    apic_t *apic = NULL;
+    cpu_entry_t *cpu = NULL;
+    uint32_t cpu_id = 0;
+    apic_reg_t *reg = NULL;
+    
+    cpu_id = apic_id_get();
+    
+    if(cpu_get_entry(cpu_id, &cpu))
+        return(0);
+
+    apic = cpu->intc;
+
+
+    reg = (apic_reg_t*)apic->reg;
+    reg->eoi[0] = 0x1;    
+}
+
 
 uint32_t apic_id_get(void)
 {
@@ -240,4 +266,87 @@ uint64_t apic_get_phys_addr(void)
     apic_base = apic_base & max_phys_mask;
 
    return(apic_base);
+}
+
+int apic_send_ipi
+(
+    cpu_entry_t *cpu,
+    apic_ipi_packet_t *ipi
+)
+{
+    apic_t *apic = (apic_t*)cpu->intc;
+    apic_reg_t *reg = NULL;
+
+    if(!apic->x2apic)
+    {
+        reg = apic->reg;
+        reg->icr[4] = ipi->high;
+        reg->icr[0] = ipi->low;
+   
+        /* Read back the value to get the status */
+        ipi->low = reg->icr[0];
+    }
+    else
+    {
+        kprintf("MUST USE x2APIC\n");
+        return(-1);
+    }
+
+    return(0);
+}
+
+int apic_cpu_init(cpu_entry_t *cpu)
+{
+    apic_reg_t *reg = NULL;
+    apic_t *apic = NULL;
+    
+    if(cpu == NULL)
+        return(-1);
+
+    cpu->intc = kmalloc(sizeof(apic_t));
+
+    if(cpu->intc == NULL)
+        return(-1);
+
+    apic = (apic_t*)cpu->intc;
+
+    if(__check_x2apic())
+        apic->x2apic = 1;
+
+    if(!apic->x2apic)
+    {
+        kprintf("INIT_APIC\n");
+        apic->paddr = apic_get_phys_addr();
+        apic->reg   = (apic_reg_t*)vmmgr_map(NULL, apic->paddr, 0x0, 
+                                    sizeof(apic_reg_t), 
+                                    VMM_ATTR_WRITABLE |
+                                    VMM_ATTR_NO_CACHE |
+                                    VMM_ATTR_WRITE_THROUGH);
+        if(apic->reg == NULL)
+        {
+            kfree(cpu->intc);
+            cpu->intc = NULL;
+            return(-1);
+        }
+
+        reg = apic->reg;
+
+        /* Stop APIC */
+        reg->svr[0]     &= ~APIC_SVR_ENABLE_BIT;
+
+        /* Set up LVT error handling */
+        reg->lvt_err[0] &= ~APIC_LVT_INT_MASK;
+        reg->lvt_err[0] |= APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
+
+        /* Enable APIC */
+        reg->svr[0] |= APIC_SVR_ENABLE_BIT | APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
+    }
+
+    return(0);
+}
+
+int apic_init(void)
+{
+    isr_install(apic_lvt_error_handler, NULL, LVT_ERROR_VECTOR);
+    isr_install(apic_spurious_handler, NULL, SPURIOUS_VECTOR);
 }

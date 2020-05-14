@@ -23,7 +23,6 @@ extern BOOT_PAGING
 extern BOOT_PAGING_LENGTH
 
 
-
 [BITS 32]
 
 section .multiboot
@@ -112,8 +111,6 @@ kernel_init:
 
     xor eax, ecx         ; compare
     jz cpuid_not_supported
-
-
 
 ;Check if we support Long mode checking
     mov eax, 0x80000000 ;get highest processor info

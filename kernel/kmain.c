@@ -79,9 +79,10 @@ static int acpi_init(void)
     return(status);
 
 }
-
+int smp_start_cpus(void);
 extern void _sgdt(gdt64_ptr_t *gdt);
-
+extern int cpu_ap_setup(uint32_t cpu_id);
+extern void __tsc_info(uint32_t *, uint32_t *);
 
 void kmain()
 {
@@ -99,25 +100,35 @@ void kmain()
     if(pfmgr_init() != 0)
         return;
     
-    if(gdt_init() != 0)
-        return;
-
-    if(isr_init()!= 0)
-        return;
-
-    if(pagemgr_install_handler() != 0)
-        return;
-
     acpi_mem_mgr_on();
 
     vga_init();
+
+    uint64_t den = 0;
+    uint64_t num = 0;
+    __tsc_info(&den, &num);
+
+    kprintf("DEN %d NUM %d\n",den,num);
+ 
+     vga_print("CPU_INIT\n",0x7,-1);
+    cpu_init();
+vga_print("CPU_INIT_DONE\n",0x7,-1);
+    if(pagemgr_install_handler() != 0)
+        return;
+
+    
+
+    
     pic_disable();
 
+    vga_print("smp_start_cpus\n",0x7,-1);
+    smp_start_cpus();
+    vga_print("smp_start_cpus_DONE\n",0x7,-1);
     extern virt_addr_t __stack_pointer();
     /*kprintf("CHECKING APIC 0x%x\n", apic_is_bsp());*/
     kprintf("HELLO TOP 0x%x\n",__stack_pointer());
-
     
+   
    // cpu_init();
     
   //  smp_init();

@@ -85,7 +85,11 @@ static pfmgr_t       *pfmgr        = NULL;
 static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
 static int         pagemgr_temp_unmap(virt_addr_t vaddr);
 static int         pagemgr_page_fault_handler(void *pv, uint64_t error_code);
-
+static int         pagemgr_per_cpu_invl_handler
+(
+    void *pv, 
+    uint64_t error_code
+);
 /* This piece code is the intermediate layer
  * between the physical memory manager and
  * the virtual memory manager.
@@ -109,7 +113,8 @@ static int         pagemgr_page_fault_handler(void *pv, uint64_t error_code);
 
 int pagemgr_install_handler(void)
 {
-    return(isr_install(pagemgr_page_fault_handler, &page_manager, 14));
+    isr_install(pagemgr_page_fault_handler, &page_manager, 14);
+    isr_install(pagemgr_per_cpu_invl_handler, NULL, 255);
 }
 
 uint8_t pagemgr_pml5_support(void)
@@ -576,7 +581,7 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
 
     kprintf("PHYS_BASE 0x%x\n",ctx->page_phys_base);
 
-    if(ctx->page_phys_base == 0)
+    if(!ctx->page_phys_base)
         return(-1);
     
     page_manager.pml5_support = __pml5_is_enabled();
@@ -593,7 +598,7 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
      * for read-only pages
      */
      
-    __enable_wp();
+    
     __write_cr3(ctx->page_phys_base);
 
     return(0);
@@ -1304,5 +1309,20 @@ static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
     kprintf("ADDRESS 0x%x ERROR 0x%x\n",fault_address, error_code);
     while(1);
 
+    return(0);
+}
+
+static int pagemgr_per_cpu_invl_handler
+(
+    void *pv, 
+    uint64_t error_code
+)
+{
+    return(0);
+}
+
+int pagemgr_per_cpu_init(void)
+{
+    __enable_wp();
     return(0);
 }

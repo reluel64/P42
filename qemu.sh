@@ -1,3 +1,4 @@
+clear
 qemu-system-x86_64 -machine q35 -cpu Icelake-Server,+x2apic -smp 32,sockets=4,maxcpus=32 \
 -numa node,nodeid=0 \
 -numa node,nodeid=1 \
@@ -14,4 +15,8 @@ qemu-system-x86_64 -machine q35 -cpu Icelake-Server,+x2apic -smp 32,sockets=4,ma
 -mon chardev=char0,mode=readline \
 -serial chardev:char0 \
 -serial chardev:char0 \
+
+#-monitor stdio
+
+
 

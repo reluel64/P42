@@ -103,6 +103,8 @@ static long long l_warningCount = 0;		///< Number of warnings encountered
 static long long l_errorCount = 0;			///< Number of actual errors
 static long long l_possibleOverruns = 0;	///< Number of possible overruns
 
+static spinlock_t lock = {.lock = 0,
+                          .int_status = 0};
 
 
 
@@ -838,7 +840,6 @@ void* PREFIX(realloc)(void* p, size_t size)
     return ptr;
 }
 
-
 /** This function is supposed to lock the memory data structures. It
  * could be as simple as disabling interrupts or acquiring a spinlock.
  * It's up to you to decide. 
@@ -848,6 +849,7 @@ void* PREFIX(realloc)(void* p, size_t size)
  */
 int liballoc_lock()
 {
+    spinlock_lock_interrupt(&lock);
     return(0);
 }
 
@@ -859,6 +861,7 @@ int liballoc_lock()
  */
 int liballoc_unlock()
 {
+    spinlock_unlock_interrupt(&lock);
     return(0);
 }
 

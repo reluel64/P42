@@ -30,4 +30,5 @@ typedef struct idt_ptr
 int isr_init(void);
 int isr_install(interrupt_handler_t ih, void *pv, uint16_t index);
 int isr_uninstall(interrupt_handler_t ih);
+void isr_per_cpu_init(void);
 #endif

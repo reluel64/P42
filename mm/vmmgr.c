@@ -21,9 +21,11 @@ extern virt_size_t __max_linear_address(void);
 
 #define NODE_TO_FREE_DESC(node) ((vmmgr_free_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
 #define NODE_TO_RSRVD_DESC(node) ((vmmgr_rsrvd_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
-
+#define VMM_RSRVD_OFFSET    (0x0)
+#define VMM_FREE_OFFSET     (PAGE_SIZE)
 
 static vmmgr_ctx_t vmmgr_kernel_ctx;
+
 
 
 static inline int vmmgr_split_free_block
@@ -99,6 +101,7 @@ int vmmgr_init(void)
 {
     vmmgr_rsrvd_mem_hdr_t *rh         = NULL;
     vmmgr_free_mem_hdr_t *fh          = NULL;
+
     virt_addr_t           vmmgr_base  = 0;
 
     memset(&vmmgr_kernel_ctx, 0, sizeof(vmmgr_ctx_t));
@@ -114,16 +117,18 @@ int vmmgr_init(void)
 
     linked_list_init(&vmmgr_kernel_ctx.free_mem);
     linked_list_init(&vmmgr_kernel_ctx.rsrvd_mem);
+    spinlock_init(&vmmgr_kernel_ctx.lock);
 
     rh = (vmmgr_rsrvd_mem_hdr_t*)pagemgr_alloc(&vmmgr_kernel_ctx.pagemgr,
-                                           vmmgr_kernel_ctx.vmmgr_base,
-                                           PAGE_SIZE,
-                                           PAGE_WRITABLE);
-
-    fh  = (vmmgr_free_mem_hdr_t*)pagemgr_alloc(&vmmgr_kernel_ctx.pagemgr,
-                                                vmmgr_kernel_ctx.vmmgr_base + PAGE_SIZE,
+                                                vmmgr_kernel_ctx.vmmgr_base + VMM_RSRVD_OFFSET,
                                                 PAGE_SIZE,
                                                 PAGE_WRITABLE);
+
+    fh  = (vmmgr_free_mem_hdr_t*)pagemgr_alloc(&vmmgr_kernel_ctx.pagemgr,
+                                                vmmgr_kernel_ctx.vmmgr_base + VMM_FREE_OFFSET,
+                                                PAGE_SIZE,
+                                                PAGE_WRITABLE);
+    
 
     kprintf("rsrvd_start 0x%x\n",rh);
     kprintf("free_start 0x%x\n",fh);
@@ -137,6 +142,7 @@ int vmmgr_init(void)
     linked_list_add_head(&vmmgr_kernel_ctx.rsrvd_mem, &rh->node);
     linked_list_add_head(&vmmgr_kernel_ctx.free_mem, &fh->node);
 
+
     vmmgr_kernel_ctx.free_ent_per_page = (PAGE_SIZE - sizeof(vmmgr_free_mem_hdr_t)) /
                                               sizeof(vmmgr_free_mem_t);
 
@@ -144,7 +150,6 @@ int vmmgr_init(void)
                                                 sizeof(vmmgr_rsrvd_mem_t);
 
     /* Get the start of the array */
-
 
     fh->fmem[0].base = vmmgr_kernel_ctx.vmmgr_base;
     fh->fmem[0].length = (UINT64_MAX - fh->fmem->base)+1;
@@ -219,8 +224,8 @@ static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
             else if(from_slot->length > fdesc->length && fdesc->length >= PAGE_SIZE)
                 from_slot = fdesc;
         }
-        fn = next_fn;
 
+        fn = next_fn;
     }
 
     if(from_slot == NULL)
@@ -666,6 +671,8 @@ int vmmgr_reserve
         ctx = &vmmgr_kernel_ctx;
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
+    
+    spinlock_lock_interrupt(&ctx->lock);
 
     fn           = linked_list_first(&ctx->free_mem);
     rsrvd.base   = virt;
@@ -688,6 +695,7 @@ int vmmgr_reserve
                 if(rem.length != 0)
                     vmmgr_put_free_mem(ctx, &rem);
 
+                spinlock_unlock_interrupt(&ctx->lock);
                 return(0);
             }
         }
@@ -702,6 +710,9 @@ int vmmgr_reserve
     }
 
     vmmgr_add_reserved(ctx, &rsrvd);
+    
+    spinlock_unlock_interrupt(&ctx->lock);
+
     return(0);
 }
 
@@ -730,6 +741,8 @@ void *vmmgr_map
         len = ALIGN_UP(len, PAGE_SIZE);
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
+
+    spinlock_lock_interrupt(&ctx->lock);
 
     fn = linked_list_first(&ctx->free_mem);
 
@@ -762,7 +775,7 @@ void *vmmgr_map
                     break;
                 }
 
-                    from_slot = NULL;
+                from_slot = NULL;
             }
             else if(from_slot)
             {
@@ -797,6 +810,7 @@ void *vmmgr_map
 
     if(from_slot->length < len)
     {
+        spinlock_unlock_interrupt(&ctx->lock);
         return(NULL);
     }
 
@@ -814,6 +828,7 @@ void *vmmgr_map
 		pagemgr_unmap(&ctx->pagemgr,
                        from_slot->base, 
                        len);
+        spinlock_unlock_interrupt(&ctx->lock);
         return(NULL);
 	}
 
@@ -823,6 +838,8 @@ void *vmmgr_map
     {
         vmmgr_put_free_mem(ctx, &rem);
     }
+
+    spinlock_unlock_interrupt(&ctx->lock);
 
     return((void*)ret_addr);
 }
@@ -853,6 +870,8 @@ void *vmmgr_alloc
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
 
+    spinlock_lock_interrupt(&ctx->lock);
+    
     fn = linked_list_first(&ctx->free_mem);
 
     while(fn)
@@ -899,7 +918,7 @@ void *vmmgr_alloc
             }
         }
 
-        /* In this case we will restart the loop */
+        /* Now...surprise me */
         if(next_fn == NULL && virt != 0 && ret_addr == 0)
         {
             kprintf("restarting\n");
@@ -918,6 +937,7 @@ void *vmmgr_alloc
     if( from_slot->length < len)
     {
         kprintf("Not From slot 0x%x - 0x%x 0x%x\n",from_slot->base,from_slot->length, len);
+        spinlock_unlock_interrupt(&ctx->lock);
         return(NULL);
     }
 
@@ -929,6 +949,7 @@ void *vmmgr_alloc
     if(ret_addr == 0)
 	{
         kprintf("PG_ALLOC_FAIL\n");
+        spinlock_unlock_interrupt(&ctx->lock);
         return(NULL);
 	}
 
@@ -938,6 +959,8 @@ void *vmmgr_alloc
     {
         vmmgr_put_free_mem(ctx, &rem);
     }      
+
+    spinlock_unlock_interrupt(&ctx->lock);
 
     return((void*)ret_addr);
 }
@@ -964,12 +987,20 @@ int vmmgr_free
 
     if(virt == 0)
         return(-1);
-
+    
+    spinlock_lock_interrupt(&ctx->lock);
+    
     if(vmmgr_is_free(ctx, virt, len))
+    {
+        spinlock_unlock_interrupt(&ctx->lock);
         return(-1);
+    }
 
     if(vmmgr_is_reserved(ctx, virt, len))
+    {
+        spinlock_unlock_interrupt(&ctx->lock);
         return(-1);
+    }
 
     status = vmmgr_merge_free_block(ctx, &mm);
 
@@ -978,6 +1009,8 @@ int vmmgr_free
 
     if(status == 0)
         status = pagemgr_free(&ctx->pagemgr, virt, len);
+
+    spinlock_unlock_interrupt(&ctx->lock);
 
     return(status);
 }
@@ -1005,11 +1038,18 @@ int vmmgr_unmap
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
 
-    if(vmmgr_is_free(ctx, virt, len))
-        return(-1);
+    spinlock_lock_interrupt(&ctx->lock);
 
-    if(vmmgr_is_reserved(ctx, virt, len))
+    if(vmmgr_is_free(ctx, virt, len))
+    {
+        spinlock_unlock_interrupt(&ctx->lock);
         return(-1);
+    }
+    if(vmmgr_is_reserved(ctx, virt, len))
+    {
+        spinlock_unlock_interrupt(&ctx->lock);
+        return(-1);
+    }
 
     status = vmmgr_merge_free_block(ctx, &mm);
 
@@ -1018,6 +1058,8 @@ int vmmgr_unmap
 
     if(status == 0)
         status = pagemgr_unmap(&ctx->pagemgr, virt, len);
+    
+    spinlock_unlock_interrupt(&ctx->lock);
 
     return(status);
 }
@@ -1031,17 +1073,69 @@ int vmmgr_change_attrib
     uint32_t attr
 )
 {
+    int status = 0;
+
     if(len == 0 || virt == 0)
         return(-1);
 
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
 
+    spinlock_lock_interrupt(&ctx->lock);
+
     if(vmmgr_is_reserved(ctx, virt, len))
+    {
+        spinlock_unlock_interrupt(&ctx->lock);
         return(-1);
+    }
     
     if(vmmgr_is_free(ctx, virt, len))
+    {
+        spinlock_unlock_interrupt(&ctx->lock);
         return(-1);
+    }
 
-    return(pagemgr_attr_change(&ctx->pagemgr, virt, len, attr));
+    status = pagemgr_attr_change(&ctx->pagemgr, virt, len, attr);
+    
+    spinlock_unlock_interrupt(&ctx->lock);
+
+    return(status);
+}
+
+virt_addr_t vmmgr_temp_identity_map
+(
+    vmmgr_ctx_t *ctx,
+    phys_addr_t phys, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+)
+{
+    if(ctx == NULL)
+        ctx = &vmmgr_kernel_ctx;
+    
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
+    return(pagemgr_map(&ctx->pagemgr,virt, phys, len, attr));
+}
+
+int vmmgr_temp_identity_unmap
+(
+    vmmgr_ctx_t *ctx,
+    void *vaddr, 
+    virt_size_t len
+)
+{
+    int status = 0;
+    if(ctx == NULL)
+        ctx = &vmmgr_kernel_ctx;
+
+
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
+    status = pagemgr_unmap(&ctx->pagemgr,(virt_addr_t)vaddr, len);
+
+    return(status);
 }

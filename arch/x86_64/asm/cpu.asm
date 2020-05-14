@@ -121,3 +121,14 @@ __stack_pointer:
     add rax, 8 ; compensate the push made for this call
     ret
 
+global __tsc_info
+
+__tsc_info:
+    xor rax, rax
+    xor rbx, rbx
+    xor rcx,rcx
+    mov eax, 0x15
+    cpuid
+    mov qword [rdi], rax
+    mov qword [rsi], rbx
+    ret

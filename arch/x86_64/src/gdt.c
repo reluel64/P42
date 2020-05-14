@@ -16,8 +16,9 @@ extern void __flush_gdt(void);
 static gdt_t gdt_root;
 
 #define GDT_ENTRY_SIZE (sizeof(gdt_entry_t))
-#define MAX_GDT_COUNT (8192)
+#define MAX_GDT_COUNT (16)
 #define MAX_GDT_TABLE_SIZE (MAX_GDT_COUNT * GDT_ENTRY_SIZE)
+#define TSS_SEGMENT (0x28)
 
 static int gdt_entry_encode
 (
@@ -57,21 +58,18 @@ static int gdt_entry_encode
     return(0);
 }
 
-int gdt_init(void)
+int gdt_per_cpu_init(void)
 {
     uint32_t     flags = 0;
     gdt_entry_t   *gdt   = NULL;
     tss64_entry_t *tss = NULL;
-    memset(&gdt_root, 0, sizeof(gdt_t));
-    kprintf("GDT INIT\n");
-    gdt_root.gdt = (gdt_entry_t*)vmmgr_alloc(NULL, 0, MAX_GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
-    gdt_root.tss = (tss64_entry_t*) vmmgr_alloc(NULL, 0, sizeof(tss64_entry_t),VMM_ATTR_WRITABLE);
+    gdt64_ptr_t gdt_ptr;
 
-    if(gdt_root.gdt == NULL || gdt_root.tss == NULL)
+    gdt = (gdt_entry_t*)vmmgr_alloc(NULL, 0, MAX_GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
+    tss = (tss64_entry_t*)vmmgr_alloc(NULL, 0, sizeof(tss64_entry_t),VMM_ATTR_WRITABLE);
+
+    if(gdt == NULL || tss == NULL)
         return(-1);
-
-    gdt = gdt_root.gdt;
-    tss = gdt_root.tss;
 
     memset(gdt, 0, MAX_GDT_TABLE_SIZE);
     memset(tss, 0, sizeof(tss64_entry_t));
@@ -117,6 +115,7 @@ int gdt_init(void)
             GDT_GRANULARITY_SET(0x1)                   |
             GDT_DPL_SET(0x0)                           |
             GDT_DESC_TYPE_SET(GDT_DESC_TYPE_SYSTEM)    |
+            
             GDT_PRESENT_SET(0x1));
 
     tss->io_map = sizeof(tss);
@@ -126,18 +125,13 @@ int gdt_init(void)
     /* Yes, TSS takes two GDT entrties */
    ((uint64_t*)gdt)[6] = (((uint64_t)tss) >> 32);
 
-    gdt_root.gdt_ptr.addr  = (uint64_t)gdt;
-    gdt_root.gdt_ptr.limit = MAX_GDT_TABLE_SIZE - 1;
+   gdt_ptr.addr  = (uint64_t)gdt;
+   gdt_ptr.limit = MAX_GDT_TABLE_SIZE - 1;
 
-    __lgdt(&gdt_root.gdt_ptr);
+    __lgdt(&gdt_ptr);
     __ltr(TSS_SEGMENT);
     __flush_gdt();
 
-    kprintf("GDT 0x%x TSS 0x%x\n",gdt_root.gdt, gdt_root.tss);
+   // kprintf("GDT 0x%x TSS 0x%x\n",gdt, tss);
     return(0);
-}
-
-virt_addr_t gdt_base_get(void)
-{
-    return((virt_addr_t)&gdt_root.gdt_ptr);
 }

@@ -104,6 +104,7 @@ typedef struct gdt_ptr
 
 }__attribute__((packed)) gdt64_ptr_t;
 
-int gdt_init(void);
+int gdt_per_cpu_init(void);
+
 
 #endif

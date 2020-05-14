@@ -155,6 +155,12 @@ int isr_init(void)
     return(0);
 }
 
+void isr_per_cpu_init(void)
+{
+    __lidt(&isr.idt_ptr);
+}
+
+
 int isr_install(interrupt_handler_t ih, void *pv, uint16_t index)
 {
     interrupt_t *intr = NULL;

@@ -14,6 +14,7 @@
 #define VMM_RES_FREE                (1 << 5)
 #define VMM_ALLOW_SWAP              (1 << 6)
 #define VMM_GUARD_MEMORY            (1 << 7)
+#define VMM_RES_LOW                 (1 << 8)
 
 #define VMM_ATTR_WRITABLE          PAGE_WRITABLE
 #define VMM_ATTR_USER              PAGE_USER
@@ -28,8 +29,10 @@ typedef struct vmmgr_ctx_t
     list_head_t rsrvd_mem;  /* reserved memory ranges */
     uint16_t    free_ent_per_page;
     uint16_t    rsrvd_ent_per_page;
+    uint16_t    low_ent_per_page;
     virt_addr_t vmmgr_base; /* base address where we will keep the structures */
     pagemgr_ctx_t pagemgr;
+    spinlock_t   lock;
 }vmmgr_ctx_t;
 
 typedef struct vmmgr_free_mem_t
@@ -37,6 +40,8 @@ typedef struct vmmgr_free_mem_t
     virt_addr_t base;
     virt_size_t length;
 }vmmgr_free_mem_t;
+
+
 
 typedef struct vmmgr_rsrvd_mem_t
 {
@@ -59,12 +64,70 @@ typedef struct vmmgr_free_mem_hdr_t
     vmmgr_free_mem_t fmem[0];
 }vmmgr_free_mem_hdr_t;
 
-int vmmgr_change_attrib(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len, uint32_t attr);
-void *vmmgr_map(vmmgr_ctx_t *ctx, phys_addr_t phys, virt_addr_t virt, virt_size_t len, uint32_t attr);
-void *vmmgr_alloc(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len, uint32_t attr);
-int vmmgr_unmap(vmmgr_ctx_t *ctx, void *vaddr, virt_size_t len);
-int vmmgr_free(vmmgr_ctx_t *ctx, void *vaddr, virt_size_t len);
-int vmmgr_reserve(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len, uint32_t type);
 int vmmgr_init(void);
+
+int vmmgr_change_attrib
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+);
+
+void *vmmgr_map
+(
+    vmmgr_ctx_t *ctx, 
+    phys_addr_t phys, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+);
+
+void *vmmgr_alloc
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+);
+
+int vmmgr_unmap
+(
+    vmmgr_ctx_t *ctx, 
+    void *vaddr, 
+    virt_size_t len
+);
+
+int vmmgr_free
+(
+    vmmgr_ctx_t *ctx, 
+    void *vaddr, 
+    virt_size_t len
+);
+
+int vmmgr_reserve
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t type
+);
+
+
+int vmmgr_temp_identity_unmap
+(
+    vmmgr_ctx_t *ctx,
+    void *vaddr, 
+    virt_size_t len
+);
+
+virt_addr_t vmmgr_temp_identity_map
+(
+    vmmgr_ctx_t *ctx,
+    phys_addr_t phys, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+);
 
 #endif
