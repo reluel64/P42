@@ -268,7 +268,7 @@ static inline int vmm_is_in_range
     rem = len - (req_base - base);
 
     /* If the remaining of the segment can
-     * fit th request and if the remaining of the
+     * fit the request and if the remaining of the
      * segment is less or equal than the total length
      * we can say that the segment is in the range
      */
@@ -538,8 +538,8 @@ static int vmmgr_merge_free_block(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
 static inline int vmmgr_split_free_block
 (
     vmmgr_free_mem_t *from,
-    virt_addr_t          virt,
-    virt_size_t          len,
+    virt_addr_t       virt,
+    virt_size_t       len,
     vmmgr_free_mem_t *rem
 )
 {

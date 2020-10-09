@@ -54,12 +54,12 @@ drv_t *devmgr_find_driver(const char *name);
 int devmgr_drv_init(drv_t *drv);
 int devmgr_dev_probe(dev_t *dev);
 int devmgr_dev_init(dev_t *dev);
-int devmgr_drv_set_data(drv_t *drv, void *data);
-void *devmgr_drv_get_data(drv_t *drv);
+int devmgr_drv_set_data(drv_t *drv, const void *data);
+void *devmgr_drv_get_data(const drv_t *drv);
 int devmgr_dev_set_data(dev_t *dev, void *data);
-void *devmgr_dev_get_data(dev_t *dev);
-dev_t *devmgr_get_parent(dev_t *dev);
-dev_type_t devmgr_get_type(dev_t *dev);
+void *devmgr_dev_get_data(const dev_t *dev);
+dev_t *devmgr_get_parent(const dev_t *dev);
+dev_type_t devmgr_get_type(const dev_t *dev);
 char *devmgr_dev_get_name(const dev_t *dev);
 int devmgr_dev_name_match(const dev_t *dev, char *name);
 #endif

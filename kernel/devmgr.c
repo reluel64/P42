@@ -26,7 +26,7 @@ int devmgr_add_drv(const drv_t *drv)
 
     /* check if the driver is already in the list */
 
-    if(devmgr_find_driver(&drv_list, &drv->drv_node) != NULL)
+    if(devmgr_find_driver(drv->drv_name) != NULL)
     {
         status = -1;
     }

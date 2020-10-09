@@ -24,6 +24,8 @@ static pfmgr_t pfmgr_interface;
 #define BIT_SET(x) ((1ull) << x)
 #define BIT_CLEAR(x) (~((1ull) << x))
 
+/* pfmgr_in_range -  check if a a memory interval is in range */
+
 static inline int pfmgr_in_range
 (
     phys_addr_t base,
@@ -51,6 +53,8 @@ static inline int pfmgr_in_range
     
     return(0);
 }
+
+/* pfmgr_in_range -  check if a a memory interval touches the range */
 
 static inline int pfmgr_touches_range
 (
@@ -90,6 +94,8 @@ static inline int pfmgr_touches_range
     return(0);
 }
 
+/* pfmgr_early_clear_bitmap - clear bitmap area using early page tables */
+
 static void pfmgr_early_clear_bitmap(pfmgr_free_range_t *fmem, phys_addr_t bmp_phys)
 {
     virt_addr_t *bmp = NULL;
@@ -108,6 +114,8 @@ static void pfmgr_early_clear_bitmap(pfmgr_free_range_t *fmem, phys_addr_t bmp_p
         pos += zlen;
     }
 }
+
+/* pfmgr_early_mark_bitmap - mark bitmap using early page table */
 
 static void pfmgr_early_mark_bitmap
 (
@@ -141,6 +149,8 @@ static void pfmgr_early_mark_bitmap
     }
 }
 
+/* pfmgr_early_init_free_callback - initialize free ranges using boot page tables */
+
 static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
 {
     pfmgr_init_t *init = pv;
@@ -162,7 +172,7 @@ static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
     if(init->prev)
     {
         freer = (pfmgr_free_range_t*)pagemgr_boot_temp_map(init->prev);
-        freer->hdr.next = track_addr;
+        freer->hdr.node.next = (list_node_t *)track_addr;
         init->prev = 0;
     }
     
@@ -215,6 +225,7 @@ static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
     init->prev = track_addr;
         
 }
+/* pfmgr_early_init_busy_callback - initialize busy ranges using boot page tables */
 
 static void pfmgr_init_busy_callback(memory_map_entry_t *e, void *pv)
 {
@@ -233,7 +244,7 @@ static void pfmgr_init_busy_callback(memory_map_entry_t *e, void *pv)
     if(init->prev)
     {
         busy = (pfmgr_busy_range_t*)pagemgr_boot_temp_map(init->prev);
-        busy->hdr.next = addr;
+        busy->hdr.node.next = (list_node_t *)addr;
         init->prev = 0;
     }
 
@@ -259,6 +270,8 @@ static void pfmgr_init_busy_callback(memory_map_entry_t *e, void *pv)
     base.busyr.count++;
     kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",__FUNCTION__,e->base, e->length, e->base + e->length);
 }
+
+/* pfmgr_early_alloc_pf - early allocator for page frame using boot page tables */
 
 int pfmgr_early_alloc_pf(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
 {
@@ -291,7 +304,7 @@ int pfmgr_early_alloc_pf(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
         /* U Can't Touch This */
         if(freer->hdr.base < LOW_MEMORY)
         {
-            freer_phys = local_freer.hdr.next;
+            freer_phys = (phys_addr_t)local_freer.hdr.node.next;
             continue;
         }
 
@@ -337,17 +350,25 @@ int pfmgr_early_alloc_pf(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
         memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
 
         /* advance */
-        freer_phys = local_freer.hdr.next;
+        freer_phys = (phys_addr_t)local_freer.hdr.node.next;
 
         if(stop)
         {
             return(0);
         }
         
-    }while(local_freer.hdr.next != 0);
+    }while(freer_phys != 0);
 
     return(-1);
 }
+
+/* pfmgr_lkup_bmp_for_free_pf - helper routine that looks for free pages 
+ *
+ * This routine will look in the bitmap represented by the pfmgr_free_range_t
+ * and will return the requested amount of page frames specified in pf that starts
+ * at start address
+ * 
+ */
 
 static int pfmgr_lkup_bmp_for_free_pf
 (
@@ -475,6 +496,9 @@ static int pfmgr_lkup_bmp_for_free_pf
     return(status);
 
 }
+
+/* pfmgr_mark_bmp - marks page frames entries as busy */
+
 /* TODO: MAKE ALLOCATION EVEN FASTER */
 static int pfmgr_mark_bmp
 (
@@ -540,6 +564,8 @@ static int pfmgr_mark_bmp
     return(pf > 0 ? -1 : 0);
 }
 
+/* pfmgr_clear_bmp - marks page frames entries as free */
+
 /* TODO: MAKE FREEING EVEN FASTER */
 static int pfmgr_clear_bmp
 (
@@ -599,6 +625,8 @@ static int pfmgr_clear_bmp
     return(pf > 0 ? -1 : 0);
 }
 
+/* pfmgr_alloc - allocates page frames */
+
 static int pfmgr_alloc(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
 {
     pfmgr_free_range_t *freer      = NULL;
@@ -634,7 +662,7 @@ static int pfmgr_alloc(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
         }
         
         avail_pf   = req_pf;    
-        lkup_sts   = pfmgr_lkup_bmp_for_free_pf(freer,&addr, &avail_pf);
+        lkup_sts   = pfmgr_lkup_bmp_for_free_pf(freer, &addr, &avail_pf);
         used_pf    = 0;
 
         /* Contiguous pages should be satisfied from one lookup */
@@ -684,6 +712,8 @@ static int pfmgr_alloc(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
     return(0);
 }
 
+/* pfmgr_free - obtains the free range using addr and pf count*/
+
 static int pfmgr_addr_to_free_range
 (
     phys_addr_t addr, 
@@ -718,6 +748,8 @@ static int pfmgr_addr_to_free_range
     return(-1);
 }
 
+/* pfmgr_free - frees page frames */
+
 static int pfmgr_free(free_cb cb, void *pv)
 {
     pfmgr_free_range_t *freer      = NULL;
@@ -751,7 +783,7 @@ static int pfmgr_free(free_cb cb, void *pv)
     
     return(err);
 }
-
+/* pfmgr_early_init - initializes tracking information */
 void pfmgr_early_init(void)
 {
     pfmgr_init_t init;
@@ -769,6 +801,7 @@ void pfmgr_early_init(void)
    
 }
 
+/* pfmgr_init - initialize runtime structures for the page frame allocator */
 int pfmgr_init(void)
 {
     phys_addr_t     phys = 0;
@@ -783,13 +816,13 @@ int pfmgr_init(void)
     {
         hdr = (pfmgr_range_header_t*)pagemgr_boot_temp_map(phys);
         hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
-                                                  VMM_ATTR_WRITABLE |
-                                                  VMM_ATTR_WRITE_THROUGH);
+                                                        VMM_ATTR_WRITABLE |
+                                                        VMM_ATTR_WRITE_THROUGH);
 
         if(hdr == NULL)
             return(-1);
 
-        phys = hdr->next;
+        phys = (phys_addr_t)hdr->node.next;
 
         linked_list_add_tail(&base.freer, &hdr->node);
 
@@ -802,12 +835,12 @@ int pfmgr_init(void)
     do
     {
         if((phys == base.physb_start)                    || 
-          ((hdr->next - base.physb_start % PAGE_SIZE) == 0))
+          (((phys_addr_t)hdr->node.next - base.physb_start % PAGE_SIZE) == 0))
         {
             hdr = (pfmgr_range_header_t*)pagemgr_boot_temp_map(phys);
             hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
-                                                      VMM_ATTR_WRITABLE |
-                                                      VMM_ATTR_WRITE_THROUGH);
+                                                            VMM_ATTR_WRITABLE |
+                                                            VMM_ATTR_WRITE_THROUGH);
 
             if(hdr == NULL)
                 return(-1);
@@ -818,12 +851,12 @@ int pfmgr_init(void)
             hdr = (pfmgr_range_header_t*)((uint8_t*)hdr + sizeof(pfmgr_busy_range_t));
         }
 
-      phys = hdr->next;
+      phys = (phys_addr_t)hdr->node.next;
       linked_list_add_tail(&base.busyr, &hdr->node);
 
     }while(phys != 0);
 
-    pfmgr_interface.alloc = pfmgr_alloc;
+    pfmgr_interface.alloc   = pfmgr_alloc;
     pfmgr_interface.dealloc = pfmgr_free;
 
     return(0);

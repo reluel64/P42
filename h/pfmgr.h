@@ -21,7 +21,7 @@ typedef struct
     int  (*dealloc)(free_cb cb, void *pv);
 }pfmgr_t;
 
-typedef struct phys_base_t
+typedef struct pfmgr_base_t
 {
     uint32_t domain_count;
     phys_addr_t physf_start;
@@ -30,11 +30,16 @@ typedef struct phys_base_t
     list_head_t busyr;
 }pfmgr_base_t;
 
-typedef struct physf_header_t
+typedef struct pfmgr_range_header_t
 {
+    /* The next entry from the node will 
+     * point to a physical address not a virtual one
+     * while early page frame allocator is in place, that
+     * being before pfmgr_init is called
+     */ 
 
+     
     list_node_t node;
-    phys_addr_t next; /* used during initialization */
     phys_addr_t base;
     phys_size_t len;
     phys_size_t struct_len;
@@ -42,7 +47,7 @@ typedef struct physf_header_t
     uint32_t type;
 }pfmgr_range_header_t;
 
-typedef struct
+typedef struct pfmgr_free_range_t
 {
     pfmgr_range_header_t hdr;
     phys_size_t total_pf;
@@ -50,7 +55,7 @@ typedef struct
     phys_addr_t bmp[0];
 }pfmgr_free_range_t;
 
-typedef struct
+typedef struct pfmgr_busy_range_t
 {
     pfmgr_range_header_t hdr;
     
