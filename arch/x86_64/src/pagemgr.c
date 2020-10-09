@@ -173,8 +173,9 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
 
 void pagemgr_boot_temp_map_init(void)
 {
-    virt_addr_t page_table;
-    virt_addr_t *page;
+    virt_addr_t page_table = 0;
+    virt_addr_t *page = NULL;
+
     page_table = (virt_addr_t)&BOOT_PAGING;
 
     page = (virt_addr_t*)(page_table + 
@@ -504,7 +505,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
             pte_ix = VIRT_TO_PT_INDEX(vaddr);
 
             /* set up page tables for mapping the kernel image */            
-            if(step ==PAGE_KERNEL_MAP_STEP)
+            if(step == PAGE_KERNEL_MAP_STEP)
             {
                 pte.bits = paddr;
 
@@ -523,7 +524,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
                     pte.fields.read_write = 1;
                 }
 
-                paddr+=PAGE_SIZE;
+                paddr += PAGE_SIZE;
                 
             }
             /* create the remapping table (last 2MB) */

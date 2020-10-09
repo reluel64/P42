@@ -199,15 +199,30 @@ __ltr:
     ret
 
 __flush_gdt:
+    push rbp ;save stack frame
+    mov rbp, rsp
     mov ax, 0x10
     mov ss, ax
     mov ds, ax
     mov es, ax
     mov gs, ax
     mov fs, ax
-    push 0x8
-    push flush_done
-    retfq
+    
+    push ax ; push ss in stack
+    push rbp
+
+    ; clear NT from RFLAGS
+    pushfq                  ; save the RFLAGS so that it can be restored later
+    pushfq                  ; push RFLAGS so that we can pop them into RAX
+    pop rax                 ; pop RFLAGS into RAX
+    and rax, ~(1 << 14)     ; Clear NT flag from RFLAGS (otherwise we will get an exception when performing iret)
+    push rax                ; push modified RFLAGS back
+    popfq                   ; set RFLAGS to CPU
+
+    push 0x8                ; push code segment
+    push flush_done         ; push return address
+    iretq                   ; do iret to reload segments
 
     flush_done:
+        leave
         ret

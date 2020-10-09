@@ -82,7 +82,7 @@ static int acpi_init(void)
 int smp_start_cpus(void);
 extern void _sgdt(gdt64_ptr_t *gdt);
 extern int cpu_ap_setup(uint32_t cpu_id);
-extern void __tsc_info(uint32_t *, uint32_t *);
+extern void __tsc_info(uint32_t *, uint32_t *, uint32_t *);
 
 void kmain()
 {
@@ -99,27 +99,33 @@ void kmain()
     /* Initialize Page Frame Manager*/
     if(pfmgr_init() != 0)
         return;
-    
-    acpi_mem_mgr_on();
-
+   
     vga_init();
 
-    uint64_t den = 0;
-    uint64_t num = 0;
-    __tsc_info(&den, &num);
 
-    kprintf("DEN %d NUM %d\n",den,num);
- 
-     vga_print("CPU_INIT\n",0x7,-1);
-    cpu_init();
-vga_print("CPU_INIT_DONE\n",0x7,-1);
-    if(pagemgr_install_handler() != 0)
-        return;
+
+    uint32_t den = 0;
+    uint32_t num = 0;
+    uint32_t crystal_hx = 0;
+    uint32_t bus = 0;
+    uint32_t base = 0;
+    __tsc_info(&den, &num, &crystal_hx);
+    __freq_info(&bus, &base);
+    kprintf("DEN %d NUM %d HZ %d\n",den,num, crystal_hx);
+    kprintf("bus %d base %d\n",bus,base);
+       // while(1);
+    vga_print("CPU_INIT\n",0x7,-1);
+
+
+    platform_register();
+    platform_init();
+
+   // ioapic_probe();
 
     
+    vga_print("CPU_INIT_DONE\n",0x7,-1);
+    while(1);
 
-    
-    pic_disable();
 
     vga_print("smp_start_cpus\n",0x7,-1);
     smp_start_cpus();

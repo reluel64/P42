@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+
+
 typedef struct apic_reg_t
 {
     uint32_t rsrvd_0    [4];
@@ -42,13 +44,28 @@ typedef struct apic_reg_t
 
 }__attribute__((packed)) apic_reg_t;
 
-typedef struct apic_t
+typedef struct apic_instance_t
 {
+    list_node_t node;
+    uint32_t apic_id;
     phys_addr_t paddr;
-    apic_reg_t *reg;
-    uint8_t x2apic;
-}apic_t;
+    volatile apic_reg_t *reg;
+    
+    uint8_t timer_fired;
+}apic_instance_t;
 
+typedef struct apic_dev_t
+{
+    volatile apic_reg_t *reg;
+    phys_addr_t paddr;
+    virt_addr_t vaddr;
+    uint32_t apic_id;
+}apic_dev_t ;
+
+typedef struct apic_drv_private_t
+{
+    char holder;
+}apic_drv_private_t;
 
 typedef struct apic_ipi_low_dword_t
 {
@@ -120,13 +137,15 @@ typedef struct apic_ipi_packet_t
 #define APIC_ICR_TRIGGER_LEVEL     (0x1)
 
 
+#define APIC_ID_SMT(x)     ((x)         & 0xF)
+#define APIC_ID_CORE(x)    (((x) >> 4)  & 0xF)
+#define APIC_ID_MODULE(x)  (((x) >> 8)  & 0xF)
+#define APIC_ID_TILE(x)    (((x) >> 16) & 0xF)
+#define APIC_ID_DIE(x)     (((x) >> 20) & 0xF)
+#define APIC_ID_PACKAGE(x) (((x) >> 24) & 0xF)
+#define APIC_ID_CLUSTER(x) (((x) >> 28) & 0xF)
+
 uint8_t apic_is_bsp(void);
-uint32_t apic_id_get(void);
 uint64_t apic_get_phys_addr(void);
-int apic_cpu_init(cpu_entry_t *cpu);
-int apic_send_ipi
-(
-    cpu_entry_t *cpu,
-    apic_ipi_packet_t *ipi
-);
+
 #endif

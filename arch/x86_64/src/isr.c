@@ -150,8 +150,6 @@ int isr_init(void)
     isr.idt_ptr.addr = (virt_addr_t)isr.idt;
     isr.idt_ptr.limit = IDT_TABLE_SIZE - 1;
 
-    __lidt(&isr.idt_ptr);    
-
     return(0);
 }
 
@@ -203,7 +201,7 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
 {
     int status = 0;
     interrupt_t *intr = NULL;
-    kprintf("ERROR 0x%x EC %x\n",index, error_code);
+   // kprintf("ERROR 0x%x EC %x\n",index, error_code);
     for(uint16_t i = 0; i < MAX_HANDLERS; i++)
     {
         intr  = isr.handlers + i;

@@ -16,7 +16,4 @@ qemu-system-x86_64 -machine q35 -cpu Icelake-Server,+x2apic -smp 32,sockets=4,ma
 -serial chardev:char0 \
 -serial chardev:char0 \
 
-#-monitor stdio
-
-
 

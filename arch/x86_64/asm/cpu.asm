@@ -12,7 +12,8 @@ global __check_x2apic
 global __has_smt
 global __cpu_switch_stack
 global __stack_pointer
-
+global __freq_info
+global __cpuid
 extern kstack_top
 extern kstack_base
 
@@ -93,12 +94,6 @@ __has_smt:
     mov rax, rdx
     ret
 
-
-
-
-
-
-
 ;RDI -> new stack base
 ;RSI -> new stack top
 ;RDX -> old stack base
@@ -124,11 +119,60 @@ __stack_pointer:
 global __tsc_info
 
 __tsc_info:
-    xor rax, rax
-    xor rbx, rbx
-    xor rcx,rcx
     mov eax, 0x15
+    mov r8, rdx
+    xor rcx, rcx
+    xor rdx, rdx
+
     cpuid
-    mov qword [rdi], rax
-    mov qword [rsi], rbx
+
+    mov dword [rdi],  eax
+    mov dword [rsi],  ebx
+    mov dword [r8],   ecx
     ret
+
+__freq_info:
+    mov eax, 0x16
+    xor rcx, rcx
+    xor rdx, rdx
+    cpuid
+
+    mov dword [rdi],  ecx
+    mov dword [rsi],  ebx
+    ret
+
+__has_apic:
+    mov eax, 0x1
+    cpuid
+    mov eax, edx
+    and eax, (1 << 9)
+    shr eax, 9
+    ret
+
+; RDI -> RAX
+; RSI -> RBX
+; RDX -> RCX
+; RCX -> RDX
+
+__cpuid:
+    ;save registers
+    push rbp
+    mov rbp, rsp
+    
+    mov r8, rdx
+    mov r9, rcx
+
+    mov ecx, dword [r9]
+    mov eax, dword [rdi]
+
+    cpuid
+
+    mov dword [rdi], eax
+    mov dword [rsi], ebx
+    mov dword [r8],  edx
+    mov dword [r9],  ecx
+
+    leave
+    ret
+
+    

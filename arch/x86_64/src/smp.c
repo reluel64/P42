@@ -39,7 +39,7 @@ int smp_start_cpus(void)
             if((lapic->LapicFlags & 0x1) || lapic->LapicFlags & 0x2)
             {
                 
-                cpu_ap_setup(lapic->Id);
+                //cpu_ap_setup(lapic->Id);
             }
         }
     }

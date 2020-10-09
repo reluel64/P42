@@ -60,10 +60,10 @@ static int gdt_entry_encode
 
 int gdt_per_cpu_init(void)
 {
-    uint32_t     flags = 0;
-    gdt_entry_t   *gdt   = NULL;
-    tss64_entry_t *tss = NULL;
-    gdt64_ptr_t gdt_ptr;
+    uint32_t       flags   = 0;
+    gdt_entry_t   *gdt     = NULL;
+    tss64_entry_t *tss     = NULL;
+    gdt64_ptr_t    gdt_ptr = {.limit = 0, .addr = 0};
 
     gdt = (gdt_entry_t*)vmmgr_alloc(NULL, 0, MAX_GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
     tss = (tss64_entry_t*)vmmgr_alloc(NULL, 0, sizeof(tss64_entry_t),VMM_ATTR_WRITABLE);
@@ -128,10 +128,11 @@ int gdt_per_cpu_init(void)
    gdt_ptr.addr  = (uint64_t)gdt;
    gdt_ptr.limit = MAX_GDT_TABLE_SIZE - 1;
 
+    kprintf("Setting gDT\n");
     __lgdt(&gdt_ptr);
     __ltr(TSS_SEGMENT);
     __flush_gdt();
 
-   // kprintf("GDT 0x%x TSS 0x%x\n",gdt, tss);
+    kprintf("GDT 0x%x TSS 0x%x\n",gdt, tss);
     return(0);
 }

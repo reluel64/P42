@@ -79,6 +79,23 @@ int linked_list_remove(list_head_t *lh, list_node_t *ln)
     lh->count--;
 }
 
+int linked_list_find_node(list_head_t *lh, list_node_t *ln)
+{
+    list_node_t *work_ln = NULL;
+
+    work_ln = linked_list_first(lh);
+
+    while(work_ln)
+    {
+        if(work_ln == ln)
+            return(0);
+        
+        work_ln = linked_list_next(work_ln);
+    }
+
+    return(-1);
+}
+
 list_node_t *linked_list_first(list_head_t *lh)
 {
     return(lh->list.next);

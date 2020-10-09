@@ -30,8 +30,9 @@
         "apic.h": "c"
     },
 
-    "editor.fontFamily": "Consolas",
-    "editor.fontSize": 13,
+    "editor.fontFamily": "Fira Code",
+    "editor.fontSize": 12,
+    "editor.fontLigatures": false,
     "files.autoSave": "onFocusChange",
     "editor.trimAutoWhitespace": true,
     "editor.renderWhitespace": "all",
