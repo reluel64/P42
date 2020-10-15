@@ -151,8 +151,8 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
                        PT_INDEX_TO_VIRT(510);
 
          page = (virt_addr_t*)(page_table + 
-							  PAGE_TABLE_BOOT_OFFSET + 
-							  511 * PAGE_SIZE + 510 * 8);
+                              PAGE_TABLE_BOOT_OFFSET + 
+                              511 * PAGE_SIZE + 510 * 8);
 
         /* mark the page as present and writeable */
         page[0] =  phys_addr            | 0x1B;
@@ -179,8 +179,8 @@ void pagemgr_boot_temp_map_init(void)
     page_table = (virt_addr_t)&BOOT_PAGING;
 
     page = (virt_addr_t*)(page_table + 
-						 PAGE_TABLE_BOOT_OFFSET + 
-						 511 * PAGE_SIZE );
+                         PAGE_TABLE_BOOT_OFFSET + 
+                         511 * PAGE_SIZE );
 
     memset(page, 0, PAGE_SIZE);
 }
@@ -212,9 +212,9 @@ virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
                        PDT_INDEX_TO_VIRT(511)    |
                        PT_INDEX_TO_VIRT(0);
 
-        page = (virt_addr_t*)(page_table + 
-							  PAGE_TABLE_BOOT_OFFSET + 
-							  511 * PAGE_SIZE );
+        page = (virt_addr_t*)(page_table             + 
+                              PAGE_TABLE_BOOT_OFFSET + 
+                              511 * PAGE_SIZE );
 
         /* Start to lookup */
 

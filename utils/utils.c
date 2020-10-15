@@ -3,40 +3,49 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <utils.h>
-void *memset(void *ptr, int value, size_t num)
-{  
-    uint8_t *start = (uint8_t*)ptr;
-    size_t   pos   = 0;
-    
+
+void* memset(void* ptr, int value, size_t num)
+{
+    uint8_t* start = (uint8_t*)ptr;
+    size_t   pos = 0;
+    size_t wval = 0;
+
+    wval = value & 0xff;
+
+    for (int i = 1; i < sizeof(size_t); i++)
+    {
+        wval |= (wval << 8 * i);
+    }
+
     /* Zero unaligned memory byte by byte */
-    while((size_t)start % 2 && pos < num)
+    while ((size_t)start % 2 && pos < num)
     {
         start[0] = (uint8_t)value;
         start++;
         pos++;
     }
 
-    while(num - pos > sizeof(uint64_t))
+    while (num - pos >= sizeof(size_t))
     {
-        *(uint64_t*)(&start[pos]) = value | (uint64_t)value << 32;
-        pos+=sizeof(uint64_t);
+        *(size_t*)(&start[pos]) = wval;
+        pos += sizeof(size_t);
     }
 
-    while(num - pos > sizeof(uint32_t))
+    while (num - pos >= sizeof(uint32_t))
     {
-        *(uint32_t*)(&start[pos]) = value;
+        *(uint32_t*)(&start[pos]) = (uint32_t)wval;
         pos += sizeof(uint32_t);
     }
 
-    while(num - pos > sizeof(uint16_t))
+    while (num - pos >= sizeof(uint16_t))
     {
-        *(uint16_t*)(&start[pos]) = (uint16_t)value;
+        *(uint16_t*)(&start[pos]) = (uint16_t)wval;
         pos += sizeof(uint16_t);
     }
 
-    while(num - pos > sizeof(uint8_t))
+    while (num - pos >= sizeof(uint8_t))
     {
-        *(uint8_t*)(&start[pos]) = (uint8_t)value;
+        *(uint8_t*)(&start[pos]) = (uint8_t)wval;
         pos += sizeof(uint8_t);
     }
 

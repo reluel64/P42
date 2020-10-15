@@ -15,8 +15,6 @@
 #define SPURIOUS_VECTOR  (239)
 #define TIMER_VECTOR      (32)
 
-#define DRIVER_NAME "APIC"
-
 extern uint64_t __read_apic_base(void);
 extern void     __write_apic_base(uint64_t base);
 extern uint8_t  __check_x2apic(void);
@@ -39,8 +37,8 @@ static int apic_probe(dev_t *dev)
     ACPI_STATUS            status   = AE_OK;
     ACPI_TABLE_MADT        *madt    = NULL;
 
-    if(!devmgr_dev_name_match(dev, DRIVER_NAME))
-        return(0);
+    if(!devmgr_dev_name_match(dev, APIC_DRIVER_NAME))
+        return(-1);
 
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
@@ -52,11 +50,6 @@ static int apic_probe(dev_t *dev)
     AcpiPutTable((ACPI_TABLE_HEADER*)madt);
 
     return(0);
-}
-
-static apic_t *apic_get(void)
-{
-    return(NULL);
 }
 
 static uint32_t apic_id_get(void)
@@ -103,7 +96,7 @@ static int apic_lvt_error_handler(void *pv, uint64_t error)
     apic_reg_t *reg = NULL;
     
     cpu = cpu_get();
-    
+ #if 0   
     apic = apic_get();
 
     if(apic == NULL)
@@ -111,7 +104,7 @@ static int apic_lvt_error_handler(void *pv, uint64_t error)
 
     reg = (apic_reg_t*)apic->reg;
     reg->eoi[0] = 0x1;    
-
+#endif
     return(0);
 }
 
@@ -135,12 +128,12 @@ uint64_t apic_get_phys_addr(void)
 
 static int apic_send_ipi
 (
-    intc_dev_t *dev,
+    dev_t *dev,
     ipi_packet_t *ipi
 )
 {
-    apic_dev_t *apic = dev->dev_data;
-    apic_reg_t *reg = NULL;
+   // apic_dev_t *apic = dev->dev_data;
+   // apic_reg_t *reg = NULL;
 
 
 #if 0
@@ -156,7 +149,7 @@ static int apic_send_ipi
 
 static int apic_cpu_init(dev_t *dev)
 {
-
+    kprintf("initializing instance\n");
     volatile apic_reg_t *reg = NULL;
     apic_dev_t *apic = NULL;
 
@@ -180,7 +173,7 @@ static int apic_cpu_init(dev_t *dev)
         return(-1);
     }
 
-    devmgr_dev_set_data(dev, apic);
+    devmgr_dev_data_set(dev, apic);
     
     reg = apic->reg;
 
@@ -211,7 +204,8 @@ static int apic_drv_init(drv_t *drv)
     isr_install(apic_lvt_error_handler, drv, LVT_ERROR_VECTOR);
     isr_install(apic_spurious_handler, drv, SPURIOUS_VECTOR);
 
-    devmgr_drv_set_data(drv, apic_pv);
+    devmgr_drv_data_set(drv, apic_pv);
+    
     return(0);
 }
 
@@ -224,10 +218,11 @@ static intc_api_t apic_api =
 
 static drv_t apic_drv = 
 {
-    .drv_name  = DRIVER_NAME,
+    .drv_name  = APIC_DRIVER_NAME,
     .dev_probe = apic_probe,
     .dev_init   = apic_cpu_init,
     .dev_uninit = NULL,
+    .drv_type  = INTERRUPT_CONTROLLER,
     .drv_init   = apic_drv_init,
     .drv_uninit = NULL,
     .drv_api = &apic_api
@@ -235,6 +230,8 @@ static drv_t apic_drv =
 
 int apic_register(void)
 {
-    devmgr_add_drv(&apic_drv);
+    devmgr_drv_add(&apic_drv);
+    kprintf("%s %d\n",__FUNCTION__,__LINE__);
+    devmgr_drv_init(&apic_drv);
     return(0);
 }

@@ -38,6 +38,6 @@ kernel = env.Program(
                     )
 
 #print Dir("h").path()
-env.Install('/media/alex/4D7E-2E98', kernel)
-env.Alias('install','/media/alex/4D7E-2E98')
+env.Install('/run/media/alex/4D7E-2E98', kernel)
+env.Alias('install','/run/media/alex/4D7E-2E98')
 env.Execute('sync')

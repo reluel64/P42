@@ -27,7 +27,9 @@
         "initializer_list": "c",
         "utility": "c",
         "types.h": "c",
-        "apic.h": "c"
+        "apic.h": "c",
+        "cstring": "c",
+        "typeinfo": "c"
     },
 
     "editor.fontFamily": "Fira Code",

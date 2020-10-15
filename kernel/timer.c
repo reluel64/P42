@@ -1,3 +1,4 @@
+#if 0
 #include <linked_list.h>
 #include <timer.h>
 #include <spinlock.h>
@@ -73,3 +74,4 @@ int timer_arm
 
     return(status);
 }
+#endif

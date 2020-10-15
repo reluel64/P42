@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define IOAPIC_DRV_NAME "ioapic"
+
 typedef struct ioapic_id_t
 {
     uint32_t rsrvd: 24;
@@ -53,5 +55,18 @@ typedef struct iowin_t
 {
     uint32_t reg_data;
 }__attribute__((packed)) iowin_t;
+
+
+typedef struct ioapic_t
+{
+    uint32_t irq_base;
+    uint32_t id;
+    phys_addr_t phys_base;
+    virt_addr_t virt_base;
+    volatile ioregsel_t volatile *ioregsel;
+    volatile iowin_t volatile *iowin;
+
+    
+}ioapic_t;
 
 #endif

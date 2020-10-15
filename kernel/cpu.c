@@ -152,7 +152,7 @@ int cpu_init(void)
     cpu = kmalloc(sizeof(cpu_entry_t));
     
     memset(cpu, 0, sizeof(cpu_entry_t));
-
+    
     status = pcpu->cpu_setup(cpu);
 
     if(status == 0)

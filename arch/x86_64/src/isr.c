@@ -164,7 +164,7 @@ int isr_install(interrupt_handler_t ih, void *pv, uint16_t index)
     interrupt_t *intr = NULL;
 
     intr = isr.handlers;
-
+    
     for(uint16_t i = 0; i <  MAX_HANDLERS; i++)
     {
         if(intr[i].ih == NULL)

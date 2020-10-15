@@ -9,7 +9,8 @@
 #include <liballoc.h>
 #include <spinlock.h>
 #include <acpi.h>
-#include <pic.h>
+#include <devmgr.h>
+
 int apic_timer_start(uint32_t timeout);
 
 uint8_t *apic_base ;extern void physmm_dump_bitmaps(void);
@@ -86,17 +87,24 @@ extern void __tsc_info(uint32_t *, uint32_t *, uint32_t *);
 
 void kmain()
 {
-    /* Init polling console */
+   
+    /* init polling console */
     init_serial();
+
+    /* initialize temporary mapping */
     pagemgr_boot_temp_map_init();
-
+    
+    /* initialize early page frame manager */
     pfmgr_early_init();
-
-    /* Initialize Virtual Memory Manager */
+    
+    /* initialize device manager */
+    devmgr_init();
+    
+    /* initialize Virtual Memory Manager */
     if(vmmgr_init() != 0)
         return;
 
-    /* Initialize Page Frame Manager*/
+    /* initialize Page Frame Manager*/
     if(pfmgr_init() != 0)
         return;
    
@@ -115,20 +123,20 @@ void kmain()
     kprintf("bus %d base %d\n",bus,base);
        // while(1);
     vga_print("CPU_INIT\n",0x7,-1);
-
+    
 
     platform_register();
     platform_init();
-
+    kprintf("%s %d\n",__FUNCTION__,__LINE__);
+   
    // ioapic_probe();
 
-    
+    vga_print("DONEEEEEEE\n",0x7,-1);
     vga_print("CPU_INIT_DONE\n",0x7,-1);
-    while(1);
 
 
     vga_print("smp_start_cpus\n",0x7,-1);
-    smp_start_cpus();
+    //smp_start_cpus();
     vga_print("smp_start_cpus_DONE\n",0x7,-1);
     extern virt_addr_t __stack_pointer();
     /*kprintf("CHECKING APIC 0x%x\n", apic_is_bsp());*/

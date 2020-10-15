@@ -89,7 +89,7 @@ static void pcpu_stack_relocate
     new_stack_top = new_stack_base - stack_entries;
     old_stack_top = old_stack_base - stack_entries;
 
-    
+
     kprintf("old_stack_base 0x%x old_stack_top 0x%x\n",old_stack_base, old_stack_top);
     /* Adjust stack content */
 
@@ -215,12 +215,13 @@ int pcpu_setup(cpu_entry_t *cpu)
         pcpu_stack_relocate((virt_addr_t*)cpu->stack_bottom,
                            (virt_addr_t*)_BSP_STACK_BASE);
     }
+
     else
     {
         pcpu_stack_relocate((virt_addr_t*)cpu->stack_bottom,
                            (virt_addr_t*)old_stack_bottom);
     }
-   
+
     if(old_stack_top != 0)
     {
         memset((void*)old_stack_top, 0, old_stack_bottom - old_stack_top);
@@ -237,8 +238,7 @@ int pcpu_setup(cpu_entry_t *cpu)
     pcpu_assign_domain_number(cpu);
     gdt_per_cpu_init();
     isr_per_cpu_init();
-    intc_per_cpu_init();
-
+ 
     return(0);
 }
 #if 0

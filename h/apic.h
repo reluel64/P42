@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-
+#define APIC_DRIVER_NAME "APIC"
 
 typedef struct apic_reg_t
 {
