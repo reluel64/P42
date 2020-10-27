@@ -653,7 +653,7 @@ AcpiOsMapMemory (
     virt_addr_t ret_addr = 0;
 
     if(mem_mgr_ready)
-        ret_addr = (virt_addr_t)acpi_map(where, length, PAGE_WRITABLE|PAGE_WRITE_THROUGH|PAGE_NO_CACHE);
+        ret_addr = (virt_addr_t)acpi_map(where, length, PAGE_WRITABLE|PAGE_STRONG_UNCACHED);
     else
         ret_addr = pagemgr_boot_temp_map_big(where, length);
 

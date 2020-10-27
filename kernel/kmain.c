@@ -10,7 +10,7 @@
 #include <spinlock.h>
 #include <acpi.h>
 #include <devmgr.h>
-
+#include <port.h>
 int apic_timer_start(uint32_t timeout);
 
 uint8_t *apic_base ;extern void physmm_dump_bitmaps(void);
@@ -29,65 +29,22 @@ static int test_callback(phys_addr_t addr, phys_size_t count, void *pv)
     return(0);
 }
 
-static int acpi_init(void)
-{
-    ACPI_STATUS status = AE_OK;
-#if 0
-    status = AcpiInitializeSubsystem();
-
-    if(ACPI_FAILURE(status))
-    {
-        kprintf("Failed to initialize ACPI Subsystem\n");
-        return(status);
-    }
-#endif
-    status = AcpiReallocateRootTable();
-    
-    if(ACPI_FAILURE(status))
-    {
-        kprintf("Failed to reallocate the RootTable\n");
-        return(status);
-    }
-
-    status = AcpiLoadTables();
-
-    if(ACPI_FAILURE(status))
-    {
-        kprintf("Failed to reallocate the load tables\n");
-        return(status);
-    }
-
-#if 1
-
-    status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
-
-    if(ACPI_FAILURE(status))
-    {
-        kprintf("Failed to enable susbsystem\n");
-        return(status);
-    }
-
-    status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
-    
-    if(ACPI_FAILURE(status))
-    {
-        kprintf("Failed to initialize objects\n");
-        return(status);
-    }
-#endif
-
-    kprintf("InitDone\n");
-    return(status);
-
-}
 int smp_start_cpus(void);
 extern void _sgdt(gdt64_ptr_t *gdt);
 extern int cpu_ap_setup(uint32_t cpu_id);
 extern void __tsc_info(uint32_t *, uint32_t *, uint32_t *);
 
+static spinlock_t lock = {.int_status = 0, .lock = 0};
+
 void kmain()
 {
    
+    uint32_t den = 0;
+    uint32_t num = 0;
+    uint32_t crystal_hx = 0;
+    uint32_t bus = 0;
+    uint32_t base = 0;
+
     /* init polling console */
     init_serial();
 
@@ -111,12 +68,6 @@ void kmain()
     vga_init();
 
 
-
-    uint32_t den = 0;
-    uint32_t num = 0;
-    uint32_t crystal_hx = 0;
-    uint32_t bus = 0;
-    uint32_t base = 0;
     __tsc_info(&den, &num, &crystal_hx);
     __freq_info(&bus, &base);
     kprintf("DEN %d NUM %d HZ %d\n",den,num, crystal_hx);
@@ -141,14 +92,24 @@ void kmain()
     extern virt_addr_t __stack_pointer();
     /*kprintf("CHECKING APIC 0x%x\n", apic_is_bsp());*/
     kprintf("HELLO TOP 0x%x\n",__stack_pointer());
-    
+  //  __sti();
+//__outb(0x43, 0b110110);
+//__outb(0x40, 0);
+//__outb(0x40, 255);
+__cli();
+uint64_t i =1024ul*1024ul*2048ul;
+
+
+    for(;;)
+    {
+        kprintf("BEGIN ALLOC %x\n",i);
+        
+        int *j = kmalloc(i);
+        
+       kfree(j);
+       kprintf("DONE\n");
+    }
    
-   // cpu_init();
-    
-  //  smp_init();
-    /*acpi_init();*/
-
-
-    
+    while(1);
 }
 

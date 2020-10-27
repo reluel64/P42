@@ -11,8 +11,8 @@
 #include <devmgr.h>
 #include <intc.h>
 
-#define LVT_ERROR_VECTOR (238)
-#define SPURIOUS_VECTOR  (239)
+#define LVT_ERROR_VECTOR (254)
+#define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
 extern uint64_t __read_apic_base(void);
@@ -21,7 +21,7 @@ extern uint8_t  __check_x2apic(void);
 extern uint64_t  __max_physical_address();
 
 
-static uint32_t apic_id_get(void);
+uint32_t apic_id_get(void);
 
 
 extern void __cpuid
@@ -52,7 +52,7 @@ static int apic_probe(dev_t *dev)
     return(0);
 }
 
-static uint32_t apic_id_get(void)
+uint32_t apic_id_get(void)
 {
     uint32_t eax = 0;
     uint32_t ebx = 0;
@@ -108,10 +108,10 @@ static int apic_lvt_error_handler(void *pv, uint64_t error)
     return(0);
 }
 
-uint64_t apic_get_phys_addr(void)
+static phys_addr_t apic_get_phys_addr(void)
 {
-    uint64_t apic_base = 0;
-    uint64_t max_phys_mask = 0;
+    phys_addr_t apic_base = 0;
+    phys_addr_t max_phys_mask = 0;
 
     apic_base = __read_apic_base();
     max_phys_mask =  __max_physical_address();
@@ -147,6 +147,13 @@ static int apic_send_ipi
     return(0);
 }
 
+int apic_timer(void *pv, uint64_t ec)
+{
+    apic_dev_t *apic = devmgr_dev_data_get(pv);
+
+    (*apic->reg->eoi)=0;
+}
+
 static int apic_cpu_init(dev_t *dev)
 {
     kprintf("initializing instance\n");
@@ -165,8 +172,9 @@ static int apic_cpu_init(dev_t *dev)
     apic->reg     = (apic_reg_t*)vmmgr_map(NULL, apic->paddr, 0x0, 
                                 sizeof(apic_reg_t), 
                                 VMM_ATTR_WRITABLE |
-                                VMM_ATTR_NO_CACHE |
-                                VMM_ATTR_WRITE_THROUGH);
+                                VMM_ATTR_STRONG_UNCACHED);
+
+    kprintf("APIC_BASE %x\n",apic->paddr);
     if(apic->reg == NULL)
     {
         kfree(apic);
@@ -174,20 +182,25 @@ static int apic_cpu_init(dev_t *dev)
     }
 
     devmgr_dev_data_set(dev, apic);
-    
+
+    isr_install(apic_lvt_error_handler, dev, LVT_ERROR_VECTOR);
+    isr_install(apic_spurious_handler, dev, SPURIOUS_VECTOR);
+    isr_install(apic_timer, dev,0x22);
     reg = apic->reg;
 
     /* Stop APIC */
-    reg->svr[0]     &= ~APIC_SVR_ENABLE_BIT;
+    (*reg->svr)     &= ~APIC_SVR_ENABLE_BIT;
 
     /* Set up LVT error handling */
-    reg->lvt_err[0] &= ~APIC_LVT_INT_MASK;
-    reg->lvt_err[0] |= APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
+    (*reg->lvt_err) &= ~APIC_LVT_INT_MASK;
+    (*reg->lvt_err) |= APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
 
     /* Enable APIC */
-    reg->svr[0]     |= APIC_SVR_ENABLE_BIT | 
+    (*reg->svr)     |= APIC_SVR_ENABLE_BIT | 
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
-
+        
+    (*reg->eoi) = 0;
+    
     return(0);
 }
 
@@ -199,10 +212,6 @@ static int apic_drv_init(drv_t *drv)
 
     if(apic_pv == NULL)
         return(-1);
-
-    
-    isr_install(apic_lvt_error_handler, drv, LVT_ERROR_VECTOR);
-    isr_install(apic_spurious_handler, drv, SPURIOUS_VECTOR);
 
     devmgr_drv_data_set(drv, apic_pv);
     
@@ -231,7 +240,6 @@ static drv_t apic_drv =
 int apic_register(void)
 {
     devmgr_drv_add(&apic_drv);
-    kprintf("%s %d\n",__FUNCTION__,__LINE__);
     devmgr_drv_init(&apic_drv);
     return(0);
 }

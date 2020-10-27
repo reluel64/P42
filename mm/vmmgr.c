@@ -122,12 +122,12 @@ int vmmgr_init(void)
     rh = (vmmgr_rsrvd_mem_hdr_t*)pagemgr_alloc(&vmmgr_kernel_ctx.pagemgr,
                                                 vmmgr_kernel_ctx.vmmgr_base + VMM_RSRVD_OFFSET,
                                                 PAGE_SIZE,
-                                                PAGE_WRITABLE);
+                                                PAGE_WRITABLE | PAGE_WRITE_THROUGH);
 
     fh  = (vmmgr_free_mem_hdr_t*)pagemgr_alloc(&vmmgr_kernel_ctx.pagemgr,
                                                 vmmgr_kernel_ctx.vmmgr_base + VMM_FREE_OFFSET,
                                                 PAGE_SIZE,
-                                                PAGE_WRITABLE);
+                                                PAGE_WRITABLE | PAGE_WRITE_THROUGH);
     
 
     kprintf("rsrvd_start 0x%x\n",rh);
@@ -142,10 +142,11 @@ int vmmgr_init(void)
     linked_list_add_head(&vmmgr_kernel_ctx.rsrvd_mem, &rh->node);
     linked_list_add_head(&vmmgr_kernel_ctx.free_mem, &fh->node);
 
-
+    /* How many free entries can we store per page */
     vmmgr_kernel_ctx.free_ent_per_page = (PAGE_SIZE - sizeof(vmmgr_free_mem_hdr_t)) /
                                               sizeof(vmmgr_free_mem_t);
 
+    /* How many reserved entries can we store per page */
     vmmgr_kernel_ctx.rsrvd_ent_per_page = (PAGE_SIZE - sizeof(vmmgr_rsrvd_mem_hdr_t)) /
                                                 sizeof(vmmgr_rsrvd_mem_t);
 
@@ -192,6 +193,12 @@ int vmmgr_init(void)
     return(0);
 }
 
+/*
+ * vmmgr_alloc_tracking - allocate tracking memory
+ * Allocate tracking memory 
+ * This routine is used by the Virtual Memory Manager
+ * to allocate tracking memory when it runs out of it
+ */ 
 
 static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
 {
@@ -202,6 +209,7 @@ static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
     list_node_t *next_fn        = NULL;
     virt_addr_t addr =           0;
 
+    /* Go thorugh the free entries */
     fn = linked_list_first(&ctx->free_mem);
 
     while(fn)
@@ -209,6 +217,10 @@ static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
         next_fn = linked_list_next(fn);
 
         fh = (vmmgr_free_mem_hdr_t*)fn;
+        
+        /* Check each free entry from the page 
+         * We try to use a best fit approach to reduce fragmentation
+         */
 
         for(uint16_t i = 0; i < ctx->free_ent_per_page; i++)
         {
@@ -231,6 +243,13 @@ static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
     if(from_slot == NULL)
         return(NULL);
 
+    /* Check if the free descriptor allows us to allocate memory */
+    if(from_slot->base == 0 || 
+       from_slot->length == 0)
+    {
+       return(NULL);
+    }
+
     addr = pagemgr_alloc(&ctx->pagemgr,
                           from_slot->base, 
                           PAGE_SIZE, 
@@ -248,7 +267,7 @@ static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
 }
 
 /*
- * vmm_is_in_range - checks if a segment is in range of another segmen
+ * vmm_is_in_range - checks if a segment is in the range of another segment
  */
 
 static inline int vmm_is_in_range
@@ -313,6 +332,7 @@ static inline int vmm_is_in_range
     return(0);
 }
 
+/* Check if a virtual address is reserved */
 static int vmmgr_is_reserved(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
 {
     list_node_t *node      = NULL;
@@ -339,7 +359,7 @@ static int vmmgr_is_reserved(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len
     return(0);
 }
 
-
+/* Check if the virtual address is free or is not mapped */
 static int vmmgr_is_free(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
 {
     list_node_t      *node      = NULL;
@@ -368,7 +388,7 @@ static int vmmgr_is_free(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
     return(0);
 }
 
-
+/* Add tracking information to the reserved list */
 static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
 {
     list_node_t           *rn        = NULL;
@@ -388,31 +408,46 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
         next_rn = linked_list_next(rn);
         rh = (vmmgr_rsrvd_mem_hdr_t*)rn;
 
+        /* If this slot is already full,
+         * then there are no available entries to
+         * store the reserved data
+         */ 
         if(rh->avail == 0)
         {
+            /* Check if we are at the end of the list 
+             * and if we are, then allocate a new node.
+             * Otherwise skip ahead
+             */
 
-            if(next_rn == NULL)
+            if(next_rn != NULL)
             {
-                next_rn = vmmgr_alloc_tracking(ctx);
+                rn = next_rn;
+                continue;
+            }
 
-                if(next_rn != NULL)
-                {
-                    rh = (vmmgr_rsrvd_mem_hdr_t*)next_rn;
-                    rh->avail = ctx->rsrvd_ent_per_page - 1;
+            
+            next_rn = vmmgr_alloc_tracking(ctx);
 
-                    /* First entry in the reserved section is the reserved page itself*/
-                    rh->rsrvd[0].base   = (virt_addr_t)next_rn;
-                    rh->rsrvd[0].length = PAGE_SIZE;
-                    rh->rsrvd[0].type   = VMM_RES_RSRVD;
-                    linked_list_add_tail(&ctx->rsrvd_mem, &rh->node);
-                }
+            if(next_rn != NULL)
+            {
+                rh = (vmmgr_rsrvd_mem_hdr_t*)next_rn;
+                rh->avail = ctx->rsrvd_ent_per_page - 1;
 
+                /* First entry in the reserved section is the reserved page itself */
+                rh->rsrvd[0].base   = (virt_addr_t)next_rn;
+                rh->rsrvd[0].length = PAGE_SIZE;
+                rh->rsrvd[0].type   = VMM_RES_RSRVD;
+                linked_list_add_tail(&ctx->rsrvd_mem, &rh->node);
             }
 
             rn = next_rn;
             continue;
         }
 
+        /* We have a reserved area which can hold 
+         * the information that we want to store
+         * so let's find the exact location in the page
+         */ 
         for(uint16_t i = 0; i < ctx->rsrvd_ent_per_page; i++)
         {
             /* TODO: Support coalescing if the types are the same */
@@ -421,6 +456,9 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
 
             if(candidate == NULL)
             {
+                /* Let's see if this is our candidate slot
+                 * to store the data 
+                 * */
                 if(rdesc->base == 0 &&
                    rdesc->length == 0)
                 {
@@ -430,6 +468,7 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
                     break;
                 }
             }
+            /* Check if the 'to reserve memory' is already in the list */
             else if(!memcmp(rsrvd, candidate, sizeof(vmmgr_rsrvd_mem_t)))
             {
                 candidate = NULL;
@@ -466,6 +505,8 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
 
     return(0);
 }
+
+/* vmmgr_merge_free_block - merge adjacent memory blocks */
 
 static int vmmgr_merge_free_block(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
 {
@@ -535,6 +576,10 @@ static int vmmgr_merge_free_block(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
     return(-1);
 }
 
+/* vmmgr_split_free_block - split a free block 
+ * and return the remaining block size
+ * */
+
 static inline int vmmgr_split_free_block
 (
     vmmgr_free_mem_t *from,
@@ -569,6 +614,10 @@ static inline int vmmgr_split_free_block
         return(-1);
     }
 }
+
+/* vmmgr_put_free_mem - place a free memory block in the free memory list 
+ * This routine is similar in implementation with vmmgr_add_reserved
+ * */
 
 static int vmmgr_put_free_mem(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
 {
@@ -650,6 +699,8 @@ static int vmmgr_put_free_mem(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
     return(-1);
 }
 
+/* vmmgr_reserve - reserve virtual memory */
+
 int vmmgr_reserve
 (
     vmmgr_ctx_t *ctx, 
@@ -716,6 +767,7 @@ int vmmgr_reserve
     return(0);
 }
 
+/* vmmgr_map - map phyical address to virtual address */
 void *vmmgr_map
 (
     vmmgr_ctx_t *ctx,
@@ -844,6 +896,7 @@ void *vmmgr_map
     return((void*)ret_addr);
 }
 
+/* vmmgr_alloc - allocate virtual memory */
 void *vmmgr_alloc
 (
     vmmgr_ctx_t *ctx,
@@ -936,7 +989,11 @@ void *vmmgr_alloc
 
     if( from_slot->length < len)
     {
-        kprintf("Not From slot 0x%x - 0x%x 0x%x\n",from_slot->base,from_slot->length, len);
+        kprintf("Not From slot 0x%x - 0x%x 0x%x\n", 
+                from_slot->base, 
+                from_slot->length, 
+                len);
+
         spinlock_unlock_interrupt(&ctx->lock);
         return(NULL);
     }
@@ -964,6 +1021,8 @@ void *vmmgr_alloc
 
     return((void*)ret_addr);
 }
+
+/* vmmgr_free - free virtual memory */
 
 int vmmgr_free
 (
@@ -1015,6 +1074,7 @@ int vmmgr_free
     return(status);
 }
 
+/* vmmgr_unmap - unmap virtual memory */
 int vmmgr_unmap
 (
     vmmgr_ctx_t *ctx,

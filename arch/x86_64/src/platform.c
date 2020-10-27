@@ -10,14 +10,12 @@ extern int pcpu_init(void);
 extern int apic_register(void);
 extern int pic8259_register(void);
 extern int acpi_mem_mgr_on(void);
-
-
+extern int ioapic_register(void);
 
 int platform_register(void)
 {
 
     pcpu_init();
-
     return(0);
 }
 
@@ -48,13 +46,21 @@ static int platform_setup_intc(void)
             }            
         }
     }
-
+    
     dev = devmgr_dev_get_by_name(PIC8259_DRIVER_NAME, 0);
     intc_disable(dev);
 }
 
+int isr_test(void)
+{
+    vga_print("TEST\n",0x7,-1);
+    return(-1);
+}
+extern void test_interrupt(void);
 int platform_init(void)
 {
+
+    __cli();
     if(isr_init() != 0)
         return(-1);
     
@@ -62,7 +68,7 @@ int platform_init(void)
         return(-1);
 
     acpi_mem_mgr_on();
-
+    
     /* Initialize interrupt controllers */
     platform_setup_intc();
 #if 0
@@ -88,4 +94,5 @@ int platform_init(void)
     }
 #endif
     cpu_init();
+    //__sti();
 }

@@ -55,6 +55,7 @@ static int devmgr_add_dev_to_drv
 
 int devmgr_init(void);
 int devmgr_dev_create(dev_t **dev);
+int devmgr_dev_delete(dev_t *dev);
 int devmgr_dev_add(dev_t *dev, dev_t *parent);
 int devmgr_drv_add(drv_t *drv);
 int devmgr_drv_remove(drv_t *drv);

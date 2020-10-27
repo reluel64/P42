@@ -146,6 +146,6 @@ typedef struct apic_ipi_packet_t
 #define APIC_ID_CLUSTER(x) (((x) >> 28) & 0xF)
 
 uint8_t apic_is_bsp(void);
-uint64_t apic_get_phys_addr(void);
+
 
 #endif

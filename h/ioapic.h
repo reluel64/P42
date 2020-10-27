@@ -32,7 +32,7 @@ typedef struct ioapic_arb_t
 typedef struct ioredtbl_t
 {
     uint8_t intvec;
-    uint8_t delmod:2;
+    uint8_t delmod:3;
     uint8_t destmod:1;
     uint8_t delivs:1;
     uint8_t intpol:1;
@@ -53,20 +53,18 @@ typedef struct ioregsel_t
 
 typedef struct iowin_t
 {
-    uint32_t reg_data;
+    uint32_t  reg_data;
 }__attribute__((packed)) iowin_t;
 
 
 typedef struct ioapic_t
 {
-    uint32_t irq_base;
-    uint32_t id;
-    phys_addr_t phys_base;
-    virt_addr_t virt_base;
-    volatile ioregsel_t volatile *ioregsel;
-    volatile iowin_t volatile *iowin;
-
-    
+    uint32_t             irq_base;
+    uint32_t             id;
+    phys_addr_t          phys_base;
+    virt_addr_t          virt_base;
+    volatile ioregsel_t  *ioregsel;
+    volatile iowin_t     *iowin;
 }ioapic_t;
 
 #endif

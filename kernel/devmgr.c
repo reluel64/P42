@@ -59,6 +59,20 @@ int devmgr_dev_create(dev_t **dev)
     return(0);
 }
 
+int devmgr_dev_delete(dev_t *dev)
+{
+    
+    if(dev != NULL)
+    {
+        memset(dev, 0, sizeof(dev_t));
+
+        if(dev->flags & DEVMGR_DEV_ALLOCATED)
+            kfree(dev);
+    }
+
+    return(0);
+}
+
 int devmgr_dev_add(dev_t *dev, dev_t *parent)
 {
     int          status = 0;

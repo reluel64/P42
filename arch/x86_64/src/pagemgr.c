@@ -18,6 +18,7 @@ typedef struct pagemgr_root_t
     virt_addr_t remap_table_vaddr;
     uint8_t     pml5_support;
     uint8_t     nx_support;
+    pat_t pat;
 }pagemgr_root_t;
 
 /* TODO: SUPPORT GUARD PAGES */
@@ -77,6 +78,8 @@ extern void        __enable_wp();
 extern virt_addr_t __read_cr2();
 extern void        __write_cr2(virt_addr_t cr2);
 extern void        __wbinvd();
+extern void        __wrmsr(uint64_t reg, uint64_t val);
+extern uint64_t    __rdmsr(uint64_t msr);
 /* locals */
 static pagemgr_root_t page_manager = {0};
 
@@ -90,6 +93,7 @@ static int         pagemgr_per_cpu_invl_handler
     void *pv, 
     uint64_t error_code
 );
+
 /* This piece code is the intermediate layer
  * between the physical memory manager and
  * the virtual memory manager.
@@ -154,7 +158,7 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
                               PAGE_TABLE_BOOT_OFFSET + 
                               511 * PAGE_SIZE + 510 * 8);
 
-        /* mark the page as present and writeable */
+        /* mark the page as present, writeable and write through*/
         page[0] =  phys_addr            | 0x1B;
         page[1] =  phys_addr + 0x1000   | 0x1B;
 
@@ -204,7 +208,6 @@ virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
 
-
     if(page_manager.remap_table_vaddr == 0)
     {
          page_table = (virt_addr_t)&BOOT_PAGING;
@@ -247,7 +250,7 @@ virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
 
         for(uint16_t i = free_start; i < 510; i++)
         {
-            
+            /* present, writable, wirte through */
             page[i] = (phys_addr + PAGE_SIZE * (i - free_start)) | 0x1B;
            // kprintf("ADDR 0x%x\n",(phys_addr + PAGE_SIZE * (i - free_start)));
             __invlpg(virt_addr + PAGE_SIZE * i);
@@ -279,6 +282,7 @@ int pagemgr_boot_temp_unmap_big(virt_addr_t vaddr, virt_size_t len)
     virt_addr_t   page_table = 0;
     virt_addr_t  *page = NULL;
     uint16_t ix  = 0;
+
     offset = vaddr % PAGE_SIZE;
     vaddr -= offset;
     
@@ -353,10 +357,84 @@ static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
     {
         pte->fields.read_write      = !!(attr & PAGE_WRITABLE);
         pte->fields.user_supervisor = !!(attr & PAGE_USER);
-        pte->fields.write_through   = !!(attr & PAGE_WRITE_THROUGH);
-        pte->fields.cache_disable   = !!(attr & PAGE_NO_CACHE);
         pte->fields.xd              =  !(attr & PAGE_EXECUTABLE) && 
                                         page_manager.nx_support;
+
+        
+        /* Translate caching attributes */
+        /*
+         * PAT PCD PWT PAT Entry
+         *  0   0   0    PAT0 -> WB
+         *  0   0   1    PAT1 -> WT
+         *  0   1   0    PAT2 -> UC-
+         *  0   1   1    PAT3 -> UC
+         *  1   0   0    PAT4 -> WC
+         *  1   0   1    PAT5 -> WT
+         *  1   1   0    PAT6 -> UC-
+         *  1   1   1    PAT7 -> UC
+         * 
+         *  just to have a picture here
+         * 
+         * pat.fields.pa0 = PAT_WRITE_BACK;
+         * pat.fields.pa1 = PAT_WRITE_THROUGH;
+         * pat.fields.pa2 = PAT_UNCACHED;
+         * pat.fields.pa3 = PAT_UNCACHEABLE;
+         * pat.fields.pa4 = PAT_WRITE_COMBINING;
+         * pat.fields.pa5 = PAT_WRITE_PROTECT;
+         * pat.fields.pa6 = PAT_UNCACHED;
+         * pat.fields.pa7 = PAT_UNCACHEABLE;
+         */
+
+        /* PAT 0 */
+        if(attr & PAGE_WRITE_BACK)
+        {
+            pte->fields.write_through = 0;
+            pte->fields.cache_disable = 0;
+            pte->fields.pat           = 0;
+        }
+        /* PAT 1 */
+        else if(attr & PAGE_WRITE_THROUGH)
+        {
+            pte->fields.write_through = 1;
+            pte->fields.cache_disable = 0;
+            pte->fields.pat           = 0;
+        }
+        /* PAT 2 */
+        else if(attr & PAGE_UNCACHEABLE)
+        {
+            pte->fields.write_through = 0;
+            pte->fields.cache_disable = 1;
+            pte->fields.pat           = 0;
+        }
+        /* PAT 3 */
+        else if(attr & PAGE_STRONG_UNCACHED)
+        {
+            pte->fields.write_through = 1;
+            pte->fields.cache_disable = 1;
+            pte->fields.pat           = 0;
+        }
+        /* PAT4 */
+        else if(attr & PAGE_WRITE_COMBINE)
+        {
+            pte->fields.write_through = 0;
+            pte->fields.cache_disable = 0;
+            pte->fields.pat           = 1;
+        }
+        else if(attr & PAGE_WRITE_PROTECT)
+        {
+            pte->fields.write_through = 1;
+            pte->fields.cache_disable = 0;
+            pte->fields.pat           = 1;
+        }
+        /* By default do write-back */
+        else
+        {
+            pte->fields.write_through = 0;
+            pte->fields.cache_disable = 0;
+            pte->fields.pat           = 0;
+        }
+
+
         return(0);
     }
 
@@ -394,8 +472,8 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
     {
         if(step == PAGE_KERNEL_MAP_STEP)
         {
-            vbase   = (phys_addr_t)&KERNEL_VMA     + paddr;
-            req_len = (phys_addr_t)&KERNEL_VMA_END - vbase;
+            vbase   = _KERNEL_VMA     + paddr;
+            req_len = _KERNEL_VMA_END - vbase;
         }
         else
         {
@@ -510,7 +588,6 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
                 pte.bits = paddr;
 
                 pte.fields.xd = page_manager.nx_support & 0x1;
-        
                 /* code must be read-only and executable */
                 if(vaddr >= (virt_addr_t)&_code && vaddr <=(virt_addr_t)&_code_end)
                 {
@@ -530,7 +607,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
             /* create the remapping table (last 2MB) */
             else if(step == PAGE_REMAP_STEP)
             {
-                pte.fields.xd = page_manager.nx_support & 0x1;
+
                 
                 /* Set the first entry of the page
                  * table to point to the page table itself 
@@ -540,6 +617,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
                 {
                     pte.bits = pde.bits;
                     pte.fields.read_write = 1;
+                    pte.fields.xd = page_manager.nx_support & 0x1;
                 }
                 /* other entries should be cleared */
                 else
@@ -550,7 +628,6 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
 
             /* mark page as present */
             pte.fields.present = 1;
-
             crt_len += PAGE_SIZE;
 
             work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(PAGE_MASK_ADDRESS(pde.bits));
@@ -573,7 +650,14 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
 
 int pagemgr_init(pagemgr_ctx_t *ctx)
 {
+    pat_t *pat = NULL;
+
+    memset(&page_manager.pat, 0, sizeof(pat_t));
+    
+    pat = &page_manager.pat;
+
     pfmgr = pfmgr_get();
+
     kprintf("Initializing Page Manager\n");
 
     spinlock_init(&ctx->lock);
@@ -595,13 +679,34 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     if(page_manager.nx_support)
         __enable_nx();
 
-    /* Enable Write protection
-     * for read-only pages
-     */
-     
+
+    /* Prepare PAT */
+
+    pat->fields.pa0 = PAT_WRITE_BACK;
+    pat->fields.pa1 = PAT_WRITE_THROUGH;
+    pat->fields.pa2 = PAT_UNCACHED;
+    pat->fields.pa3 = PAT_UNCACHEABLE;
+    pat->fields.pa4 = PAT_WRITE_COMBINING;
+    pat->fields.pa5 = PAT_WRITE_PROTECTED;
+    pat->fields.pa6 = PAT_UNCACHED;
+    pat->fields.pa7 = PAT_UNCACHEABLE;
+
+        
+    /* Flush cached changes */ 
+
+    __wbinvd();
+    
+    /* write pat */
+    
+   // __wrmsr(PAT_MSR, pat->pat);
+
+    /* switch to the new page table */
     
     __write_cr3(ctx->page_phys_base);
-
+    
+    /* Flush again */
+    __wbinvd();
+    
     return(0);
 }
 
@@ -630,14 +735,13 @@ static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
     }
     
     pte.bits = phys;
-    pte.fields.read_write = 1;
-    pte.fields.present    = 1;
+    pte.fields.read_write    = 1;
+    pte.fields.present       = 1;
 
     remap_tbl[ix] = pte.bits;
     
     remap_value = REMAP_TABLE_VADDR + (PAGE_SIZE * ix);
 
-    
     __invlpg(remap_value);
 
     return(remap_value);
@@ -772,7 +876,6 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
              
                 if(path->pd[path->pdt_ix].fields.present == 0)
                 {
-                    
                     path->pd[path->pdt_ix].bits = phys + used_pf * PAGE_SIZE;
                     
                     path->pd[path->pdt_ix].fields.read_write = 1;
@@ -1321,6 +1424,7 @@ static int pagemgr_per_cpu_invl_handler
 {
     return(0);
 }
+
 
 int pagemgr_per_cpu_init(void)
 {

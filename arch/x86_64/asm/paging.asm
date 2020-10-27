@@ -47,4 +47,3 @@ __pml5_is_enabled:
     .no_pml5:
         mov rax, 0
         ret
-    

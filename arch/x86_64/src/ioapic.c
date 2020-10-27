@@ -7,14 +7,34 @@
 #include <liballoc.h>
 #include <vmmgr.h>
 
-static uint32_t ioapic_count(void)
+typedef struct ioapic_iter_cb_data_t
 {
-    uint32_t count = 0;
+    uint32_t ioapic_id;
+    phys_addr_t addr;
+    phys_size_t irq_base;
+}ioapic_iter_cb_data_t;
 
-    ACPI_STATUS             status  = AE_OK;
-    ACPI_TABLE_MADT        *madt    = NULL;
-    ACPI_SUBTABLE_HEADER   *subhdr  = NULL;
-    ACPI_MADT_IO_APIC      *ioapic  = NULL;
+typedef int (*ioapic_iter_cb)(ioapic_iter_cb_data_t *cb, void *pv);
+
+static int ioapic_iterate
+(
+    ioapic_iter_cb cb,
+    void *pv
+)
+{
+    uint8_t                 has_ioapic     = 0;
+    uint8_t                 has_iosapic    = 0;
+    ACPI_STATUS             status         = AE_OK;
+    ACPI_TABLE_MADT        *madt           = NULL;
+    ACPI_SUBTABLE_HEADER   *ioapic_subhdr  = NULL;
+    ACPI_SUBTABLE_HEADER   *iosapic_subhdr = NULL;
+    ACPI_MADT_IO_APIC      *ioapic         = NULL;
+    ACPI_MADT_IO_SAPIC     *iosapic        = NULL;
+    ioapic_iter_cb_data_t  cb_data;
+    int                    stop            = 0;
+
+    if(cb == NULL)
+        return(-1);
 
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
@@ -24,126 +44,302 @@ static uint32_t ioapic_count(void)
         return(0);
     }
 
-    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
-        i< madt->Header.Length;
-        i+=subhdr->Length)
-    {
-        subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
+    /* 
+     * Documentation says:
+     * 
+     * The I/O SAPIC structure is very similar to the I/O APIC structure. 
+     * If both I/O APIC and I/O SAPIC structures exist for a specific APIC ID, 
+     * the information in the I/O SAPIC structure must be used.
+     * 
+     * Ok, let's do that by going through
+     * the IOAPIC table and then checking if 
+     * SAPIC exists for the same APIC ID
+     * 
+     */ 
 
-        if((subhdr->Type == ACPI_MADT_TYPE_IO_APIC) || 
-           (subhdr->Type == ACPI_MADT_TYPE_IO_SAPIC))
+    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
+        i < madt->Header.Length;
+        i += ioapic_subhdr->Length)
+    {
+        ioapic_subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
+
+        if(ioapic_subhdr->Type == ACPI_MADT_TYPE_IO_APIC)
         {
-            count++;
+            has_ioapic = 1;
+            has_iosapic = 0;
+            ioapic = (ACPI_MADT_IO_APIC*)ioapic_subhdr;
+
+            for(phys_size_t j = sizeof(ACPI_TABLE_MADT);
+                j < madt->Header.Length;
+                j += iosapic_subhdr->Length)
+            {
+                iosapic_subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + j);
+
+                if(iosapic_subhdr->Type == ACPI_MADT_TYPE_IO_SAPIC)
+                {
+                    iosapic = (ACPI_MADT_IO_SAPIC*)iosapic_subhdr;
+
+                    if(iosapic->Id == ioapic->Id)
+                    {
+                        vga_print("IOSAPIC_CHECK\n",0x7,-1);
+                        has_iosapic = 1;
+                        cb_data.ioapic_id = iosapic->Id;
+                        cb_data.irq_base  = iosapic->GlobalIrqBase;
+                        cb_data.addr      = iosapic->Address;
+
+                        stop = cb(&cb_data, pv);
+                        break;
+                    }
+                }
+            }
+
+            if(!has_iosapic && !stop)
+            {
+                cb_data.ioapic_id = ioapic->Id;
+                cb_data.irq_base  = ioapic->GlobalIrqBase;
+                cb_data.addr      = ioapic->Address;
+
+                stop = cb(&cb_data, pv);
+                vga_print("NO_IOSAPIC\n",0x7,-1);
+            }
+
+            if(stop)
+            {
+                break;
+            }
+        }
+    }
+
+    /* If there is no IOAPIC entry found,
+     * then try only SAPIC, just in case
+     * the platform does have only SAPIC entries
+     */
+
+    if(!has_ioapic && !stop)
+    {
+        for(phys_size_t j = sizeof(ACPI_TABLE_MADT);
+            j < madt->Header.Length;
+            j += iosapic_subhdr->Length)
+        {
+            iosapic_subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + j);
+
+            if(iosapic_subhdr->Type == ACPI_MADT_TYPE_IO_SAPIC)
+            {
+                iosapic = (ACPI_MADT_IO_SAPIC*)iosapic_subhdr;
+                cb_data.ioapic_id = iosapic->Id;
+                cb_data.irq_base  = iosapic->GlobalIrqBase;
+                cb_data.addr      = iosapic->Address;
+
+                stop = cb(&cb_data, pv);
+                vga_print("IOSAPIC_CHECK2\n",0x7,-1);
+            }
+
+            if(stop)
+            {
+                break;
+            }
         }
     }
 
     AcpiPutTable((ACPI_TABLE_HEADER*)madt);
 
-    return(count);
+    if(stop < 0)
+    {
+        return(-1);
+    }
+
+    return(0);
+}
+
+static int ioapic_write
+(
+    dev_t *dev, 
+    uint32_t reg,
+    void *data, 
+    size_t length
+)
+{
+    ioapic_t *ioapic = NULL;
+    uint32_t *iowin_data = NULL;
+    
+    ioapic = devmgr_dev_data_get(dev);
+
+    if(ioapic == NULL)
+        return(-1);
+
+    reg = reg & 0xff;
+    iowin_data = data;
+
+    ioapic->ioregsel->reg_address = reg;
+    ioapic->iowin->reg_data = iowin_data[0];
+
+    /* Wait, there's more */
+    if(length > sizeof(uint32_t))
+    {
+        ioapic->ioregsel->reg_address = reg +1 ;
+        ioapic->iowin->reg_data       = iowin_data[1];
+    }
+
+    return(0);
+}
+
+static int ioapic_read
+(
+    dev_t *dev, 
+    uint32_t reg,
+    void *data, 
+    size_t length
+)
+{
+    ioapic_t *ioapic = NULL;
+    uint32_t *iowin_data = NULL;
+    
+    ioapic = devmgr_dev_data_get(dev);
+
+    if(ioapic == NULL)
+        return(-1);
+    
+    reg = reg & 0xff;
+    iowin_data = data;
+    ioapic->ioregsel->reg_address = reg;
+    iowin_data[0] = ioapic->iowin->reg_data;
+
+    /* Wait, there's more */
+    if(length > sizeof(uint32_t))
+    {
+        ioapic->ioregsel->reg_address = reg + 1;
+        iowin_data[1] = ioapic->iowin->reg_data;
+    }
+
+    return(0);
+}
+
+static int ioapic_count
+(
+    ioapic_iter_cb_data_t *entry,
+    void *pv
+)
+{
+    uint32_t *count = pv;
+
+    (*count)++;
+
+    return(0);
+}
+
+static int ioapic_device_init
+(
+    ioapic_iter_cb_data_t *entry,
+    void *pv
+)
+{
+    void    **cb_data  = NULL;
+    dev_t    *dev      = NULL;
+    uint32_t *index    = NULL;
+    ioapic_t *ioapic   = NULL;
+    uint32_t dev_index = 0;
+    ioredtbl_t tbl;
+    
+    cb_data = (void**)pv;
+    dev     = (dev_t*)cb_data[0];
+    index   = (uint32_t*)cb_data[1];
+
+    dev_index = devmgr_dev_index_get(dev);
+
+    /* Check if this is our index */
+    if(dev_index != (*index))
+    {
+        (*index)++;
+        return(0);
+    }
+
+    /* Allocate memory for per-device data */
+    ioapic = kcalloc(sizeof(ioapic_t), 1);
+
+    if(ioapic == NULL)
+    {
+        return(-1);
+    }
+
+    /* populate ioapic structure */
+    ioapic->irq_base  = entry->irq_base;
+    ioapic->phys_base = entry->addr;
+    ioapic->id        = entry->ioapic_id;
+    
+    /* Map registers into virtual memory */
+    ioapic->virt_base = (virt_addr_t)vmmgr_map(NULL, ioapic->phys_base,
+                                      0,    PAGE_SIZE, 
+                                      VMM_ATTR_STRONG_UNCACHED |
+                                      VMM_ATTR_WRITABLE
+                                      );
+   
+    if(ioapic->virt_base == 0)
+    {
+        kfree(ioapic);
+        return(-1);
+
+    }
+    
+    /* save pointers of IOREGSEL and IOWIN */
+    ioapic->ioregsel = (volatile ioregsel_t*)ioapic->virt_base;
+    ioapic->iowin = (volatile iowin_t*)(ioapic->virt_base + 0x10);
+    
+    /* Save per device structure */
+    devmgr_dev_data_set(dev, ioapic);
+
+    memset(&tbl, 0, sizeof(ioredtbl_t));
+
+    
+    for(uint32_t i = 0 ; i < 24;i++)
+    {
+
+    tbl.intvec = 32 + i;
+
+    uint64_t tt = 0;
+    ioapic_write(dev, 0x10 + i * 2, &tbl, sizeof(tbl));
+    ioapic_read(dev, 0x10, &tt, sizeof(tt));
+    }
+
+    return(1);
 }
 
 static int ioapic_probe(dev_t *dev)
 {
+    uint32_t count = 0;
+   
     if(!devmgr_dev_name_match(dev, IOAPIC_DRV_NAME))
         return(-1); 
 
-    if(ioapic_count() == 0)
+    ioapic_iterate(ioapic_count, &count);
+
+    if(count == 0)
         return(-1);
 
     return(0);
 }
 
-
-
 static int ioapic_init(dev_t *dev)
 {
-    uint32_t                dev_index    = 0;
-    uint32_t                ioapic_index = 0;
-    ACPI_STATUS             status  = AE_OK;
-    ACPI_TABLE_MADT        *madt    = NULL;
-    ACPI_SUBTABLE_HEADER   *subhdr  = NULL;
-    ACPI_MADT_IO_APIC      *ioapic  = NULL;
-    ioapic_t               *ioapic_dev = NULL;
+    int     status         = 0;
+    void    *cb_data[2]    = {NULL, NULL};
+    uint32_t index         = 0;
 
-    dev_index = devmgr_dev_index_get(dev);
+    cb_data[0] = dev;
+    cb_data[1] = &index;
 
-    status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
+    status = ioapic_iterate(ioapic_device_init, 
+                            (void*)cb_data);
 
-    if(ACPI_FAILURE(status))
-    {
-        kprintf("FAIL\n");
-        return(-1);
-    }
-    
-    /* Find the corresponding index */
-    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
-        i< madt->Header.Length;
-        i+=subhdr->Length)
-    {
-        subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
-
-        if((subhdr->Type != ACPI_MADT_TYPE_IO_APIC) &&
-           (subhdr->Type != ACPI_MADT_TYPE_IO_SAPIC))
-        {
-            continue;
-        }
-        
-        if(dev_index == ioapic_index)
-        {
-            ioapic = (ACPI_MADT_IO_APIC*)subhdr;
-            break;
-        }
-
-        ioapic_index ++;
-
-    }
-
-    ioapic_dev = kcalloc(sizeof(ioapic_t), 1);
-
-    if(ioapic_dev == NULL)
-    {
-        AcpiPutTable((ACPI_TABLE_HEADER*)madt);
-        return(-1);
-    }
-
-    
-    ioapic_dev->irq_base  = ioapic->GlobalIrqBase;
-    ioapic_dev->phys_base = ioapic->Address;
-    ioapic_dev->id        = ioapic->Id;
-
-    ioapic_dev->virt_base = (virt_addr_t)vmmgr_map(NULL, ioapic_dev->phys_base,
-                                      0,    PAGE_SIZE, 
-                                      VMM_ATTR_NO_CACHE      | 
-                                      VMM_ATTR_WRITE_THROUGH | 
-                                      VMM_ATTR_WRITABLE
-                                      );
-   
-    if(ioapic_dev->virt_base == 0)
-    {
-        kfree(ioapic_dev);
-        AcpiPutTable((ACPI_TABLE_HEADER*)madt);
-        return(-1);
-
-    }
-
-    ioapic_dev->ioregsel = (volatile ioregsel_t*)ioapic_dev->virt_base;
-    ioapic_dev->iowin = (volatile iowin_t*)(ioapic_dev->virt_base + 0x10);
-
-    ioapic_dev->ioregsel->reg_address = 0x1;
-    ver = ioapic_dev->iowin->reg_data;
-    kprintf("VERSION %x\n", ver & 0xff);
-
-    AcpiPutTable((ACPI_TABLE_HEADER*)madt);
-    
-    return(0);
+    return(status);
 }
 
 static int ioapic_drv_init(drv_t *drv)
 {
     uint32_t ioapic_cnt = 0;
     dev_t    *dev       = NULL;
+    
 
-    ioapic_cnt = ioapic_count();
+    ioapic_iterate(ioapic_count, &ioapic_cnt);
 
     for(uint32_t index = 0; index < ioapic_cnt; index++)
     {
@@ -156,7 +352,10 @@ static int ioapic_drv_init(drv_t *drv)
             devmgr_dev_index_set(dev, index);
             
             if(devmgr_dev_add(dev, NULL) != 0)
+            {
+                devmgr_dev_delete(dev);
                 return(-1);
+            }
         }
     }
 

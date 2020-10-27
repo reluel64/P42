@@ -3,6 +3,28 @@
 #include <acpi.h>
 #include <devmgr.h>
 #include <intc.h>
+#include <isr.h>
+
+#define PIC1_COMMAND 0x20
+#define PIC1_DATA    0x21
+#define PIC2_COMMAND 0xA0
+#define PIC2_DATA    0xA1
+
+#define ICW1_IC4  (1 << 0)
+#define ICW1_SNGL (1 << 1)
+#define ICW1_ADI  (1 << 2)
+#define ICW1_LTIM (1 << 3)
+#define ICW1_PIC_INIT (1 << 4)
+
+
+
+static int pic8259_isr(void *pv, uint64_t ec)
+{
+    kprintf("8259ISR\n");
+    __outb(PIC1_COMMAND,(1<<5));
+    __outb(PIC2_COMMAND,(1<<5));
+    return(0);
+}
 
 static int pic8259_probe(dev_t *dev)
 {
@@ -34,6 +56,18 @@ static int pic8259_drv_init(drv_t *drv)
 
 static int pic8259_dev_init(dev_t *drv)
 {
+    __outb(PIC1_COMMAND, ICW1_IC4|ICW1_PIC_INIT);
+    __outb(PIC2_COMMAND, ICW1_IC4|ICW1_PIC_INIT);
+
+    __outb(PIC1_DATA, 0x20);
+    __outb(PIC2_DATA, 0x28);
+
+    __outb(PIC1_DATA, 0x4);
+    __outb(PIC2_DATA, 0x2);
+
+    __outb(PIC1_DATA, 0x1);
+    __outb(PIC2_DATA, 0x1);
+
     return(0);
 }
 
@@ -45,9 +79,16 @@ static int pic8259_disable(dev_t *dev)
     return(0);
 }
 
+static int pic8259_enable(dev_t *dev)
+{
+    __outb(0xa1, 0);
+    __outb(0x21, 0);
+    return(0);
+}
+
 static intc_api_t pic_8259_api = 
 {
-    .enable = NULL,
+    .enable = pic8259_enable,
     .disable = pic8259_disable,
     .send_ipi = NULL
 };

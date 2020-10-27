@@ -815,9 +815,9 @@ int pfmgr_init(void)
     do
     {
         hdr = (pfmgr_range_header_t*)pagemgr_boot_temp_map(phys);
-        hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
-                                                        VMM_ATTR_WRITABLE |
-                                                        VMM_ATTR_WRITE_THROUGH);
+        hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_WRITE_THROUGH |
+                                                        VMM_ATTR_WRITABLE
+                            );
 
         if(hdr == NULL)
             return(-1);
@@ -838,9 +838,9 @@ int pfmgr_init(void)
           (((phys_addr_t)hdr->node.next - base.physb_start % PAGE_SIZE) == 0))
         {
             hdr = (pfmgr_range_header_t*)pagemgr_boot_temp_map(phys);
-            hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_NO_CACHE |
-                                                            VMM_ATTR_WRITABLE |
-                                                            VMM_ATTR_WRITE_THROUGH);
+            hdr = vmmgr_map(NULL, phys, 0, hdr->struct_len, VMM_ATTR_WRITE_THROUGH |
+                                                            VMM_ATTR_WRITABLE
+                            );
 
             if(hdr == NULL)
                 return(-1);

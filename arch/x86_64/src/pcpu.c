@@ -199,8 +199,7 @@ int pcpu_setup(cpu_entry_t *cpu)
 
     cpu->stack_top = (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
                                              PER_CPU_STACK_SIZE,
-                                             VMM_ATTR_WRITABLE  | 
-                                             VMM_GUARD_MEMORY);
+                                             VMM_ATTR_WRITABLE  );
 
     if(cpu->stack_top == 0)
     {
