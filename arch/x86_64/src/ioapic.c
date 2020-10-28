@@ -6,6 +6,15 @@
 #include <ioapic.h>
 #include <liballoc.h>
 #include <vmmgr.h>
+#include <utils.h>
+
+#define IOAPIC_INTPOL_ACTIVE_HIGH (0x0)
+#define IOAPIC_INTPOL_ACTIVE_LOW  (0x1)
+
+#define IOAPIC_TRIGGER_EDGE       (0x0)
+#define IOAPIC_TRIGGER_LEVEL      (0x1)
+
+#define IRQ0                      (0x20)
 
 typedef struct ioapic_iter_cb_data_t
 {
@@ -227,19 +236,75 @@ static int ioapic_count
     return(0);
 }
 
+static int ioapic_redirect_vector
+(
+    uint32_t *vector,
+    uint16_t *flags
+)
+{
+    ACPI_STATUS                    status   = AE_OK;
+    ACPI_TABLE_MADT               *madt     = NULL;
+    ACPI_SUBTABLE_HEADER          *subhdr   = NULL;
+    ACPI_MADT_INTERRUPT_OVERRIDE  *override = NULL;
+    int                    found            = 0;
+
+    status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
+
+    if(ACPI_FAILURE(status))
+    {
+        kprintf("FAIL\n");
+        return(0);
+    }
+
+    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
+        i < madt->Header.Length;
+        i += subhdr->Length)
+    {
+        subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
+
+        if(subhdr->Type == ACPI_MADT_TYPE_INTERRUPT_OVERRIDE)
+        {
+            override = (ACPI_MADT_INTERRUPT_OVERRIDE*)subhdr;
+            if(override->SourceIrq == (*vector))
+            {
+
+                kprintf("REDIRECTING %d to %d\n",(*vector), override->GlobalIrq);
+                (*vector) = override->GlobalIrq;
+                (*flags)  = override->IntiFlags;
+                found = 1;
+                break;
+            }
+        }
+    }
+
+    AcpiPutTable((ACPI_TABLE_HEADER*)madt);
+
+    return(found ? 0 : -1);
+}
+
 static int ioapic_device_init
 (
     ioapic_iter_cb_data_t *entry,
     void *pv
 )
 {
-    void    **cb_data  = NULL;
-    dev_t    *dev      = NULL;
-    uint32_t *index    = NULL;
-    ioapic_t *ioapic   = NULL;
-    uint32_t dev_index = 0;
-    ioredtbl_t tbl;
-    
+    void      **cb_data  = NULL;
+    dev_t      *dev      = NULL;
+    uint32_t   *index    = NULL;
+    ioapic_t   *ioapic   = NULL;
+    uint32_t   dev_index = 0;
+    uint32_t   vector    = 0;
+    uint32_t   irq       = 0;
+    uint16_t   int_flags = 0;
+    uint8_t    polarity  = 0;
+    uint8_t    trigger    = 0;
+    ioredtbl_t *tbl = NULL;
+    ioredtbl_t temp_tbl;
+    ioapic_ver_t version;
+    uint8_t    redir_tbl_count = 0;
+    uint32_t   ioapic_tbl_index = 0;
+    uint32_t   redir_vector     = 0;
+
     cb_data = (void**)pv;
     dev     = (dev_t*)cb_data[0];
     index   = (uint32_t*)cb_data[1];
@@ -287,17 +352,82 @@ static int ioapic_device_init
     /* Save per device structure */
     devmgr_dev_data_set(dev, ioapic);
 
-    memset(&tbl, 0, sizeof(ioredtbl_t));
-
     
-    for(uint32_t i = 0 ; i < 24;i++)
+    memset(&version, 0, sizeof(ioapic_ver_t));
+
+    ioapic_read(dev, 0x1, &version, sizeof(ioapic_ver_t));
+
+    ioapic->redir_tbl_count = version.max_redir;
+    kprintf("IRQ BASE %d\n",ioapic->irq_base);
+  
+    tbl = kcalloc(sizeof(ioredtbl_t), ioapic->redir_tbl_count);
+
+    if(tbl == NULL)
     {
+        vmmgr_unmap(NULL, ioapic->virt_base, PAGE_SIZE);
+        kfree(ioapic);
+        return(-1);
+    }
 
-    tbl.intvec = 32 + i;
 
-    uint64_t tt = 0;
-    ioapic_write(dev, 0x10 + i * 2, &tbl, sizeof(tbl));
-    ioapic_read(dev, 0x10, &tt, sizeof(tt));
+    /* set up interrupt vectors */
+    for(uint32_t i = 0; i < ioapic->redir_tbl_count;i++)
+    {
+        vector = i + ioapic->irq_base;
+        tbl[i].intvec = vector;
+    }
+
+    for(uint32_t i = 0; i < ioapic->redir_tbl_count; i++)
+    {
+        vector = i + ioapic->irq_base;
+        redir_vector = vector;
+        int_flags = 0;
+
+        ioapic_redirect_vector(&redir_vector, &int_flags);
+        
+        polarity = (int_flags & 0x3);
+        trigger = (int_flags >> 2) & 0x3;
+
+        switch(polarity)
+        {
+            default:
+            case 0:
+            case 1:
+                tbl[i].intpol = IOAPIC_INTPOL_ACTIVE_HIGH;
+            break;
+
+            case 3:
+                tbl[i].intpol = IOAPIC_INTPOL_ACTIVE_LOW;
+                break;
+        }
+
+        switch(trigger)
+        {
+            default:
+            case 0:
+            case 1:
+                tbl[i].tr_mode = IOAPIC_TRIGGER_EDGE;
+            break;
+
+            case 3:
+                tbl[i].tr_mode = IOAPIC_TRIGGER_LEVEL;
+                break;
+        }
+
+        /* Ok, we must redirect interrupts */
+        if(redir_vector != vector)
+        {
+            temp_tbl = tbl[i];
+            tbl[i] = tbl[redir_vector - ioapic->irq_base];
+            tbl[redir_vector - ioapic->irq_base] = temp_tbl;
+        }
+
+    }
+
+    for(uint32_t i = 0; i < ioapic->redir_tbl_count; i++)
+    {
+        tbl[i].intvec += IRQ0;
+        ioapic_write(dev, 0x10 + i * 2, tbl + i, sizeof(ioredtbl_t));
     }
 
     return(1);

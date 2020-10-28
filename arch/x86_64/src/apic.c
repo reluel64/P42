@@ -147,11 +147,22 @@ static int apic_send_ipi
     return(0);
 }
 
-int apic_timer(void *pv, uint64_t ec)
+static int apic_timer(void *pv, uint64_t ec)
 {
     apic_dev_t *apic = devmgr_dev_data_get(pv);
 
     (*apic->reg->eoi)=0;
+}
+
+
+static int apic_eoi_handler(void *pv, uint64_t ec)
+{
+    apic_dev_t *apic = NULL;
+
+    apic = devmgr_dev_data_get(pv);
+
+    (*apic->reg->eoi) = 0;
+    return(0);
 }
 
 static int apic_cpu_init(dev_t *dev)
@@ -183,9 +194,10 @@ static int apic_cpu_init(dev_t *dev)
 
     devmgr_dev_data_set(dev, apic);
 
-    isr_install(apic_lvt_error_handler, dev, LVT_ERROR_VECTOR);
-    isr_install(apic_spurious_handler, dev, SPURIOUS_VECTOR);
-    isr_install(apic_timer, dev,0x22);
+    isr_install(apic_lvt_error_handler, dev, LVT_ERROR_VECTOR,0);
+    isr_install(apic_spurious_handler, dev, SPURIOUS_VECTOR,0);
+    isr_install(apic_eoi_handler, dev, 0, 1);
+
     reg = apic->reg;
 
     /* Stop APIC */

@@ -117,8 +117,8 @@ static int         pagemgr_per_cpu_invl_handler
 
 int pagemgr_install_handler(void)
 {
-    isr_install(pagemgr_page_fault_handler, &page_manager, 14);
-    isr_install(pagemgr_per_cpu_invl_handler, NULL, 255);
+    isr_install(pagemgr_page_fault_handler, &page_manager, 14, 0);
+    isr_install(pagemgr_per_cpu_invl_handler, NULL, 255, 0);
 }
 
 uint8_t pagemgr_pml5_support(void)

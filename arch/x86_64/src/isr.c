@@ -28,6 +28,7 @@ typedef struct isr_root_t
     idt64_entry_t *idt;
     idt64_ptr_t    idt_ptr;
     list_head_t   handlers[MAX_HANDLERS];
+    list_head_t   eoi_handlers;
 }isr_root_t;
 
 static isr_root_t isr;
@@ -154,11 +155,17 @@ void isr_per_cpu_init(void)
 }
 
 
-int isr_install(interrupt_handler_t ih, void *pv, uint16_t index)
+int isr_install
+(
+    interrupt_handler_t ih, 
+    void *pv, 
+    uint16_t index, 
+    uint8_t  eoi
+)
 {
     interrupt_t *intr = NULL;
- kprintf("HELLOPPPPPPPPPPPPPP\n");
-    if(index >= MAX_HANDLERS)
+
+    if(index >= MAX_HANDLERS  && eoi == 0)
         return(-1);
 
     intr = kmalloc(sizeof(interrupt_t));
@@ -166,7 +173,10 @@ int isr_install(interrupt_handler_t ih, void *pv, uint16_t index)
     if(intr == NULL)
         return(-1);
 
-    linked_list_add_head(&isr.handlers[index], &intr->node);
+    if(!eoi)
+        linked_list_add_head(&isr.handlers[index], &intr->node);
+    else
+        linked_list_add_head(&isr.eoi_handlers, &intr->node);
 
     intr->ih = ih;
     intr->pv = pv;
@@ -174,12 +184,39 @@ int isr_install(interrupt_handler_t ih, void *pv, uint16_t index)
     return(0);
 }
 
-int isr_uninstall(interrupt_handler_t ih)
+int isr_uninstall
+(
+    interrupt_handler_t ih,
+    void *pv,
+    uint8_t eoi
+)
 {
     interrupt_t *intr = NULL;
     list_node_t *node = NULL;
     list_node_t *next_node = NULL;    
     list_head_t *int_lh = NULL;
+
+    if(eoi)
+    {
+        node = linked_list_first(&isr.eoi_handlers);
+
+        while(node)
+        {
+            next_node = linked_list_next(node);
+
+            intr = (interrupt_t*)node;
+
+            if(intr->ih == ih && intr->pv == pv)
+            {
+                linked_list_remove(int_lh, node);
+                kfree(intr);
+            }
+
+            node = next_node;
+        }
+
+        return(0);
+    }
 
     for(uint16_t i = 0; i <  MAX_HANDLERS; i++)
     {
@@ -201,7 +238,7 @@ int isr_uninstall(interrupt_handler_t ih)
             node = next_node;
         }
     }
-    return(-1);
+    return(0);
 }
 
 
@@ -212,9 +249,11 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
     interrupt_t *intr = NULL;
     list_node_t *node = NULL;
 
-    kprintf("ERROR 0x%x EC %x\n",index, error_code);
-    if(index > MAX_HANDLERS)
+    
+    if(index >= MAX_HANDLERS)
         return;
+
+    kprintf("INTERRUPT 0x%x EC %x\n",index, error_code);
 
     int_lh = &isr.handlers[index];
 
@@ -229,8 +268,29 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
 
         if(!status)
         {
+            break;
+        }
+
+        node = linked_list_next(node);
+    }
+
+    int_lh = &isr.eoi_handlers;
+
+    /* Send EOIs */
+    node = linked_list_first(int_lh);
+    kprintf("SEND EOI\n");
+    while(node)
+    {
+        intr = (interrupt_t*)node;
+
+        if(intr->ih)
+            status = intr->ih(intr->pv, error_code);
+
+        if(!status)
+        {
             return;
         }
         node = linked_list_next(node);
     }
 }
+

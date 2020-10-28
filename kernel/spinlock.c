@@ -25,7 +25,6 @@ void spinlock_lock(spinlock_t *s)
     {
         __pause();
     }
-
 }
 
 int spinlock_try_lock(spinlock_t *s)

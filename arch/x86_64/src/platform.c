@@ -94,5 +94,5 @@ int platform_init(void)
     }
 #endif
     cpu_init();
-    //__sti();
+    __sti();
 }

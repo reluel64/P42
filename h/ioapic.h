@@ -63,6 +63,8 @@ typedef struct ioapic_t
     uint32_t             id;
     phys_addr_t          phys_base;
     virt_addr_t          virt_base;
+    ioredtbl_t           *redir_tbl;
+    uint8_t              redir_tbl_count;
     volatile ioregsel_t  *ioregsel;
     volatile iowin_t     *iowin;
 }ioapic_t;
