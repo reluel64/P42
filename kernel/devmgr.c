@@ -86,8 +86,9 @@ int devmgr_dev_add(dev_t *dev, dev_t *parent)
       }
 
     status = devmgr_dev_probe(dev);
- 
+    
     devmgr_dev_add_to_parent(dev, parent);
+
     kprintf("PROBE_STATUS %d\n",status);
     /* If we found the driver, then initialize the device */
     if(!status)
@@ -194,6 +195,9 @@ static int devmgr_dev_add_to_parent
 {
     if(parent == NULL)
         parent = &root_bus;
+
+    if(dev->parent != NULL)
+        return(-1);
 
     if(!linked_list_find_node(&parent->children, &dev->dev_node))
         return(-1);

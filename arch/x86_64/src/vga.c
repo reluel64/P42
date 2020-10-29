@@ -62,7 +62,6 @@ int vga_print_internal(uint8_t *buf)
             memset(&vga.base[vga.col + VGA_MAX_COL * vga.row],
                     0, 
                     sizeof(uint16_t) * VGA_MAX_COL);
-
         }
 
         if(buf[pos] == '\n')

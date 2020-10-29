@@ -219,6 +219,7 @@ static int apic_cpu_init(dev_t *dev)
 static int apic_drv_init(drv_t *drv)
 {
     apic_drv_private_t *apic_pv = NULL;
+    dev_t              *dev = NULL;
 
     apic_pv = kmalloc(sizeof(apic_dev_t));
 
@@ -227,6 +228,20 @@ static int apic_drv_init(drv_t *drv)
 
     devmgr_drv_data_set(drv, apic_pv);
     
+    if(!devmgr_dev_create(&dev))
+    {
+        devmgr_dev_name_set(dev, APIC_DRIVER_NAME);
+        devmgr_dev_type_set(dev, INTERRUPT_CONTROLLER);
+        devmgr_dev_index_set(dev, 0);
+
+        if(devmgr_dev_add(dev, NULL))
+        {
+            kprintf("%s %d failed to add device\n");
+            return(-1);
+           /* devmgr_dev_delete(dev); */
+        }
+    }
+
     return(0);
 }
 

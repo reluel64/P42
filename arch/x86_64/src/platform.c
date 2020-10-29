@@ -21,34 +21,11 @@ int platform_register(void)
 
 static int platform_setup_intc(void)
 {
-    char *intc_drv[] = {APIC_DRIVER_NAME, PIC8259_DRIVER_NAME};
-    int has_apic = 0;
-    dev_t *dev = NULL;
-    dev_t *temp_dev = NULL;
-
     apic_register();
     pic8259_register();
     ioapic_register();
-  
-    /* Initialize the interrupt controllers */
-    for(int i = 0; i < sizeof(intc_drv) / sizeof(char*); i++)
-    {
-        dev = NULL;
 
-        if(!devmgr_dev_create(&dev))
-        {
-            devmgr_dev_name_set(dev, intc_drv[i]);
-            devmgr_dev_type_set(dev, INTERRUPT_CONTROLLER);
-
-            if(devmgr_dev_add(dev, NULL))
-            {
-               kprintf("Failed to add %s\n", intc_drv[i]); 
-            }            
-        }
-    }
-    
-    dev = devmgr_dev_get_by_name(PIC8259_DRIVER_NAME, 0);
-    intc_disable(dev);
+    return(0);
 }
 
 int isr_test(void)

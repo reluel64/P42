@@ -7,6 +7,7 @@
 #include <liballoc.h>
 #include <vmmgr.h>
 #include <utils.h>
+#include <pic8259.h>
 
 #define IOAPIC_INTPOL_ACTIVE_HIGH (0x0)
 #define IOAPIC_INTPOL_ACTIVE_LOW  (0x1)
@@ -470,7 +471,7 @@ static int ioapic_drv_init(drv_t *drv)
     
 
     ioapic_iterate(ioapic_count, &ioapic_cnt);
-
+    
     for(uint32_t index = 0; index < ioapic_cnt; index++)
     {
         dev = NULL;
@@ -483,11 +484,16 @@ static int ioapic_drv_init(drv_t *drv)
             
             if(devmgr_dev_add(dev, NULL) != 0)
             {
-                devmgr_dev_delete(dev);
+                /*devmgr_dev_delete(dev);*/
                 return(-1);
             }
         }
     }
+
+    /* We are using I/O APIC so PIC must be disabled */
+    dev = devmgr_dev_get_by_name(PIC8259_DRIVER_NAME, 0);
+
+    intc_disable(dev);
 
     return(0);
 }
