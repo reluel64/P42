@@ -11,10 +11,10 @@ extern int apic_register(void);
 extern int pic8259_register(void);
 extern int acpi_mem_mgr_on(void);
 extern int ioapic_register(void);
+extern int pit8254_register(void);
 
 int platform_register(void)
 {
-
     pcpu_init();
     return(0);
 }
@@ -24,7 +24,7 @@ static int platform_setup_intc(void)
     apic_register();
     pic8259_register();
     ioapic_register();
-
+    pit8254_register();
     return(0);
 }
 
@@ -48,28 +48,7 @@ int platform_init(void)
     
     /* Initialize interrupt controllers */
     platform_setup_intc();
-#if 0
-    for(int i = 0; i < sizeof(intc_names) / sizeof(char*); i++)
-    {
-        intc = intc_probe(intc_names[i]);
-        
-        if(intc != NULL)
-        {
-            if(intc_init(intc) != 0)
-            {
-                return(-1);
-            }
-            kprintf("USING PIC %s\n",intc_names[i]);
-            break;
-        }
-        
-    }
-
-    if(intc == NULL)
-    {
-        return(-1);
-    }
-#endif
+    
     cpu_init();
     __sti();
 }

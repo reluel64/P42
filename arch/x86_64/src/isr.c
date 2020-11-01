@@ -253,7 +253,7 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
     if(index >= MAX_HANDLERS)
         return;
 
-    kprintf("INTERRUPT 0x%x EC %x\n",index, error_code);
+ //   kprintf("INTERRUPT 0x%x EC %x\n",index, error_code);
 
     int_lh = &isr.handlers[index];
 
@@ -278,7 +278,7 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
 
     /* Send EOIs */
     node = linked_list_first(int_lh);
-    kprintf("SEND EOI\n");
+ //   kprintf("SEND EOI\n");
     while(node)
     {
         intr = (interrupt_t*)node;

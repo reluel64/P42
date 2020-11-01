@@ -16,8 +16,6 @@
 #define ICW1_LTIM (1 << 3)
 #define ICW1_PIC_INIT (1 << 4)
 
-
-
 static int pic8259_isr(void *pv, uint64_t ec)
 {
     kprintf("8259ISR\n");
@@ -85,7 +83,6 @@ static int pic8259_dev_init(dev_t *drv)
 
     return(0);
 }
-
 
 static int pic8259_disable(dev_t *dev)
 {

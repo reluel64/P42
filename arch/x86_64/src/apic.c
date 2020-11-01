@@ -254,14 +254,14 @@ static intc_api_t apic_api =
 
 static drv_t apic_drv = 
 {
-    .drv_name  = APIC_DRIVER_NAME,
-    .dev_probe = apic_probe,
+    .drv_name   = APIC_DRIVER_NAME,
+    .dev_probe  = apic_probe,
     .dev_init   = apic_cpu_init,
     .dev_uninit = NULL,
-    .drv_type  = INTERRUPT_CONTROLLER,
+    .drv_type   = INTERRUPT_CONTROLLER,
     .drv_init   = apic_drv_init,
     .drv_uninit = NULL,
-    .drv_api = &apic_api
+    .drv_api    = &apic_api
 };
 
 int apic_register(void)

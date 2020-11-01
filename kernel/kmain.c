@@ -11,6 +11,7 @@
 #include <acpi.h>
 #include <devmgr.h>
 #include <port.h>
+#include <timer.h>
 
 int smp_start_cpus(void);
 extern void _sgdt(gdt64_ptr_t *gdt);
@@ -63,7 +64,6 @@ void kmain()
     vga_print("DONEEEEEEE\n",0x7,-1);
     vga_print("CPU_INIT_DONE\n",0x7,-1);
 
-
     vga_print("smp_start_cpus\n",0x7,-1);
     //smp_start_cpus();
     vga_print("smp_start_cpus_DONE\n",0x7,-1);
@@ -71,10 +71,12 @@ void kmain()
     /*kprintf("CHECKING APIC 0x%x\n", apic_is_bsp());*/
     kprintf("HELLO TOP 0x%x\n",__stack_pointer());
 
-    while(1);
-    
-  
 
-
+int  i = 0;
+    while(1)
+    {
+        timer_loop_delay(NULL, 1000);
+        kprintf("Hello %d\n", i++);
+    }
 }
 

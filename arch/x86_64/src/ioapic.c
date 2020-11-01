@@ -438,7 +438,8 @@ static int ioapic_probe(dev_t *dev)
 {
     uint32_t count = 0;
    
-    if(!devmgr_dev_name_match(dev, IOAPIC_DRV_NAME))
+    if(!devmgr_dev_name_match(dev, IOAPIC_DRV_NAME) ||
+       !devmgr_dev_type_match(dev, INTERRUPT_CONTROLLER))
         return(-1); 
 
     ioapic_iterate(ioapic_count, &count);

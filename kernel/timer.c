@@ -1,77 +1,86 @@
-#if 0
+
 #include <linked_list.h>
 #include <timer.h>
 #include <spinlock.h>
 #include <utils.h>
+#include <liballoc.h>
 
-static list_head_t timer_list = {0};
-static spinlock_t lock = {0};
-static timer_t *active_tm = NULL;
+static list_head_t timers;
+static spinlock_t lock;
 
-int timer_register(timer_t *tm)
-{
-    linked_list_add_tail(&timer_list,&tm->node);
-    return(0);
-}
-#error "TEST"
-void *timer_probe(char *tm_name)
+void timer_update(void)
 {
     timer_t *tm = NULL;
+    list_node_t *node = NULL;
+    list_node_t *next = NULL;
 
-    tm = (timer_t*)linked_list_first(&timer_list);
+    spinlock_lock(&lock);
+    node = linked_list_first(&timers);
 
-    while(tm)
+    while(node)
     {
-        if(!strcmp(tm_name, tm->name))
+        next = linked_list_next(node);
+        tm = (timer_t*)node;
+
+        if(tm->ttime <= tm->ctime)
         {
-            if(!tm->probe())
+            if(tm->handler(tm->data))
             {
-                active_tm = tm;
-                return(0);
+                linked_list_remove(&timers, &tm->node);
             }
+            tm->ctime = 0;
         }
-        tm = linked_list_next(&tm->node);
+        else
+            tm->ctime++;
+
+        node = next;
     }
-
-    return(-1);
+    spinlock_unlock(&lock);
 }
 
-int timer_init(void *timer)
-{
-    timer_t *tm = NULL;
-    int status = -1;
-
-    if(timer == NULL)
-        return(-1);
-
-    spinlock_lock_interrupt(&lock);
-    tm = timer;
-
-    if(tm->init)
-        status = tm->init();
-
-    if(!status)
-        active_tm = tm;
-        
-    spinlock_unlock_interrupt(&lock);
-    return(status);
-}
-
-int timer_arm
+void *timer_arm
 (
-    uint32_t val, 
-    timer_callback_t *cb, 
-    void *cb_pv
+    dev_t *dev, 
+    timer_handler_t *cb, 
+    void *data,
+    uint32_t delay
 )
 {
-    int status = 0;
+    timer_t *timer = NULL;
 
-    spinlock_lock_interrupt(&lock);
-
+    timer = kcalloc(1, sizeof(timer_t));
     
-    
-    spinlock_unlock_interrupt(&lock);
 
-    return(status);
+    timer->handler = cb;
+    timer->data = data;
+    timer->ttime = delay;
+    spinlock_lock(&lock);
+    linked_list_add_head(&timers, &timer->node);
+    spinlock_unlock(&lock);
+
+    return(timer);
+    
 }
-#endif
+
+static int timer_sleep_callback(void *pv)
+{
+    spinlock_unlock((spinlock_t*)pv);
+    return(1);
+}
+
+void timer_loop_delay(dev_t *dev, uint32_t delay)
+{
+    spinlock_t wait;
+    timer_t *timer = NULL;
+    spinlock_init(&wait);
+
+    /* deliberately lock the spinlock */
+    spinlock_lock(&wait);
+
+    timer = timer_arm(dev, timer_sleep_callback, &wait, delay);
+
+    spinlock_lock(&wait);
+
+    kfree(timer);
+
+}

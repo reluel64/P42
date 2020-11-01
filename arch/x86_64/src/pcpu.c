@@ -62,8 +62,6 @@ extern virt_addr_t __start_ap_per_cpu;
 #define _TRAMPOLINE_BEGIN ((virt_addr_t)&__start_ap_begin)
 #define _TRAMPOLINE_END ((virt_addr_t)&__start_ap_end)
 
-
-
 static void pcpu_stack_relocate
 (
     virt_addr_t *new_stack_base, 
@@ -171,8 +169,8 @@ static virt_addr_t *pcpu_prepare_trampoline
      * the data for trampoline code
      */
 
-    pml5_on = ((virt_addr_t)&__start_ap_pml5_on - _TRAMPOLINE_BEGIN) + tr_code;
-    nx_on   = ((virt_addr_t)&__start_ap_nx_on   - _TRAMPOLINE_BEGIN) + tr_code;
+    pml5_on = ((virt_addr_t)&__start_ap_pml5_on                - _TRAMPOLINE_BEGIN) + tr_code;
+    nx_on   = ((virt_addr_t)&__start_ap_nx_on                  - _TRAMPOLINE_BEGIN) + tr_code;
     pt_base = (phys_addr_t*)(((virt_addr_t)&__start_ap_pt_base - _TRAMPOLINE_BEGIN) + tr_code);
     stack   = (virt_addr_t*)(((virt_addr_t)&__start_ap_stack   - _TRAMPOLINE_BEGIN) + tr_code);
     per_cpu = (virt_addr_t*)(((virt_addr_t)&__start_ap_per_cpu - _TRAMPOLINE_BEGIN) + tr_code);
@@ -197,15 +195,19 @@ int pcpu_setup(cpu_entry_t *cpu)
     old_stack_bottom = cpu->stack_bottom;
     old_stack_top = cpu->stack_top;
 
+
+    /* FIXME: Use guard pages */
     cpu->stack_top = (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
                                              PER_CPU_STACK_SIZE,
-                                             VMM_ATTR_WRITABLE  );
+                                             VMM_ATTR_WRITABLE;
 
     if(cpu->stack_top == 0)
     {
         return(-1);
     }
 
+    /* make sure that the stacks do not contain bogus values */
+    
     cpu->stack_bottom = cpu->stack_top + PER_CPU_STACK_SIZE;
     memset((void*)cpu->stack_top, 0, PER_CPU_STACK_SIZE);
 
@@ -221,6 +223,7 @@ int pcpu_setup(cpu_entry_t *cpu)
                            (virt_addr_t*)old_stack_bottom);
     }
 
+    /* Clear the old stacks */
     if(old_stack_top != 0)
     {
         memset((void*)old_stack_top, 0, old_stack_bottom - old_stack_top);
