@@ -1,191 +1,127 @@
-#include <cpu.h>
 #include <spinlock.h>
 #include <liballoc.h>
 #include <utils.h>
-static list_head_t cpu_list;
-static spinlock_t lock;
-static cpu_funcs_t *pcpu;
+#include <devmgr.h>
+#include <cpu.h>
+#include <platform.h>
+#include <vmmgr.h>
 
-
-int cpu_add_entry
-(
-    cpu_entry_t *cpu_in
-)
+uint32_t cpu_id_get(void)
 {
-    cpu_entry_t *cpu      = NULL;
-    cpu_entry_t *next_cpu = NULL;
-    list_head_t *head     = NULL;
-    int          status   = 0;
+    dev_t *cpu = NULL;
+    cpu_api_t *api = NULL;
 
-    spinlock_lock_interrupt(&lock);
-    head = &cpu_list;
+    /* Get the bootstrap CPU */
+    cpu = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, 0);
 
-    cpu = (cpu_entry_t*)linked_list_first(head);
+    api = devmgr_dev_api_get(cpu);
 
-    /* Check if the CPU is added to the list */
-    while(cpu)
-    {
-        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
+    return(api->cpu_id_get());
+}
 
-        if(cpu->cpu_id == cpu_in->cpu_id)
-        {
-            break;
-        }
-        cpu = next_cpu;
-    }
+int cpu_setup(dev_t *dev)
+{
+    dev_t      *cpu_dev = NULL;
+    cpu_api_t  *api = NULL;
+    cpu_t      *cpu = NULL;
+    uint32_t    cpu_id = 0;
+    virt_addr_t stack = 0;
+    dev_srch_t  *srch = NULL;
 
+    /* Get the first cpu */
+
+    api = devmgr_dev_api_get(dev);
+
+    if(api == NULL)
+        return(-1);
+
+    api->int_lock();
+
+    cpu_id = api->cpu_id_get();
+
+    cpu = kcalloc(1, sizeof(cpu_t));
 
     if(cpu == NULL)
-    {
-        linked_list_add_tail(head, &cpu_in->node);
-    }
-    else
-    {
-        status = 1;
-    }
+        return(-1);
     
-    spinlock_unlock_interrupt(&lock);
-    
-    return(status);
-}
+    /* Allocate the stack */
 
-int cpu_remove_entry
-(
-    cpu_entry_t *cpu_in
-)
-{
-    cpu_entry_t *cpu  = NULL;
-    cpu_entry_t *next_cpu = NULL;
-    list_head_t *head = NULL;
+    stack =  (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
+                                      PER_CPU_STACK_SIZE,
+                                      VMM_ATTR_WRITABLE);
 
-    spinlock_lock_interrupt(&lock);
-    head = &cpu_list;
-
-    cpu = (cpu_entry_t*)linked_list_first(head);
-
-    /* Check if the CPU is added to the list */
-    while(cpu)
+    if(!stack)
     {
-        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
-
-        if(cpu->cpu_id == cpu_in->cpu_id)
-        {
-            linked_list_remove(head, &cpu->node);
-            spinlock_unlock_interrupt(&lock);
-            return(0);
-        }
-        cpu = next_cpu;
+        kfree(cpu);
+        return(-1);
     }
-    spinlock_unlock_interrupt(&lock);
-    return(-1);
-}
 
-int cpu_get_entry
-(
-    uint32_t cpu_id, 
-    cpu_entry_t **cpu_out
-)
-{
-    cpu_entry_t *cpu  = NULL;
-    cpu_entry_t *next_cpu = NULL;
-    list_head_t *head = NULL;
-
-    spinlock_lock_interrupt(&lock);
-
-    head = &cpu_list;
-
-    cpu = (cpu_entry_t*)linked_list_first(head);
-
-    /* Check if the CPU is added to the list */
-    while(cpu)
-    {
-        next_cpu = (cpu_entry_t*)linked_list_next((list_node_t*)cpu);
-
-        if(cpu->cpu_id == cpu_id)
-        {
-            *cpu_out = cpu;
-            spinlock_unlock_interrupt(&lock);
-            return(0);
-        }
-        cpu = next_cpu;
-    }
-    spinlock_unlock_interrupt(&lock);
-    return(-1);
-}
-
-cpu_entry_t *cpu_get(void)
-{
-    uint32_t cpu_id  = 0;
-    cpu_entry_t *cpu = NULL;
-
-    if(pcpu->cpu_id_get)
-        cpu_id = pcpu->cpu_id_get();
-
-    if(cpu_get_entry(cpu_id, &cpu))
-        return(NULL);
-
-    return(cpu);
-}
-
-int cpu_register_funcs(cpu_funcs_t *func)
-{
-    if(pcpu == NULL)
-        pcpu = func;
-    else
-       return(-1);
+    /* prepare the stack */
     
+    memset((void*)stack, 0, PER_CPU_STACK_SIZE);
+
+    cpu->stack_top = stack;
+
+    cpu->stack_bottom = cpu->stack_top + PER_CPU_STACK_SIZE;
+
+    api->stack_relocate(cpu->stack_bottom, _BSP_STACK_BASE);
+
+    /* Clear the old stack */
+    memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
+
+    /* set up some per-cpu stuff */
+    pagemgr_per_cpu_init();
+    
+    if(api->cpu_get_domain)
+        cpu->proximity_domain = api->cpu_get_domain(cpu_id);
+
+    api->cpu_setup(cpu);
+
+    api->int_unlock();
+
     return(0);
-}
-
-
-int cpu_init(void)
-{
-    int status = 0;
-    cpu_entry_t *cpu = NULL;
-
-    spinlock_init(&lock);
-    linked_list_init(&cpu_list);
-  
-    /* set up the bootstrap CPU */
-    spinlock_lock_interrupt(&lock);
-    
-    cpu = kmalloc(sizeof(cpu_entry_t));
-    
-    memset(cpu, 0, sizeof(cpu_entry_t));
-    
-    status = pcpu->cpu_setup(cpu);
-
-    if(status == 0)
-    {
-        spinlock_unlock_interrupt(&lock);  
-        cpu_add_entry(cpu);
-        
-        return(0);
-    }
-
-    kfree(cpu);
-
-    spinlock_unlock_interrupt(&lock);
- 
-    return(-1);
 }
 
 int cpu_entry_point(void)
 {
-    cpu_entry_t *cpu = NULL;
-    spinlock_lock_interrupt(&lock);
-    
-    cpu = cpu_get();
-    pcpu->cpu_setup(cpu);
-    
-    spinlock_unlock_interrupt(&lock);
+    return(0);
 }
 
-uint32_t cpu_id_get(void)
+int cpu_int_lock(void)
 {
-    if(pcpu->cpu_id_get)
-        return(pcpu->cpu_id_get());
-    else
-        return(0);
+    dev_t     *dev = NULL;
+    cpu_api_t *api = NULL;
+    uint32_t   cpu_id = 0;
+    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, 0);
+    api = devmgr_dev_api_get(dev);
+
+    api->int_lock();
+
+    return(0);
 }
 
+int cpu_int_unlock(void)
+{
+    dev_t     *dev = NULL;
+    cpu_api_t *api = NULL;
+    uint32_t   cpu_id = 0;
+    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, 0);
+    api = devmgr_dev_api_get(dev);
+
+    api->int_unlock();
+
+    return(0);
+}
+
+int cpu_int_check(void)
+{
+    dev_t     *dev = NULL;
+    cpu_api_t *api = NULL;
+    uint32_t   cpu_id = 0;
+    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, 0);
+    api = devmgr_dev_api_get(dev);
+
+    api->int_check();
+
+    return(0);
+}

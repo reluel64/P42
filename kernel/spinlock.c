@@ -5,7 +5,7 @@
 
 
 #include <spinlock.h>
-#include <types.h>
+
 
 extern void __sti();
 extern void __cli();

@@ -14,7 +14,7 @@
 #include <timer.h>
 
 int smp_start_cpus(void);
-extern void _sgdt(gdt64_ptr_t *gdt);
+
 extern int cpu_ap_setup(uint32_t cpu_id);
 extern void __tsc_info(uint32_t *, uint32_t *, uint32_t *);
 

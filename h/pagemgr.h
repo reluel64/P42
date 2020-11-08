@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <pfmgr.h>
-#include <types.h>
 #include <defs.h>
 #include <spinlock.h>
 #define REMAP_TABLE_VADDR (0xFFFFFFFFFFE00000)

@@ -43,6 +43,15 @@ typedef struct dev_t
     list_head_t  children;
 }dev_t;
 
+typedef struct dev_srch_t
+{
+    dev_t **stack;
+    uint32_t stack_index;
+    list_node_t *this_node;
+    list_node_t *next_node;
+    char *dev_name;
+}dev_srch_t;
+
 
 int devmgr_init(void);
 int devmgr_add_drv(drv_t *drv);
@@ -80,4 +89,8 @@ int devmgr_dev_index_set(dev_t *dev, uint32_t index);
 uint32_t devmgr_dev_index_get(dev_t *dev);
 void *devmgr_dev_api_get(dev_t *dev);
 dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index);
+int devmgr_dev_end(dev_srch_t *sh);
+dev_t *devmgr_dev_next(dev_srch_t *sh);
+dev_srch_t *devmgr_dev_first(char *name, dev_t **dev);
+void *devmgr_drv_api_get(drv_t *drv);
 #endif

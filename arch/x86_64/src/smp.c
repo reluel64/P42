@@ -6,7 +6,7 @@
 #include <utils.h>
 #include <liballoc.h>
 #include <cpu.h>
-
+#if 0
 int smp_start_cpus(void)
 {
     ACPI_STATUS             status  = AE_OK;
@@ -47,3 +47,4 @@ int smp_start_cpus(void)
     AcpiPutTable((ACPI_TABLE_HEADER*)madt);
     return(0);
 }
+#endif

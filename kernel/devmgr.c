@@ -449,9 +449,9 @@ dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
 
             if(dev->index == index && 
                !strcmp(dev->dev_name, name))
-               {
-                    return(dev);
-               }
+            {
+                return(dev);
+            }
             node = linked_list_next(node);
         }
 
@@ -466,4 +466,120 @@ dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
     }
 
     return(NULL);
+}
+
+dev_srch_t *devmgr_dev_first(char *name, dev_t **dev_out)
+{
+    dev_t *dev = NULL;
+    dev_srch_t *dev_srch = NULL;
+    dev_t *dev_stack[DEVMGR_SRCH_STACK];
+    list_node_t *node        = NULL;
+    
+
+    dev_srch = kcalloc(1, sizeof(dev_srch_t));
+    dev_srch->stack = kcalloc(sizeof(dev_t*), DEVMGR_SRCH_STACK);
+
+    node = linked_list_first(&root_bus.children);
+
+    for(;;)
+    {
+        while(node)
+        {
+            dev = (dev_t*)node;
+
+            if(linked_list_count(&dev->children) > 0)
+            {
+                if(dev_srch->stack_index < DEVMGR_SRCH_STACK)
+                    dev_srch->stack[dev_srch->stack_index++] = dev;
+            }
+
+            kprintf("DEVICE %s\n",dev->dev_name);
+
+            if(strcmp(dev->dev_name, name))
+            {
+                dev_srch->dev_name = name;
+                dev_srch->this_node = node;
+                *dev_out = dev;
+                return(dev_srch);
+            }
+
+            node = linked_list_next(node);
+        }
+
+        if(dev_srch->stack_index > 0)
+        {
+            dev_srch->stack_index--;
+            node = linked_list_first(&dev_srch->stack[dev_srch->stack_index]->children);
+        }
+
+        if(node == NULL)
+            break;
+    }
+
+    return(NULL);
+}
+
+dev_t *devmgr_dev_next(dev_srch_t *sh)
+{
+    dev_t *dev = NULL;
+    dev_srch_t *dev_srch = sh;
+    dev_t *dev_stack[DEVMGR_SRCH_STACK];
+    list_node_t *node        = NULL;
+    
+    /* Continue from we left off */
+    node = sh->next_node;
+
+    for(;;)
+    {
+        while(node)
+        {
+            dev = (dev_t*)node;
+
+            if(linked_list_count(&dev->children) > 0)
+            {
+                if(dev_srch->stack_index < DEVMGR_SRCH_STACK)
+                    dev_srch->stack[dev_srch->stack_index++] = dev;
+            }
+
+            kprintf("DEVICE %s\n",dev->dev_name);
+
+            if(strcmp(dev->dev_name, dev_srch->dev_name))
+            {
+                dev_srch->this_node = node;
+                dev_srch->next_node = linked_list_next(node);
+                return(dev);
+            }
+
+            node = linked_list_next(node);
+        }
+
+        if(dev_srch->stack_index > 0)
+        {
+            dev_srch->stack_index--;
+            node = linked_list_first(&dev_srch->stack[dev_srch->stack_index]->children);
+        }
+
+        if(node == NULL)
+            break;
+    }
+
+    return(NULL);
+}
+
+
+int devmgr_dev_end(dev_srch_t *sh)
+{
+    if(sh != NULL)
+    {
+        kfree(sh->stack);
+        kfree(sh);
+        return(0);
+    }
+
+    return(-1);
+}
+
+void *devmgr_drv_api_get(drv_t *drv)
+{
+    return(drv->drv_api);
 }

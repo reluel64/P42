@@ -3,35 +3,32 @@
 
 #include <linked_list.h>
 #include <defs.h>
+#include <devmgr.h>
 
+#define CPU_DEVICE_TYPE "cpu"
 
-typedef struct cpu_entry_t
+typedef struct cpu_t
 {
-    list_node_t node;
     uint32_t cpu_id;
     uint32_t proximity_domain;
     virt_addr_t stack_top;
     virt_addr_t stack_bottom;
-    
-}cpu_entry_t;
+    void *cpu_pv;
+}cpu_t;
 
-typedef struct cpu_funcs_t
+typedef struct cpu_api_t
 {
     uint32_t (*cpu_id_get)(void);
-    int  (*cpu_setup)(cpu_entry_t*);
+    int  (*cpu_setup)(cpu_t*);
+    uint32_t (*cpu_get_domain) (uint32_t cpu_id);
+    void (*stack_relocate)(virt_addr_t *new, virt_addr_t *old);
+    void (*int_lock)(void);
+    void (*int_unlock)(void);
+    int (*int_check)(void);
+    int (*is_bsp)(void);
+}cpu_api_t;
 
-    
-}cpu_funcs_t;
 
-int cpu_init(void);
-int cpu_ap_setup(uint32_t cpu_id);
-int cpu_get_current(cpu_entry_t **cpu_out);
-int cpu_register_funcs(cpu_funcs_t *func);
-cpu_entry_t *cpu_get(void);
+int cpu_setup(dev_t *dev);
 uint32_t cpu_id_get(void);
-int cpu_get_entry
-(
-    uint32_t apic_id, 
-    cpu_entry_t **cpu_out
-);
 #endif

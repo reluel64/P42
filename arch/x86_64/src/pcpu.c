@@ -3,7 +3,6 @@
  */ 
 
 #include <cpu.h>
-#include <types.h>
 #include <utils.h>
 #include <apic.h>
 #include <liballoc.h>
@@ -12,23 +11,20 @@
 #include <isr.h>
 #include <acpi.h>
 #include <intc.h>
-
-#define CPU_TRAMPOLINE_LOCATION_START (0x8000)
-#define PER_CPU_STACK_SIZE            (0x8000) /* 32 K */
-#define START_AP_STACK_SIZE           (PAGE_SIZE) /* 4K */
+#include <devmgr.h>
+#include <platform.h>
 
 
+extern void __sti();
+extern void __cli();
+extern int  __geti();
+extern uint64_t __read_apic_base(void);
 
 extern void __cpu_switch_stack
 (
     virt_addr_t *new_top,
     virt_addr_t *new_pos,
     virt_addr_t *old_base
-);
-
-static int pcpu_assign_domain_number
-(
-    cpu_entry_t *cpu
 );
 
 extern void __cpuid
@@ -133,7 +129,7 @@ static void pcpu_stack_relocate
     spinlock_unlock_interrupt(&lock);
 }
 
-
+#if 0
 static virt_addr_t *pcpu_prepare_trampoline
 (
     cpu_entry_t *cpu
@@ -199,7 +195,7 @@ int pcpu_setup(cpu_entry_t *cpu)
     /* FIXME: Use guard pages */
     cpu->stack_top = (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
                                              PER_CPU_STACK_SIZE,
-                                             VMM_ATTR_WRITABLE;
+                                             VMM_ATTR_WRITABLE);
 
     if(cpu->stack_top == 0)
     {
@@ -243,7 +239,7 @@ int pcpu_setup(cpu_entry_t *cpu)
  
     return(0);
 }
-#if 0
+
 int cpu_ap_setup(uint32_t cpu_id)
 {
     cpu_entry_t *cpu = NULL;
@@ -380,22 +376,44 @@ void cpu_entry_point(void)
 
 }
 #endif
-static int pcpu_assign_domain_number
+
+static int pcpu_setup(cpu_t *cpu)
+{
+    cpu_platform_t *pcpu = NULL;
+
+    cpu->cpu_pv = kcalloc(1, sizeof(cpu_platform_t));
+
+    if(cpu->cpu_pv == NULL)
+        return(-1);
+
+    pcpu = cpu->cpu_pv;
+
+    pcpu->esp0  = vmmgr_alloc(NULL, 0, PAGE_SIZE, VMM_ATTR_WRITABLE);
+    cpu->cpu_id = pcpu_id_get();
+
+    gdt_per_cpu_init(cpu->cpu_pv);
+    isr_per_cpu_init();
+
+    return(0);
+}
+
+static uint32_t pcpu_get_domain
 (
-    cpu_entry_t *cpu
+    uint32_t cpu_id
 )
 {
     ACPI_STATUS             status  = AE_OK;
     ACPI_TABLE_SRAT        *srat    = NULL;
     ACPI_SRAT_CPU_AFFINITY *cpu_aff = NULL;
     ACPI_SUBTABLE_HEADER   *subhdr  = NULL;
-    
+    uint32_t                domain  = 0;
+
     status = AcpiGetTable(ACPI_SIG_SRAT, 0, (ACPI_TABLE_HEADER**)&srat);
 
     if(ACPI_FAILURE(status))
     {
         kprintf("SRAT table not available\n");
-        return(-1);
+        return(0);
     }
 
     for(phys_size_t i = sizeof(ACPI_TABLE_SRAT); 
@@ -410,19 +428,24 @@ static int pcpu_assign_domain_number
         
         cpu_aff = (ACPI_SRAT_CPU_AFFINITY*)subhdr;
 
-        if(cpu->cpu_id == cpu_aff->ApicId)
+        if(cpu_id == cpu_aff->ApicId)
         {
-            cpu->proximity_domain = 
-                      (uint32_t)cpu_aff->ProximityDomainLo          | 
-                      (uint32_t)cpu_aff->ProximityDomainHi[0] << 8  | 
-                      (uint32_t)cpu_aff->ProximityDomainHi[1] << 16 |
-                      (uint32_t)cpu_aff->ProximityDomainHi[2] << 24;
+            domain = 
+                    (uint32_t)cpu_aff->ProximityDomainLo          | 
+                    (uint32_t)cpu_aff->ProximityDomainHi[0] << 8  | 
+                    (uint32_t)cpu_aff->ProximityDomainHi[1] << 16 |
+                    (uint32_t)cpu_aff->ProximityDomainHi[2] << 24;
         }
     }
 
     AcpiPutTable((ACPI_TABLE_HEADER*)srat);
 
-    return(0);
+    return(domain);
+}
+
+static int pcpu_is_bsp(void)
+{
+    return(!!((__read_apic_base() & (1 << 8))));
 }
 
 static uint32_t pcpu_id_get(void)
@@ -457,14 +480,86 @@ static uint32_t pcpu_id_get(void)
     return((ebx >> 24) & 0xFF);
 }
 
-static cpu_funcs_t cpu=
+static int pcpu_init(dev_t *dev)
 {
-    .cpu_setup = pcpu_setup,
-    .cpu_id_get = pcpu_id_get,
+    cpu_t *cpu = NULL;
+
+
+    if(pcpu_is_bsp())
+    {
+        cpu_setup(dev);
+        return(0);
+    }
+
+    return(0);
+}
+
+static int pcpu_probe(dev_t *dev)
+{
+    if(devmgr_dev_name_match(dev, PLATFORM_CPU_NAME) &&
+       devmgr_dev_type_match(dev, CPU_DEVICE_TYPE))
+        return(0);
+
+    return(-1);
+}
+
+/* There's not much that 
+ * can be initialized in the 
+ * driver, except setting up the BSP 
+ */
+
+
+static int pcpu_drv_init(drv_t *drv)
+{
+    dev_t *cpu_bsp = NULL;
+    uint32_t cpu_id = 0;
+
+    if(!devmgr_dev_create(&cpu_bsp))
+    {
+        devmgr_dev_name_set(cpu_bsp,PLATFORM_CPU_NAME);
+        devmgr_dev_type_set(cpu_bsp, CPU_DEVICE_TYPE);
+
+        cpu_id = pcpu_id_get();
+
+        devmgr_dev_index_set(cpu_bsp, cpu_id);
+
+        if(devmgr_dev_add(cpu_bsp, NULL))
+        {
+            kprintf("FAILED TO ADD BSP CPU\n");
+            return(-1);
+        }
+    }
+    
+    return(0);
+}
+
+static cpu_api_t cpu_api = 
+{
+    .cpu_setup      = pcpu_setup,
+    .cpu_id_get     = pcpu_id_get,
+    .cpu_get_domain = pcpu_get_domain,
+    .stack_relocate = pcpu_stack_relocate,
+    .int_lock       = __sti,
+    .int_unlock     = __cli,
+    .int_check      = __geti,
+    .is_bsp         = pcpu_is_bsp,
 };
 
-int pcpu_init(void)
+static drv_t x86_cpu = 
 {
-    cpu_register_funcs(&cpu);
+    .drv_name   = PLATFORM_CPU_NAME,
+    .drv_type   = CPU_DEVICE_TYPE,
+    .dev_probe  = pcpu_probe,
+    .dev_init   = pcpu_init,
+    .dev_uninit = NULL,
+    .drv_init   = pcpu_drv_init,
+    .drv_uninit = NULL,
+    .drv_api    = &cpu_api
+};
+
+int pcpu_register(void)
+{
+    devmgr_drv_add(&x86_cpu);
+    devmgr_drv_init(&x86_cpu);
     return(0);
 }

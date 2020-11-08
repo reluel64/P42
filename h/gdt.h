@@ -100,11 +100,11 @@ typedef struct tss64
 typedef struct gdt_ptr
 {
     uint16_t limit;
-    uint64_t addr;
+    virt_addr_t addr;
 
-}__attribute__((packed)) gdt64_ptr_t;
+}__attribute__((packed)) gdt_ptr_t;
 
-int gdt_per_cpu_init(void);
+int gdt_per_cpu_init(void *cpu_pv);
 
 
 #endif

@@ -92,10 +92,8 @@ static int apic_spurious_handler(void *pv, uint64_t error)
 static int apic_lvt_error_handler(void *pv, uint64_t error)
 {
     apic_dev_t *apic = NULL;
-    cpu_entry_t *cpu = NULL;
     apic_reg_t *reg = NULL;
     
-    cpu = cpu_get();
  #if 0   
     apic = apic_get();
 

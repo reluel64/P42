@@ -15,7 +15,6 @@ extern int pit8254_register(void);
 
 int platform_register(void)
 {
-    pcpu_init();
     return(0);
 }
 
@@ -33,11 +32,10 @@ int isr_test(void)
     vga_print("TEST\n",0x7,-1);
     return(-1);
 }
-extern void test_interrupt(void);
+
+
 int platform_init(void)
 {
-
-    __cli();
     if(isr_init() != 0)
         return(-1);
     
@@ -46,9 +44,9 @@ int platform_init(void)
 
     acpi_mem_mgr_on();
     
+    /* Initialize platform CPU */
+    pcpu_register();
+
     /* Initialize interrupt controllers */
     platform_setup_intc();
-    
-    cpu_init();
-    __sti();
 }

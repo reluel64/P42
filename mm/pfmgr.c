@@ -631,14 +631,14 @@ static int pfmgr_alloc(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
 {
     pfmgr_free_range_t *freer      = NULL;
     pfmgr_free_range_t *next_freer = NULL;
-    phys_addr_t addr               = 0;
-    phys_size_t pf_ix              = 0;
-    phys_size_t pf_pos             = 0;
-    phys_size_t bmp_pos            = 0;
-    phys_size_t avail_pf           = 0;
-    phys_size_t req_pf             = 0;
-    phys_size_t used_pf            = 0;
-    int         lkup_sts           = 0;
+    phys_addr_t         addr       = 0;
+    phys_size_t         pf_ix      = 0;
+    phys_size_t         pf_pos     = 0;
+    phys_size_t         bmp_pos    = 0;
+    phys_size_t         avail_pf   = 0;
+    phys_size_t         req_pf     = 0;
+    phys_size_t         used_pf    = 0;
+    int                 lkup_sts   = 0;
 
     freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
     req_pf = pf;
