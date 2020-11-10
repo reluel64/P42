@@ -31,4 +31,8 @@ typedef struct cpu_api_t
 
 int cpu_setup(dev_t *dev);
 uint32_t cpu_id_get(void);
+int cpu_int_lock(void);
+int cpu_int_unlock(void);
+int cpu_int_check(void);
+int cpu_register(void);
 #endif

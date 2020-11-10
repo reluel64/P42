@@ -389,7 +389,6 @@ static int pcpu_setup(cpu_t *cpu)
     pcpu = cpu->cpu_pv;
 
     pcpu->esp0  = vmmgr_alloc(NULL, 0, PAGE_SIZE, VMM_ATTR_WRITABLE);
-    cpu->cpu_id = pcpu_id_get();
 
     gdt_per_cpu_init(cpu->cpu_pv);
     isr_per_cpu_init();
@@ -513,7 +512,7 @@ static int pcpu_drv_init(drv_t *drv)
 {
     dev_t *cpu_bsp = NULL;
     uint32_t cpu_id = 0;
-
+#if 0
     if(!devmgr_dev_create(&cpu_bsp))
     {
         devmgr_dev_name_set(cpu_bsp,PLATFORM_CPU_NAME);
@@ -529,7 +528,7 @@ static int pcpu_drv_init(drv_t *drv)
             return(-1);
         }
     }
-    
+#endif
     return(0);
 }
 
@@ -557,9 +556,11 @@ static drv_t x86_cpu =
     .drv_api    = &cpu_api
 };
 
-int pcpu_register(void)
+int pcpu_register(cpu_api_t **api)
 {
+    *api = &cpu_api;
     devmgr_drv_add(&x86_cpu);
     devmgr_drv_init(&x86_cpu);
+
     return(0);
 }

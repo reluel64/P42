@@ -470,10 +470,9 @@ dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
 
 dev_srch_t *devmgr_dev_first(char *name, dev_t **dev_out)
 {
-    dev_t *dev = NULL;
-    dev_srch_t *dev_srch = NULL;
-    dev_t *dev_stack[DEVMGR_SRCH_STACK];
-    list_node_t *node        = NULL;
+    dev_t       *dev      = NULL;
+    dev_srch_t  *dev_srch = NULL;
+    list_node_t *node     = NULL;
     
 
     dev_srch = kcalloc(1, sizeof(dev_srch_t));
@@ -523,7 +522,6 @@ dev_t *devmgr_dev_next(dev_srch_t *sh)
 {
     dev_t *dev = NULL;
     dev_srch_t *dev_srch = sh;
-    dev_t *dev_stack[DEVMGR_SRCH_STACK];
     list_node_t *node        = NULL;
     
     /* Continue from we left off */

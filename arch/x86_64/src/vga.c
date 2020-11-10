@@ -33,6 +33,9 @@ void vga_init()
 
     vga.col = 0;
     vga.row = 0;
+
+    /* clear the buffer */
+    memset(vga.base, 0, FB_LEN);
 }
 
 int vga_print_internal(uint8_t *buf)

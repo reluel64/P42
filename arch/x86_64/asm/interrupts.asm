@@ -170,7 +170,8 @@ __sti:
 __geti:
     pushfq
     pop rax
-    and rax, 0x0200
+    and rax, (1 << 10)
+    shr rax, 10
     ret
 
 ; Load the Interrupt Descriptor Table Register
@@ -227,8 +228,3 @@ __flush_gdt:
         leave
         ret
 
-global test_interrupt
-test_interrupt:
-    
-    int 0x80
-    ret

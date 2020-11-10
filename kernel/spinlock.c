@@ -2,14 +2,9 @@
  * Spinlock 
  */ 
 
-
-
 #include <spinlock.h>
+#include <cpu.h>
 
-
-extern void __sti();
-extern void __cli();
-extern int  __geti();
 extern void __pause();
 extern void __wbinvd();
 
@@ -39,10 +34,10 @@ void spinlock_unlock(spinlock_t *s)
 
 void spinlock_lock_interrupt(spinlock_t *s)
 {
-    s->int_status = __geti();
+    s->int_status = cpu_int_check();
     
     if(s->int_status)
-        __cli();
+        cpu_int_lock();
 
     spinlock_lock(s);
 }
@@ -52,7 +47,7 @@ void spinlock_unlock_interrupt(spinlock_t *s)
     spinlock_unlock(s);
   
     if(s->int_status)
-        __sti();
+        cpu_int_unlock();
 
 }
 
@@ -60,15 +55,15 @@ int spinlock_try_lock_interrupt(spinlock_t *s)
 {
     int status = 0;
 
-     s->int_status = __geti();
+     s->int_status = cpu_int_check();
 
      if(s->int_status)
-        __cli();
+        cpu_int_lock();
 
     status = spinlock_try_lock(s);
     
     if(status && s->int_status)
-        __sti();
+        cpu_int_unlock();
 
     return(status);    
 }

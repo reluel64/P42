@@ -18,35 +18,21 @@ int platform_register(void)
     return(0);
 }
 
-static int platform_setup_intc(void)
-{
-    apic_register();
-    pic8259_register();
-    ioapic_register();
-    pit8254_register();
-    return(0);
-}
-
-int isr_test(void)
-{
-    vga_print("TEST\n",0x7,-1);
-    return(-1);
-}
-
-
 int platform_init(void)
 {
-    if(isr_init() != 0)
-        return(-1);
+    dev_t *dev  = NULL;
     
     if(pagemgr_install_handler() != 0)
         return(-1);
 
     acpi_mem_mgr_on();
-    
-    /* Initialize platform CPU */
-    pcpu_register();
 
-    /* Initialize interrupt controllers */
-    platform_setup_intc();
+    /* Register and initalize interrupt controllers */
+    pic8259_register();
+    ioapic_register();
+
+    /* register and initialize PIT */
+    pit8254_register();
+
+    
 }

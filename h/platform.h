@@ -1,6 +1,7 @@
 #ifndef platformh
 #define platformh
 #include <gdt.h>
+#include <cpu.h>
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -19,6 +20,5 @@ typedef struct cpu_platform_t
     virt_addr_t esp0;
 }cpu_platform_t;
 
-int pcpu_register(void);
-
+int pcpu_register(cpu_api_t **api);
 #endif

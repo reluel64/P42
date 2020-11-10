@@ -353,7 +353,6 @@ static int ioapic_device_init
     /* Save per device structure */
     devmgr_dev_data_set(dev, ioapic);
 
-    
     memset(&version, 0, sizeof(ioapic_ver_t));
 
     ioapic_read(dev, 0x1, &version, sizeof(ioapic_ver_t));
@@ -369,7 +368,6 @@ static int ioapic_device_init
         kfree(ioapic);
         return(-1);
     }
-
 
     /* set up interrupt vectors */
     for(uint32_t i = 0; i < ioapic->redir_tbl_count;i++)

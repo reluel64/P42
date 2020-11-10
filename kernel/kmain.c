@@ -12,7 +12,7 @@
 #include <devmgr.h>
 #include <port.h>
 #include <timer.h>
-
+#include <cpu.h>
 int smp_start_cpus(void);
 
 extern int cpu_ap_setup(uint32_t cpu_id);
@@ -37,40 +37,28 @@ void kmain()
     pfmgr_early_init();
     
     /* initialize device manager */
-    devmgr_init();
+    if(devmgr_init())
+        return;
     
     /* initialize Virtual Memory Manager */
-    if(vmmgr_init() != 0)
+    if(vmmgr_init())
         return;
 
     /* initialize Page Frame Manager*/
-    if(pfmgr_init() != 0)
+    if(pfmgr_init())
         return;
    
     vga_init();
 
+    /* initialize interrupt handler */
+    if(isr_init())
+        return(-1);
 
-    __tsc_info(&den, &num, &crystal_hx);
-    __freq_info(&bus, &base);
-    kprintf("DEN %d NUM %d HZ %d\n",den,num, crystal_hx);
-    kprintf("bus %d base %d\n",bus,base);
+    /* install ISR handlers for the page manager */
+    if(pagemgr_install_handler())
+        return(-1);
 
-    vga_print("CPU_INIT\n",0x7,-1);
-    
-    platform_register();
     platform_init();
-    kprintf("%s %d\n",__FUNCTION__,__LINE__);
-
-    vga_print("DONEEEEEEE\n",0x7,-1);
-    vga_print("CPU_INIT_DONE\n",0x7,-1);
-
-    vga_print("smp_start_cpus\n",0x7,-1);
-    //smp_start_cpus();
-    vga_print("smp_start_cpus_DONE\n",0x7,-1);
-    extern virt_addr_t __stack_pointer();
-    /*kprintf("CHECKING APIC 0x%x\n", apic_is_bsp());*/
-    kprintf("HELLO TOP 0x%x\n",__stack_pointer());
-
 
 int  i = 0;
     while(1)
