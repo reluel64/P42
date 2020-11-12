@@ -8,7 +8,7 @@
 static list_head_t timers;
 static spinlock_t lock;
 
-void timer_update(void)
+void timer_update(uint32_t interval)
 {
     timer_t *tm = NULL;
     list_node_t *node = NULL;
@@ -31,7 +31,7 @@ void timer_update(void)
             tm->ctime = 0;
         }
         else
-            tm->ctime++;
+            tm->ctime += interval;
 
         node = next;
     }

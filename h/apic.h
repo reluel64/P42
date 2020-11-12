@@ -67,44 +67,6 @@ typedef struct apic_drv_private_t
     char holder;
 }apic_drv_private_t;
 
-typedef struct apic_ipi_low_dword_t
-{
-    uint8_t vector;
-    uint32_t delivery_mode:3;
-    uint32_t dest_mode:1;
-    uint32_t delivery_status:1;
-    uint32_t rsrvd_1:1;
-    uint32_t level:1;
-    uint32_t trigger:1;
-    uint32_t rsrvd_2:2;
-    uint32_t dest_shortland:2;
-    uint32_t rsrvd_3:12;
-
-}__attribute__((packed)) apic_ipi_low_dword_t;
-
-typedef struct apic_ipi_high_dword_t
-{
-    uint8_t reserved[3];
-    uint8_t dest_field;
-
-}__attribute__((packed)) apic_ipi_high_dword_t;
-
-typedef struct apic_ipi_packet_t
-{
-
-    union
-    {
-        apic_ipi_low_dword_t low_bits;
-        uint32_t low;
-    };
-    union
-    {
-        apic_ipi_high_dword_t high_bits;
-        uint32_t high;
-    };
-
-}__attribute__((packed)) apic_ipi_packet_t;
-
 
 #define APIC_SVR_ENABLE_BIT (1 << 7)
 #define APIC_SVR_VEC_MASK(x)   (0xFF & (x))
@@ -132,10 +94,14 @@ typedef struct apic_ipi_packet_t
 #define APIC_ICR_DEST_SHORTLAND_ALL_AND_SELF    (0b10)
 #define APIC_ICR_DEST_SHORTLAND_ALL_NO_SELF     (0b11)
 
+#define APIC_ICR_LEVEL_DEASSERT (0x0)
+#define APIC_ICR_LEVEL_ASSERT (0x1)
+
 /* APIC ICR trigger mode */
 #define APIC_ICR_TRIGGER_EDGE   (0x0)
 #define APIC_ICR_TRIGGER_LEVEL     (0x1)
 
+#define APIC_ICR_DELIVERY_STATUS_MASK (0x1000)
 
 #define APIC_ID_SMT(x)     ((x)         & 0xF)
 #define APIC_ID_CORE(x)    (((x) >> 4)  & 0xF)

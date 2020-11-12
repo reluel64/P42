@@ -18,6 +18,7 @@ int smp_start_cpus(void);
 extern int cpu_ap_setup(uint32_t cpu_id);
 extern void __tsc_info(uint32_t *, uint32_t *, uint32_t *);
 
+extern int pcpu_ap_start(uint32_t cpu_start_id);
 void kmain()
 {
    
@@ -58,7 +59,17 @@ void kmain()
     if(pagemgr_install_handler())
         return(-1);
 
-    platform_init();
+
+    kprintf("HELLO WORLKD\n");
+
+    platform_early_init();
+
+    /* initialize the CPU driver and the BSP */
+    cpu_init();
+
+
+    for(uint32_t i = 1; i < 32; i++)
+        pcpu_ap_start(i);
 
 int  i = 0;
     while(1)

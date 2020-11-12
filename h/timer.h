@@ -9,8 +9,6 @@
 
 typedef int (*timer_handler_t)(void *);
 
-
-
 typedef struct timer_t
 {
     list_node_t node;
@@ -36,5 +34,5 @@ void *timer_arm
 );
 void timer_loop_delay(dev_t *dev, uint32_t delay);
 
-void timer_update(void);
+void timer_update(uint32_t interval);
 #endif

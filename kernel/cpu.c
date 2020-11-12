@@ -17,7 +17,7 @@ static cpu_api_t dummy_funcs =
 
 static cpu_api_t *api = &dummy_funcs;
 
-int cpu_register(void)
+int cpu_init(void)
 {
     return(pcpu_register(&api));
 }
@@ -54,13 +54,15 @@ int cpu_setup(dev_t *dev)
     stack = (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
                                       PER_CPU_STACK_SIZE,
                                       VMM_ATTR_WRITABLE);
-
+    
     if(!stack)
     {
         kfree(cpu);
         return(-1);
     }
 
+    cpu->dev = dev;
+    
     devmgr_dev_data_set(dev, cpu);
     /* prepare the stack */
     
@@ -70,6 +72,7 @@ int cpu_setup(dev_t *dev)
 
     cpu->stack_bottom = cpu->stack_top + PER_CPU_STACK_SIZE;
 
+    /* ask platform code to do the stack relocation */
     api->stack_relocate(cpu->stack_bottom, _BSP_STACK_BASE);
 
     /* Clear the old stack */
@@ -83,6 +86,7 @@ int cpu_setup(dev_t *dev)
     if(api->cpu_get_domain)
         cpu->proximity_domain = api->cpu_get_domain(cpu_id);
 
+    /* Perform platform specific cpu setup */
     api->cpu_setup(cpu);
     
     api->int_unlock();

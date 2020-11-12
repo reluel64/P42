@@ -93,4 +93,5 @@ int devmgr_dev_end(dev_srch_t *sh);
 dev_t *devmgr_dev_next(dev_srch_t *sh);
 dev_srch_t *devmgr_dev_first(char *name, dev_t **dev);
 void *devmgr_drv_api_get(drv_t *drv);
+drv_t *devmgr_dev_drv_get(dev_t *dev);
 #endif

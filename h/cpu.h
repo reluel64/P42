@@ -9,6 +9,7 @@
 
 typedef struct cpu_t
 {
+    dev_t *dev;
     uint32_t cpu_id;
     uint32_t proximity_domain;
     virt_addr_t stack_top;
@@ -34,5 +35,5 @@ uint32_t cpu_id_get(void);
 int cpu_int_lock(void);
 int cpu_int_unlock(void);
 int cpu_int_check(void);
-int cpu_register(void);
+int cpu_init(void);
 #endif

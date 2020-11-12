@@ -5,7 +5,7 @@ global __start_ap_pt_base
 global __start_ap_pml5_on
 global __start_ap_nx_on
 global __start_ap_stack
-global __start_ap_per_cpu
+global __start_ap_entry_pt
 
 extern  cpu_entry_point
 
@@ -136,12 +136,13 @@ dummy_stack_bottom:
 
 
 ; define data
-__start_ap_pt_base dq 0x0
-__start_ap_cpu_on  db 0x0
-__start_ap_pml5_on db 0x0
-__start_ap_nx_on   db 0x0
-__start_ap_stack   dq 0x0
-__start_ap_per_cpu dq 0x0
+__start_ap_pt_base  dq 0x0
+__start_ap_cpu_on   db 0x0
+__start_ap_pml5_on  db 0x0
+__start_ap_nx_on    db 0x0
+__start_ap_stack    dq 0x0
+__start_ap_entry_pt dq 0x0
+
 
 
 __start_ap_end:
@@ -162,11 +163,10 @@ ap_start_higher:
 
     mov rsp, qword [0x8000 + __start_ap_stack - __start_ap_begin]
     mov rbp, rsp
-
-    call cpu_entry_point
-
-
-
+    
+    mov rax, qword [0x8000 + __start_ap_entry_pt - __start_ap_begin]
+    call rax
+    
     .halt:
         hlt
         jmp .halt

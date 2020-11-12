@@ -18,7 +18,7 @@ static int seconds = 0;
 
 static int pit8254_irq_handler(void *dev, uint64_t ec)
 {
-    timer_update();
+    timer_update(INTERRUPT_INTERVAL);
     return(0);
 }
 

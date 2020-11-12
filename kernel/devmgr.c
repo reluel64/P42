@@ -445,7 +445,7 @@ dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
                     dev_stack[stack_index++] = dev;
             }
 
-            kprintf("DEVICE %s\n",dev->dev_name);
+           // kprintf("DEVICE %s\n",dev->dev_name);
 
             if(dev->index == index && 
                !strcmp(dev->dev_name, name))
@@ -520,9 +520,9 @@ dev_srch_t *devmgr_dev_first(char *name, dev_t **dev_out)
 
 dev_t *devmgr_dev_next(dev_srch_t *sh)
 {
-    dev_t *dev = NULL;
-    dev_srch_t *dev_srch = sh;
-    list_node_t *node        = NULL;
+    dev_t       *dev      = NULL;
+    dev_srch_t  *dev_srch = sh;
+    list_node_t *node     = NULL;
     
     /* Continue from we left off */
     node = sh->next_node;
@@ -539,7 +539,7 @@ dev_t *devmgr_dev_next(dev_srch_t *sh)
                     dev_srch->stack[dev_srch->stack_index++] = dev;
             }
 
-            kprintf("DEVICE %s\n",dev->dev_name);
+           // kprintf("DEVICE %s\n",dev->dev_name);
 
             if(strcmp(dev->dev_name, dev_srch->dev_name))
             {
@@ -579,5 +579,16 @@ int devmgr_dev_end(dev_srch_t *sh)
 
 void *devmgr_drv_api_get(drv_t *drv)
 {
+    if(drv == NULL)
+        return(NULL);
+
     return(drv->drv_api);
+}
+
+drv_t *devmgr_dev_drv_get(dev_t *dev)
+{
+    if(dev == NULL)
+        return(NULL);
+
+    return(dev->drv);
 }

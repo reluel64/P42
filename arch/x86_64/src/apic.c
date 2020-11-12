@@ -130,18 +130,67 @@ static int apic_send_ipi
     ipi_packet_t *ipi
 )
 {
-   // apic_dev_t *apic = dev->dev_data;
-   // apic_reg_t *reg = NULL;
-
-
-#if 0
-    reg = apic->reg;
-    reg->icr[4] = ipi->high;
-    reg->icr[0] = ipi->low;
+    apic_dev_t *apic = NULL;
+    uint32_t reg_low = 0;
+    uint32_t reg_hi  = 0;
+    
+    apic = devmgr_dev_data_get(dev);
+    
+    reg_hi = ((uint32_t)ipi->dest_cpu) << 24;
    
-    /* Read back the value to get the status */
-    ipi->low = reg->icr[0];
-#endif
+    reg_low = ipi->vector;
+
+    switch(ipi->type)
+    {
+        case IPI_INIT:
+            reg_low = APIC_ICR_DELIVERY_INIT << 8;
+            break;
+        
+        case IPI_START_AP:
+            reg_low |= APIC_ICR_DELIVERY_START << 8;
+            break;
+        
+        default:
+            reg_low &= ~0b1110000000;
+            break;
+    }
+
+    if(ipi->dest_mode == IPI_DEST_MODE_LOGICAL)
+        reg_low |= (APIC_ICR_DEST_MODE_LOGICAL << 11);
+
+    if(ipi->level == IPI_LEVEL_ASSERT)
+        reg_low |= (APIC_ICR_LEVEL_ASSERT << 14);
+
+    if(ipi->trigger == IPI_TRIGGER_LEVEL)
+        reg_low |= (APIC_ICR_TRIGGER_LEVEL << 15);
+    
+    switch(ipi->dest)
+    {
+        case IPI_DEST_NO_SHORTHAND:
+            reg_low |= (APIC_ICR_DEST_SHORTLAND_NO << 18);
+            break;
+
+        case IPI_DEST_SELF:
+            reg_low |= (APIC_ICR_DEST_SHORTLAND_SELF << 18);
+            break;
+
+        case IPI_DEST_ALL:
+            reg_low |= (APIC_ICR_DEST_SHORTLAND_ALL_AND_SELF << 18);
+            break;
+
+        case IPI_DEST_ALL_NO_SELF:
+            reg_low |= (APIC_ICR_DEST_SHORTLAND_ALL_NO_SELF << 18);
+            break;
+    }
+
+
+
+    apic->reg->icr[4] = reg_hi;
+    apic->reg->icr[0] = reg_low;
+
+    /* wait for it to be 0 */
+    while(apic->reg->icr[0] & APIC_ICR_DELIVERY_STATUS_MASK);
+
     return(0);
 }
 
@@ -159,6 +208,7 @@ static int apic_eoi_handler(void *pv, uint64_t ec)
 
     apic = devmgr_dev_data_get(pv);
 
+
     (*apic->reg->eoi) = 0;
     return(0);
 }
@@ -169,6 +219,8 @@ static int apic_cpu_init(dev_t *dev)
     volatile apic_reg_t *reg = NULL;
     apic_dev_t *apic = NULL;
 
+    cpu_int_lock();
+    
     apic = kmalloc(sizeof(apic_dev_t));
 
     if(apic == NULL)
@@ -177,13 +229,16 @@ static int apic_cpu_init(dev_t *dev)
     kprintf("INIT_APIC\n");
 
     apic->paddr   = apic_get_phys_addr();
+    
     apic->apic_id = apic_id_get();
+
     apic->reg     = (apic_reg_t*)vmmgr_map(NULL, apic->paddr, 0x0, 
                                 sizeof(apic_reg_t), 
                                 VMM_ATTR_WRITABLE |
                                 VMM_ATTR_STRONG_UNCACHED);
 
     kprintf("APIC_BASE %x\n",apic->paddr);
+
     if(apic->reg == NULL)
     {
         kfree(apic);
@@ -210,6 +265,8 @@ static int apic_cpu_init(dev_t *dev)
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
         
     (*reg->eoi) = 0;
+
+    cpu_int_unlock();
     
     return(0);
 }
@@ -225,20 +282,6 @@ static int apic_drv_init(drv_t *drv)
         return(-1);
 
     devmgr_drv_data_set(drv, apic_pv);
-    
-    if(!devmgr_dev_create(&dev))
-    {
-        devmgr_dev_name_set(dev, APIC_DRIVER_NAME);
-        devmgr_dev_type_set(dev, INTERRUPT_CONTROLLER);
-        devmgr_dev_index_set(dev, 0);
-
-        if(devmgr_dev_add(dev, NULL))
-        {
-            kprintf("%s %d failed to add device\n");
-            return(-1);
-           /* devmgr_dev_delete(dev); */
-        }
-    }
 
     return(0);
 }

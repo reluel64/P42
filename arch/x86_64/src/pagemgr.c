@@ -159,6 +159,7 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
                               511 * PAGE_SIZE + 510 * 8);
 
         /* mark the page as present, writeable and write through*/
+        __wbinvd();
         page[0] =  phys_addr            | 0x1B;
         page[1] =  phys_addr + 0x1000   | 0x1B;
 
@@ -187,6 +188,7 @@ void pagemgr_boot_temp_map_init(void)
                          511 * PAGE_SIZE );
 
     memset(page, 0, PAGE_SIZE);
+    __wbinvd();
 }
 
 virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
@@ -250,6 +252,7 @@ virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
 
         for(uint16_t i = free_start; i < 510; i++)
         {
+            __wbinvd();
             /* present, writable, wirte through */
             page[i] = (phys_addr + PAGE_SIZE * (i - free_start)) | 0x1B;
            // kprintf("ADDR 0x%x\n",(phys_addr + PAGE_SIZE * (i - free_start)));
@@ -261,7 +264,7 @@ virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
     }
     else
     {
-        kprintf("NOT IMPLEMENTED \n");
+        kprintf("WARNING - NOT IMPLEMENTED \n");
         while(1);
         #if 0
         virt_addr = pagemgr_temp_map(phys_addr, 0);
