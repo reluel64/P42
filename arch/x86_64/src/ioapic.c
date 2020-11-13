@@ -163,7 +163,7 @@ static int ioapic_iterate
 
 static int ioapic_write
 (
-    dev_t *dev, 
+    device_t *dev, 
     uint32_t reg,
     void *data, 
     size_t length
@@ -195,7 +195,7 @@ static int ioapic_write
 
 static int ioapic_read
 (
-    dev_t *dev, 
+    device_t *dev, 
     uint32_t reg,
     void *data, 
     size_t length
@@ -290,7 +290,7 @@ static int ioapic_device_init
 )
 {
     void      **cb_data  = NULL;
-    dev_t      *dev      = NULL;
+    device_t      *dev      = NULL;
     uint32_t   *index    = NULL;
     ioapic_t   *ioapic   = NULL;
     uint32_t   dev_index = 0;
@@ -307,7 +307,7 @@ static int ioapic_device_init
     uint32_t   redir_vector     = 0;
 
     cb_data = (void**)pv;
-    dev     = (dev_t*)cb_data[0];
+    dev     = (device_t*)cb_data[0];
     index   = (uint32_t*)cb_data[1];
 
     dev_index = devmgr_dev_index_get(dev);
@@ -432,7 +432,7 @@ static int ioapic_device_init
     return(1);
 }
 
-static int ioapic_probe(dev_t *dev)
+static int ioapic_probe(device_t *dev)
 {
     uint32_t count = 0;
    
@@ -448,7 +448,7 @@ static int ioapic_probe(dev_t *dev)
     return(0);
 }
 
-static int ioapic_init(dev_t *dev)
+static int ioapic_init(device_t *dev)
 {
     int     status         = 0;
     void    *cb_data[2]    = {NULL, NULL};
@@ -463,10 +463,10 @@ static int ioapic_init(dev_t *dev)
     return(status);
 }
 
-static int ioapic_drv_init(drv_t *drv)
+static int ioapic_drv_init(driver_t *drv)
 {
     uint32_t ioapic_cnt = 0;
-    dev_t    *dev       = NULL;
+    device_t    *dev       = NULL;
     
 
     ioapic_iterate(ioapic_count, &ioapic_cnt);
@@ -505,7 +505,7 @@ static intc_api_t api =
     .send_ipi = NULL
 };
 
-static drv_t ioapic_drv = 
+static driver_t ioapic_drv = 
 {
     .dev_probe  = ioapic_probe,
     .dev_init   = ioapic_init,

@@ -768,7 +768,7 @@ int vmmgr_reserve
 }
 
 /* vmmgr_map - map phyical address to virtual address */
-void *vmmgr_map
+virt_addr_t vmmgr_map
 (
     vmmgr_ctx_t *ctx,
     phys_addr_t phys, 
@@ -863,7 +863,7 @@ void *vmmgr_map
     if(from_slot->length < len)
     {
         spinlock_unlock_interrupt(&ctx->lock);
-        return(NULL);
+        return(0);
     }
 
     if(ret_addr == 0)
@@ -881,7 +881,7 @@ void *vmmgr_map
                        from_slot->base, 
                        len);
         spinlock_unlock_interrupt(&ctx->lock);
-        return(NULL);
+        return(0);
 	}
 
     vmmgr_split_free_block(from_slot, ret_addr, len, &rem);
@@ -893,11 +893,11 @@ void *vmmgr_map
 
     spinlock_unlock_interrupt(&ctx->lock);
 
-    return((void*)ret_addr);
+    return(ret_addr);
 }
 
 /* vmmgr_alloc - allocate virtual memory */
-void *vmmgr_alloc
+virt_addr_t vmmgr_alloc
 (
     vmmgr_ctx_t *ctx,
     virt_addr_t virt, 
@@ -995,7 +995,7 @@ void *vmmgr_alloc
                 len);
 
         spinlock_unlock_interrupt(&ctx->lock);
-        return(NULL);
+        return(0);
     }
 
     if(ret_addr == 0)
@@ -1007,7 +1007,7 @@ void *vmmgr_alloc
 	{
         kprintf("PG_ALLOC_FAIL\n");
         spinlock_unlock_interrupt(&ctx->lock);
-        return(NULL);
+        return(0);
 	}
 
     vmmgr_split_free_block(from_slot, ret_addr, len, &rem);
@@ -1019,7 +1019,7 @@ void *vmmgr_alloc
 
     spinlock_unlock_interrupt(&ctx->lock);
 
-    return((void*)ret_addr);
+    return(ret_addr);
 }
 
 /* vmmgr_free - free virtual memory */
@@ -1027,7 +1027,7 @@ void *vmmgr_alloc
 int vmmgr_free
 (
     vmmgr_ctx_t *ctx,
-    void *vaddr, 
+    virt_addr_t *vaddr, 
     virt_size_t len
 )
 {
@@ -1078,7 +1078,7 @@ int vmmgr_free
 int vmmgr_unmap
 (
     vmmgr_ctx_t *ctx,
-    void *vaddr, 
+    virt_addr_t vaddr, 
     virt_size_t len
 )
 {
@@ -1183,7 +1183,7 @@ virt_addr_t vmmgr_temp_identity_map
 int vmmgr_temp_identity_unmap
 (
     vmmgr_ctx_t *ctx,
-    void *vaddr, 
+    virt_addr_t vaddr, 
     virt_size_t len
 )
 {

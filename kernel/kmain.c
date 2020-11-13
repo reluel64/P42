@@ -13,6 +13,7 @@
 #include <port.h>
 #include <timer.h>
 #include <cpu.h>
+#include <intc.h>
 int smp_start_cpus(void);
 
 extern int cpu_ap_setup(uint32_t cpu_id);
@@ -53,12 +54,11 @@ void kmain()
 
     /* initialize interrupt handler */
     if(isr_init())
-        return(-1);
+        return;
 
     /* install ISR handlers for the page manager */
     if(pagemgr_install_handler())
-        return(-1);
-
+        return;
 
     kprintf("HELLO WORLKD\n");
 
@@ -67,15 +67,9 @@ void kmain()
     /* initialize the CPU driver and the BSP */
     cpu_init();
 
+    cpu_ap_start();
 
-    for(uint32_t i = 1; i < 32; i++)
-        pcpu_ap_start(i);
+    vga_print("KERNEL_UP\n",0,0);
 
-int  i = 0;
-    while(1)
-    {
-        timer_loop_delay(NULL, 1000);
-        kprintf("Hello %d\n", i++);
-    }
 }
 

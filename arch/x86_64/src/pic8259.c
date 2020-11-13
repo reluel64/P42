@@ -24,7 +24,7 @@ static int pic8259_isr(void *pv, uint64_t ec)
     return(0);
 }
 
-static int pic8259_probe(dev_t *dev)
+static int pic8259_probe(device_t *dev)
 {
     int has_pic             = 0;
     ACPI_STATUS             status  = AE_OK;
@@ -47,9 +47,9 @@ static int pic8259_probe(dev_t *dev)
     return(has_pic ? 0 : -1);
 }
 
-static int pic8259_drv_init(drv_t *drv)
+static int pic8259_drv_init(driver_t *drv)
 {
-    dev_t *dev = NULL;
+    device_t *dev = NULL;
 
     if(!devmgr_dev_create(&dev))
     {
@@ -67,7 +67,7 @@ static int pic8259_drv_init(drv_t *drv)
     return(0);
 }
 
-static int pic8259_dev_init(dev_t *drv)
+static int pic8259_dev_init(device_t *drv)
 {
     __outb(PIC1_COMMAND, ICW1_IC4|ICW1_PIC_INIT);
     __outb(PIC2_COMMAND, ICW1_IC4|ICW1_PIC_INIT);
@@ -84,14 +84,14 @@ static int pic8259_dev_init(dev_t *drv)
     return(0);
 }
 
-static int pic8259_disable(dev_t *dev)
+static int pic8259_disable(device_t *dev)
 {
     __outb(0xa1, 0xff);
     __outb(0x21, 0xff);
     return(0);
 }
 
-static int pic8259_enable(dev_t *dev)
+static int pic8259_enable(device_t *dev)
 {
     __outb(0xa1, 0);
     __outb(0x21, 0);
@@ -105,13 +105,13 @@ static intc_api_t pic_8259_api =
     .send_ipi = NULL
 };
 
-static drv_t pic8259 = 
+static driver_t pic8259 = 
 {
     .drv_name   = PIC8259_DRIVER_NAME,
     .dev_probe  = pic8259_probe,
     .dev_init   = pic8259_dev_init,
     .dev_uninit = NULL,
-    .drv_type  = INTERRUPT_CONTROLLER,
+    .drv_type   = INTERRUPT_CONTROLLER,
     .drv_init   = pic8259_drv_init,
     .drv_uninit = NULL,
     .drv_api    = &pic_8259_api

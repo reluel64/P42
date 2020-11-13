@@ -77,7 +77,7 @@ int vmmgr_change_attrib
     uint32_t attr
 );
 
-void *vmmgr_map
+virt_addr_t vmmgr_map
 (
     vmmgr_ctx_t *ctx, 
     phys_addr_t phys, 
@@ -86,7 +86,7 @@ void *vmmgr_map
     uint32_t attr
 );
 
-void *vmmgr_alloc
+virt_addr_t vmmgr_alloc
 (
     vmmgr_ctx_t *ctx, 
     virt_addr_t virt, 
@@ -97,14 +97,14 @@ void *vmmgr_alloc
 int vmmgr_unmap
 (
     vmmgr_ctx_t *ctx, 
-    void *vaddr, 
+    virt_addr_t vaddr, 
     virt_size_t len
 );
 
 int vmmgr_free
 (
     vmmgr_ctx_t *ctx, 
-    void *vaddr, 
+    virt_addr_t *vaddr, 
     virt_size_t len
 );
 
@@ -120,7 +120,7 @@ int vmmgr_reserve
 int vmmgr_temp_identity_unmap
 (
     vmmgr_ctx_t *ctx,
-    void *vaddr, 
+    virt_addr_t vaddr, 
     virt_size_t len
 );
 

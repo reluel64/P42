@@ -27,9 +27,9 @@ uint32_t cpu_id_get(void)
     return(api->cpu_id_get());
 }
 
-int cpu_setup(dev_t *dev)
+int cpu_setup(device_t *dev)
 {
-    dev_t      *cpu_dev = NULL;
+    device_t      *cpu_dev = NULL;
     cpu_t      *cpu = NULL;
     uint32_t    cpu_id = 0;
     virt_addr_t stack = 0;
@@ -73,15 +73,12 @@ int cpu_setup(dev_t *dev)
     cpu->stack_bottom = cpu->stack_top + PER_CPU_STACK_SIZE;
 
     /* ask platform code to do the stack relocation */
-    api->stack_relocate(cpu->stack_bottom, _BSP_STACK_BASE);
+    api->stack_relocate((virt_addr_t*)cpu->stack_bottom, 
+                        (virt_addr_t*)_BSP_STACK_BASE);
 
     /* Clear the old stack */
-    memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
-
+    
     cpu->cpu_id = api->cpu_id_get();
-
-    /* set up some per-cpu stuff */
-    pagemgr_per_cpu_init();
     
     if(api->cpu_get_domain)
         cpu->proximity_domain = api->cpu_get_domain(cpu_id);
@@ -89,8 +86,11 @@ int cpu_setup(dev_t *dev)
     /* Perform platform specific cpu setup */
     api->cpu_setup(cpu);
     
-    api->int_unlock();
+    /* set up some per-cpu stuff */
+    pagemgr_per_cpu_init();
 
+    api->int_unlock();
+    memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
     return(0);
 }
 
@@ -119,4 +119,9 @@ int cpu_int_check(void)
 static int cpu_dummy(void)
 {
     return(0);
+}
+
+int cpu_ap_start(void)
+{
+    return(api->start_ap(-1));
 }

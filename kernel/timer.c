@@ -40,8 +40,8 @@ void timer_update(uint32_t interval)
 
 void *timer_arm
 (
-    dev_t *dev, 
-    timer_handler_t *cb, 
+    device_t *dev, 
+    timer_handler_t cb, 
     void *data,
     uint32_t delay
 )
@@ -68,7 +68,7 @@ static int timer_sleep_callback(void *pv)
     return(1);
 }
 
-void timer_loop_delay(dev_t *dev, uint32_t delay)
+void timer_loop_delay(device_t *dev, uint32_t delay)
 {
     spinlock_t wait;
     timer_t *timer = NULL;

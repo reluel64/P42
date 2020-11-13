@@ -63,12 +63,12 @@ int gdt_per_cpu_init(void *cpu_pv)
     gdt_ptr_t gdt_ptr = {.limit = 0, .addr = 0};
     uint8_t *desc_mem = NULL;
 
-    desc_mem = vmmgr_alloc(NULL, 0, GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
+    desc_mem = (uint8_t*)vmmgr_alloc(NULL, 0, GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
 
     cpu = cpu_pv;
 
     gdt = (gdt_entry_t *)desc_mem;
-    tss = desc_mem + GDT_TABLE_SIZE;
+    tss = (tss64_entry_t*)(desc_mem + GDT_TABLE_SIZE);
 
     if (gdt == NULL || tss == NULL)
         return (-1);

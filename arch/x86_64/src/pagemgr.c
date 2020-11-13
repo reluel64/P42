@@ -118,7 +118,7 @@ static int         pagemgr_per_cpu_invl_handler
 int pagemgr_install_handler(void)
 {
     isr_install(pagemgr_page_fault_handler, &page_manager, 14, 0);
-    isr_install(pagemgr_per_cpu_invl_handler, NULL, 255, 0);
+    isr_install(pagemgr_per_cpu_invl_handler, NULL, 64, 0);
 }
 
 uint8_t pagemgr_pml5_support(void)
@@ -159,7 +159,7 @@ virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
                               511 * PAGE_SIZE + 510 * 8);
 
         /* mark the page as present, writeable and write through*/
-        __wbinvd();
+
         page[0] =  phys_addr            | 0x1B;
         page[1] =  phys_addr + 0x1000   | 0x1B;
 
@@ -188,7 +188,7 @@ void pagemgr_boot_temp_map_init(void)
                          511 * PAGE_SIZE );
 
     memset(page, 0, PAGE_SIZE);
-    __wbinvd();
+
 }
 
 virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
@@ -252,7 +252,7 @@ virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
 
         for(uint16_t i = free_start; i < 510; i++)
         {
-            __wbinvd();
+            
             /* present, writable, wirte through */
             page[i] = (phys_addr + PAGE_SIZE * (i - free_start)) | 0x1B;
            // kprintf("ADDR 0x%x\n",(phys_addr + PAGE_SIZE * (i - free_start)));
@@ -1129,6 +1129,7 @@ static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void 
              */ 
             else
             {
+                pagemgr_invalidate(virt);
                 *phys = start_phys;
                 *count = page_count;
                 return(1);
@@ -1414,6 +1415,7 @@ static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
     virt_addr_t fault_address = __read_cr2();
     
     kprintf("ADDRESS 0x%x ERROR 0x%x\n",fault_address, error_code);
+        kprintf("CPU_ID_GET_TEST %d\n",cpu_id_get());
     while(1);
 
     return(0);
@@ -1425,12 +1427,18 @@ static int pagemgr_per_cpu_invl_handler
     uint64_t error_code
 )
 {
-    return(0);
+ 
+    kprintf("CPU_ID_GET_TEST %d\n",cpu_id_get());
+    return(-1);
 }
 
 
 int pagemgr_per_cpu_init(void)
 {
+    virt_addr_t cr3 = 0;
     __enable_wp();
+    cr3 = __read_cr3();
+    __write_cr3(cr3);
+    
     return(0);
 }

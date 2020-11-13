@@ -4,7 +4,7 @@
 #include <utils.h>
 
 
-int intc_disable(dev_t *dev)
+int intc_disable(device_t *dev)
 {
     intc_api_t *api = NULL;
     
@@ -20,7 +20,7 @@ int intc_disable(dev_t *dev)
     return(api->disable(dev));
 }
 
-int intc_enable(dev_t *dev)
+int intc_enable(device_t *dev)
 {
     intc_api_t *api = NULL;
 
@@ -35,7 +35,7 @@ int intc_enable(dev_t *dev)
     return(api->enable(dev));
 }
 
-int intc_send_ipi(dev_t *dev, ipi_packet_t *ipi)
+int intc_send_ipi(device_t *dev, ipi_packet_t *ipi)
 {
     intc_api_t *api = NULL;
 

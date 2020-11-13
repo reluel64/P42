@@ -11,25 +11,68 @@
 
 static list_head_t drv_list;
 static spinlock_t  drv_list_lock;
-static dev_t       root_bus;
+static device_t       root_bus;
 
-static int devmgr_add_dev_to_drv
+static int devmgr_add_device_to_drv
 (
-    dev_t *dev, 
-    const drv_t *drv
+    device_t *dev, 
+    const driver_t *drv
 );
 
 static int devmgr_dev_add_to_parent
 (
-    dev_t *dev,
-    dev_t *parent
+    device_t *dev,
+    device_t *parent
 );
+
+int devmgr_show_devices(void)
+{
+        device_t *dev = NULL;
+    device_t **dev_stack = NULL;
+    list_node_t *node        = NULL;
+    int          stack_index = 0;
+
+    dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(device_t));
+
+    memset(dev_stack, 0, sizeof(dev_stack));
+
+    node = linked_list_first(&root_bus.children);
+
+    for(;;)
+    {
+        while(node)
+        {
+            dev = (device_t*)node;
+
+            if(linked_list_count(&dev->children) > 0)
+            {
+                if(stack_index < DEVMGR_SRCH_STACK)
+                    dev_stack[stack_index++] = dev;
+            }
+
+            kprintf("DEVICE %s TYPE %s Index %d\n",dev->dev_name,dev->dev_type, dev->index);
+
+            node = linked_list_next(node);
+        }
+
+        if(stack_index > 0)
+        {
+            stack_index--;
+            node = linked_list_first(&dev_stack[stack_index]->children);
+        }
+
+        if(node == NULL)
+            break;
+    }
+    kfree(dev_stack);
+    return(0);
+}
 
 int devmgr_init(void)
 {
     linked_list_init(&drv_list);
     spinlock_init(&drv_list_lock);
-    memset(&root_bus, 0, sizeof(dev_t));
+    memset(&root_bus, 0, sizeof(device_t));
     devmgr_dev_name_set(&root_bus, "root_bus");
     devmgr_dev_type_set(&root_bus, DEVMGR_ROOT_BUS);
     return(0);
@@ -39,14 +82,14 @@ int devmgr_init(void)
  * devmgr_dev_create - create a device structure
  */
 
-int devmgr_dev_create(dev_t **dev)
+int devmgr_dev_create(device_t **dev)
 {
     if(dev == NULL)
         return(-1);
     
     if(*dev == NULL)
     {
-        (*dev) = kmalloc(sizeof(dev_t));
+        (*dev) = kmalloc(sizeof(device_t));
 
         if((*dev) == NULL)
             return(-1);
@@ -54,17 +97,17 @@ int devmgr_dev_create(dev_t **dev)
         (*dev)->flags |= DEVMGR_DEV_ALLOCATED;
     }
 
-    memset((*dev), 0, sizeof(dev_t));
+    memset((*dev), 0, sizeof(device_t));
     
     return(0);
 }
 
-int devmgr_dev_delete(dev_t *dev)
+int devmgr_dev_delete(device_t *dev)
 {
     
     if(dev != NULL)
     {
-        memset(dev, 0, sizeof(dev_t));
+        memset(dev, 0, sizeof(device_t));
 
         if(dev->flags & DEVMGR_DEV_ALLOCATED)
             kfree(dev);
@@ -73,7 +116,7 @@ int devmgr_dev_delete(dev_t *dev)
     return(0);
 }
 
-int devmgr_dev_add(dev_t *dev, dev_t *parent)
+int devmgr_dev_add(device_t *dev, device_t *parent)
 {
     int          status = 0;
 
@@ -104,7 +147,7 @@ int devmgr_dev_add(dev_t *dev, dev_t *parent)
  * devmgr_add_drv - add device driver
  */
 
-int devmgr_drv_add(drv_t *drv)
+int devmgr_drv_add(driver_t *drv)
 {
     int status = 0;
 
@@ -133,7 +176,7 @@ int devmgr_drv_add(drv_t *drv)
  * devmgr_remove_drv - remove device driver
  */
 
-int devmgr_drv_remove(drv_t *drv)
+int devmgr_drv_remove(driver_t *drv)
 {
     int status = 0;
 
@@ -154,7 +197,7 @@ int devmgr_drv_remove(drv_t *drv)
     return(status);
 }
 
-char *devmgr_dev_type_get(dev_t *dev)
+char *devmgr_dev_type_get(device_t *dev)
 {
     if(dev == NULL)
         return(NULL);
@@ -162,7 +205,7 @@ char *devmgr_dev_type_get(dev_t *dev)
     return(dev->dev_type);
 }
 
-char *devmgr_drv_type_get(drv_t *drv)
+char *devmgr_drv_type_get(driver_t *drv)
 {
     if(drv == NULL)
         return(NULL);
@@ -170,7 +213,7 @@ char *devmgr_drv_type_get(drv_t *drv)
     return(drv->drv_type);
 }
 
-int devmgr_dev_type_set(dev_t *dev, char *type)
+int devmgr_dev_type_set(device_t *dev, char *type)
 {
     if(dev == NULL)
         return(-1);
@@ -179,18 +222,18 @@ int devmgr_dev_type_set(dev_t *dev, char *type)
     return(0);
 }
 
-int devmgr_dev_type_match(dev_t *dev, char *type)
+int devmgr_dev_type_match(device_t *dev, char *type)
 {
     if(dev == NULL || dev->dev_type == NULL || type == NULL)
         return(0);
-    
+
     return(!strcmp(dev->dev_type, type));
 }
 
 static int devmgr_dev_add_to_parent
 (
-    dev_t *dev,
-    dev_t *parent
+    device_t *dev,
+    device_t *parent
 )
 {
     if(parent == NULL)
@@ -202,18 +245,18 @@ static int devmgr_dev_add_to_parent
     if(!linked_list_find_node(&parent->children, &dev->dev_node))
         return(-1);
     
-    linked_list_add_head(&parent->children, &dev->dev_node);
+    linked_list_add_tail(&parent->children, &dev->dev_node);
 
     dev->parent = parent;
-
+    
     return(0);
 }
 
 /* devmgr_find_driver - find a driver by name */
 
-drv_t *devmgr_drv_find(const char *name)
+driver_t *devmgr_drv_find(const char *name)
 {
-    drv_t       *drv  = NULL;
+    driver_t       *drv  = NULL;
     list_node_t *node = NULL;
 
     spinlock_lock_interrupt(&drv_list_lock);
@@ -221,7 +264,7 @@ drv_t *devmgr_drv_find(const char *name)
     
     while(node)
     {
-        drv = (drv_t*)node;
+        drv = (driver_t*)node;
 
         if(!strcmp(drv->drv_name, name))
         {
@@ -240,7 +283,7 @@ drv_t *devmgr_drv_find(const char *name)
 
 /* devmgr_drv_init - initialize the driver */
 
-int devmgr_drv_init(drv_t *drv)
+int devmgr_drv_init(driver_t *drv)
 {
     int status = -1;
 
@@ -255,11 +298,11 @@ int devmgr_drv_init(drv_t *drv)
 
 /* devmgr_dev_probe - probe the device */
 
-int devmgr_dev_probe(dev_t *dev)
+int devmgr_dev_probe(device_t *dev)
 {
     int status        = -1;
     list_node_t *node = NULL;
-    drv_t       *drv  = NULL;
+    driver_t       *drv  = NULL;
 
     spinlock_lock_interrupt(&drv_list_lock);
 
@@ -269,7 +312,7 @@ int devmgr_dev_probe(dev_t *dev)
     while(node)
     {
         status = -1;
-        drv = (drv_t*)node;
+        drv = (driver_t*)node;
 
         if(dev->dev_type != NULL && drv->drv_type != NULL)
         {
@@ -299,7 +342,7 @@ int devmgr_dev_probe(dev_t *dev)
     return(status);
 }
 
-int devmgr_dev_init(dev_t *dev)
+int devmgr_dev_init(device_t *dev)
 {
     int status = -1;
 
@@ -321,7 +364,7 @@ int devmgr_dev_init(dev_t *dev)
     return(status);
 }
 
-int devmgr_dev_uninit(dev_t *dev)
+int devmgr_dev_uninit(device_t *dev)
 {
     int status = -1;
 
@@ -334,7 +377,7 @@ int devmgr_dev_uninit(dev_t *dev)
     return(status);
 }
 
-int devmgr_drv_data_set(drv_t *drv, const void *data)
+int devmgr_drv_data_set(driver_t *drv, void *data)
 {
     if(drv == NULL)
         return(-1);
@@ -344,7 +387,7 @@ int devmgr_drv_data_set(drv_t *drv, const void *data)
     return(0);
 }
 
-void *devmgr_drv_data_get(const drv_t *drv)
+void *devmgr_drv_data_get(const driver_t *drv)
 {
     if(drv == NULL)
         return(NULL);
@@ -352,7 +395,7 @@ void *devmgr_drv_data_get(const drv_t *drv)
     return(drv->driver_pv);
 }
 
-int devmgr_dev_data_set(dev_t *dev, void *data)
+int devmgr_dev_data_set(device_t *dev, void *data)
 {
     if(dev == NULL)
         return(-1);
@@ -362,7 +405,7 @@ int devmgr_dev_data_set(dev_t *dev, void *data)
     return(0);
 }
 
-void *devmgr_dev_data_get(const dev_t *dev)
+void *devmgr_dev_data_get(const device_t *dev)
 {
     if(dev == NULL)
         return(NULL);
@@ -370,7 +413,7 @@ void *devmgr_dev_data_get(const dev_t *dev)
     return(dev->dev_data);
 }
 
-dev_t *devmgr_parent_get(const dev_t *dev)
+device_t *devmgr_parent_get(const device_t *dev)
 {
     if(dev == NULL)
         return(NULL);
@@ -378,7 +421,7 @@ dev_t *devmgr_parent_get(const dev_t *dev)
     return(dev->parent);
 }
 
-char *devmgr_dev_name_get(const dev_t *dev)
+char *devmgr_dev_name_get(const device_t *dev)
 {
     if(dev == NULL)
         return(NULL);
@@ -386,7 +429,7 @@ char *devmgr_dev_name_get(const dev_t *dev)
     return(dev->dev_name);
 }
 
-int devmgr_dev_name_match(const dev_t *dev, char *name)
+int devmgr_dev_name_match(const device_t *dev, char *name)
 {
     if(dev == NULL || dev->dev_name == NULL)
         return(0);
@@ -397,24 +440,24 @@ int devmgr_dev_name_match(const dev_t *dev, char *name)
     return(0);
 }
 
-int devmgr_dev_name_set(dev_t *dev, char *name)
+int devmgr_dev_name_set(device_t *dev, char *name)
 {
     dev->dev_name = name;
     return(0);
 }
 
-int devmgr_dev_index_set(dev_t *dev, uint32_t index)
+int devmgr_dev_index_set(device_t *dev, uint32_t index)
 {
     dev->index = index;
     return(0);
 }
 
-uint32_t devmgr_dev_index_get(dev_t *dev)
+uint32_t devmgr_dev_index_get(device_t *dev)
 {
     return(dev->index);
 }
 
-void *devmgr_dev_api_get(dev_t *dev)
+void *devmgr_dev_api_get(device_t *dev)
 {
     if(dev == NULL || dev->drv == NULL)
         return(NULL);
@@ -422,12 +465,14 @@ void *devmgr_dev_api_get(dev_t *dev)
     return(dev->drv->drv_api);
 }
 
-dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
+device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
 {
-    dev_t *dev = NULL;
-    dev_t *dev_stack[DEVMGR_SRCH_STACK];
+    device_t *dev = NULL;
+    device_t **dev_stack = NULL;
     list_node_t *node        = NULL;
     int          stack_index = 0;
+
+    dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(device_t));
 
     memset(dev_stack, 0, sizeof(dev_stack));
 
@@ -437,7 +482,7 @@ dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
     {
         while(node)
         {
-            dev = (dev_t*)node;
+            dev = (device_t*)node;
 
             if(linked_list_count(&dev->children) > 0)
             {
@@ -450,6 +495,7 @@ dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
             if(dev->index == index && 
                !strcmp(dev->dev_name, name))
             {
+                kfree(dev_stack);
                 return(dev);
             }
             node = linked_list_next(node);
@@ -464,19 +510,19 @@ dev_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
         if(node == NULL)
             break;
     }
-
+    kfree(dev_stack);
     return(NULL);
 }
 
-dev_srch_t *devmgr_dev_first(char *name, dev_t **dev_out)
+dev_srch_t *devmgr_dev_first(char *name, device_t **dev_out)
 {
-    dev_t       *dev      = NULL;
+    device_t       *dev      = NULL;
     dev_srch_t  *dev_srch = NULL;
     list_node_t *node     = NULL;
     
 
     dev_srch = kcalloc(1, sizeof(dev_srch_t));
-    dev_srch->stack = kcalloc(sizeof(dev_t*), DEVMGR_SRCH_STACK);
+    dev_srch->stack = kcalloc(sizeof(device_t*), DEVMGR_SRCH_STACK);
 
     node = linked_list_first(&root_bus.children);
 
@@ -484,7 +530,7 @@ dev_srch_t *devmgr_dev_first(char *name, dev_t **dev_out)
     {
         while(node)
         {
-            dev = (dev_t*)node;
+            dev = (device_t*)node;
 
             if(linked_list_count(&dev->children) > 0)
             {
@@ -518,9 +564,9 @@ dev_srch_t *devmgr_dev_first(char *name, dev_t **dev_out)
     return(NULL);
 }
 
-dev_t *devmgr_dev_next(dev_srch_t *sh)
+device_t *devmgr_dev_next(dev_srch_t *sh)
 {
-    dev_t       *dev      = NULL;
+    device_t       *dev      = NULL;
     dev_srch_t  *dev_srch = sh;
     list_node_t *node     = NULL;
     
@@ -531,7 +577,7 @@ dev_t *devmgr_dev_next(dev_srch_t *sh)
     {
         while(node)
         {
-            dev = (dev_t*)node;
+            dev = (device_t*)node;
 
             if(linked_list_count(&dev->children) > 0)
             {
@@ -577,7 +623,7 @@ int devmgr_dev_end(dev_srch_t *sh)
     return(-1);
 }
 
-void *devmgr_drv_api_get(drv_t *drv)
+void *devmgr_drv_api_get(driver_t *drv)
 {
     if(drv == NULL)
         return(NULL);
@@ -585,7 +631,7 @@ void *devmgr_drv_api_get(drv_t *drv)
     return(drv->drv_api);
 }
 
-drv_t *devmgr_dev_drv_get(dev_t *dev)
+driver_t *devmgr_dev_drv_get(device_t *dev)
 {
     if(dev == NULL)
         return(NULL);

@@ -17,6 +17,7 @@ global __cpuid
 global __wrmsr
 global __rdmsr
 global __tsc_info
+global __invd
 
 extern kstack_top
 extern kstack_base
@@ -122,30 +123,6 @@ __stack_pointer:
     add rax, 8 ; compensate the push made for this call
     ret
 
-
-;----------------------------------------
-__tsc_info:
-    mov eax, 0x15
-    mov r8, rdx
-    xor rcx, rcx
-    xor rdx, rdx
-
-    cpuid
-
-    mov dword [rdi],  eax
-    mov dword [rsi],  ebx
-    mov dword [r8],   ecx
-    ret
-;----------------------------------------
-__freq_info:
-    mov eax, 0x16
-    xor rcx, rcx
-    xor rdx, rdx
-    cpuid
-
-    mov dword [rdi],  ecx
-    mov dword [rsi],  ebx
-    ret
 ;----------------------------------------
 __has_apic:
     mov eax, 0x1
@@ -165,18 +142,35 @@ __cpuid:
     push rbp
     mov rbp, rsp
     
+    push rax
+    push rbx
+    push rcx
+    push rdx
+
     mov r8, rdx
     mov r9, rcx
 
-    mov ecx, dword [r9]
-    mov eax, dword [rdi]
+    xor rax, rax
+    xor rbx, rbx
+    xor rcx, rcx
+    xor rdx, rdx
 
+    mov edx, dword [r9]
+    mov ecx, dword [r8]
+    mov eax, dword [rdi]
+    mov ebx, dword [rsi]
+    
     cpuid
 
     mov dword [rdi], eax
     mov dword [rsi], ebx
-    mov dword [r8],  edx
-    mov dword [r9],  ecx
+    mov dword [r8],  ecx
+    mov dword [r9],  edx
+
+    pop rdx
+    pop rcx
+    pop rbx
+    pop rax
 
     leave
     ret
@@ -194,4 +188,8 @@ __wrmsr:
     shr rsi, 32
     mov edx, esi
     wrmsr
+    ret
+
+__invd:
+    invd
     ret

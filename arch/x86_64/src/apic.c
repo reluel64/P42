@@ -32,7 +32,7 @@ extern void __cpuid
     uint32_t *edx
 );
 
-static int apic_probe(dev_t *dev)
+static int apic_probe(device_t *dev)
 {
     ACPI_STATUS            status   = AE_OK;
     ACPI_TABLE_MADT        *madt    = NULL;
@@ -52,38 +52,6 @@ static int apic_probe(dev_t *dev)
     return(0);
 }
 
-uint32_t apic_id_get(void)
-{
-    uint32_t eax = 0;
-    uint32_t ebx = 0;
-    uint32_t ecx = 0;
-    uint32_t edx = 0;
-
-    eax = 0x1F;
-
-    __cpuid(&eax, &ebx, &edx, &ecx);
-    kprintf("EAX = 0x1F\n");
-
-    if(eax != 0 || ebx != 0 || ecx != 0 || edx != 0)
-        return(edx);
-    
-    eax = 0xB;
-    ecx = 0;
-
-    __cpuid(&eax, &ebx, &edx, &ecx);
-    kprintf("EAX = 0xB\n");
-
-    if(eax != 0 || ebx != 0 || ecx != 0 || edx != 0)
-        return(edx);
-
-    eax = 0x1;
-    ecx = 0;
-
-    __cpuid(&eax, &ebx, &edx, &ecx);
-    kprintf("EAX = 0x1\n");
-    return((ebx >> 24) & 0xFF);
-}
-
 static int apic_spurious_handler(void *pv, uint64_t error)
 {
     return(0);
@@ -91,7 +59,7 @@ static int apic_spurious_handler(void *pv, uint64_t error)
 
 static int apic_lvt_error_handler(void *pv, uint64_t error)
 {
-    apic_dev_t *apic = NULL;
+    apic_device_t *apic = NULL;
     apic_reg_t *reg = NULL;
     
  #if 0   
@@ -126,16 +94,16 @@ static phys_addr_t apic_get_phys_addr(void)
 
 static int apic_send_ipi
 (
-    dev_t *dev,
+    device_t *dev,
     ipi_packet_t *ipi
 )
 {
-    apic_dev_t *apic = NULL;
+    apic_device_t *apic = NULL;
     uint32_t reg_low = 0;
     uint32_t reg_hi  = 0;
     
     apic = devmgr_dev_data_get(dev);
-    
+    kprintf("IPI FROM %d\n",apic->apic_id);
     reg_hi = ((uint32_t)ipi->dest_cpu) << 24;
    
     reg_low = ipi->vector;
@@ -183,8 +151,6 @@ static int apic_send_ipi
             break;
     }
 
-
-
     apic->reg->icr[4] = reg_hi;
     apic->reg->icr[0] = reg_low;
 
@@ -196,7 +162,7 @@ static int apic_send_ipi
 
 static int apic_timer(void *pv, uint64_t ec)
 {
-    apic_dev_t *apic = devmgr_dev_data_get(pv);
+    apic_device_t *apic = devmgr_dev_data_get(pv);
 
     (*apic->reg->eoi)=0;
 }
@@ -204,24 +170,23 @@ static int apic_timer(void *pv, uint64_t ec)
 
 static int apic_eoi_handler(void *pv, uint64_t ec)
 {
-    apic_dev_t *apic = NULL;
+    apic_device_t *apic = NULL;
 
     apic = devmgr_dev_data_get(pv);
-
-
+    
     (*apic->reg->eoi) = 0;
-    return(0);
+    return(-1);
 }
 
-static int apic_cpu_init(dev_t *dev)
+static int apic_cpu_init(device_t *dev)
 {
     kprintf("initializing instance\n");
     volatile apic_reg_t *reg = NULL;
-    apic_dev_t *apic = NULL;
+    apic_device_t *apic = NULL;
 
     cpu_int_lock();
     
-    apic = kmalloc(sizeof(apic_dev_t));
+    apic = kmalloc(sizeof(apic_device_t));
 
     if(apic == NULL)
         return(-1);
@@ -230,7 +195,7 @@ static int apic_cpu_init(dev_t *dev)
 
     apic->paddr   = apic_get_phys_addr();
     
-    apic->apic_id = apic_id_get();
+    apic->apic_id = devmgr_dev_index_get(dev);
 
     apic->reg     = (apic_reg_t*)vmmgr_map(NULL, apic->paddr, 0x0, 
                                 sizeof(apic_reg_t), 
@@ -271,12 +236,12 @@ static int apic_cpu_init(dev_t *dev)
     return(0);
 }
 
-static int apic_drv_init(drv_t *drv)
+static int apic_drv_init(driver_t *drv)
 {
     apic_drv_private_t *apic_pv = NULL;
-    dev_t              *dev = NULL;
+    device_t              *dev = NULL;
 
-    apic_pv = kmalloc(sizeof(apic_dev_t));
+    apic_pv = kmalloc(sizeof(apic_device_t));
 
     if(apic_pv == NULL)
         return(-1);
@@ -293,7 +258,7 @@ static intc_api_t apic_api =
     .send_ipi = apic_send_ipi
 };
 
-static drv_t apic_drv = 
+static driver_t apic_drv = 
 {
     .drv_name   = APIC_DRIVER_NAME,
     .dev_probe  = apic_probe,

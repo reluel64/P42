@@ -874,7 +874,7 @@ int liballoc_unlock()
 void* liballoc_alloc(size_t pages)
 {
 
-    void *v = vmmgr_alloc(NULL, 0, pages * PAGE_SIZE, VMM_ATTR_WRITABLE);
+    void *v = (void*)vmmgr_alloc(NULL, 0, pages * PAGE_SIZE, VMM_ATTR_WRITABLE);
 
     return(v);
 }

@@ -228,3 +228,8 @@ __flush_gdt:
         leave
         ret
 
+
+global test_interrupt
+test_interrupt:
+int 64
+ret

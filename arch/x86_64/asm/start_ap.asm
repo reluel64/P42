@@ -128,13 +128,6 @@ GDT_PTR64:
 GDT_PTR64_ADDR:
     dd 0x0
 
-
-dummy_stack_top:
-    dq 0x0
-    dq 0x0
-dummy_stack_bottom:
-
-
 ; define data
 __start_ap_pt_base  dq 0x0
 __start_ap_cpu_on   db 0x0
@@ -164,8 +157,9 @@ ap_start_higher:
     mov rsp, qword [0x8000 + __start_ap_stack - __start_ap_begin]
     mov rbp, rsp
     
-    mov rax, qword [0x8000 + __start_ap_entry_pt - __start_ap_begin]
-    call rax
+    mov rcx, qword [0x8000 + __start_ap_entry_pt - __start_ap_begin]
+    cld
+    call rcx
     
     .halt:
         hlt

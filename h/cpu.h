@@ -9,7 +9,7 @@
 
 typedef struct cpu_t
 {
-    dev_t *dev;
+    device_t *dev;
     uint32_t cpu_id;
     uint32_t proximity_domain;
     virt_addr_t stack_top;
@@ -27,10 +27,11 @@ typedef struct cpu_api_t
     void (*int_unlock)(void);
     int (*int_check)(void);
     int (*is_bsp)(void);
+    int (*start_ap)(uint32_t num);
 }cpu_api_t;
 
 
-int cpu_setup(dev_t *dev);
+int cpu_setup(device_t *dev);
 uint32_t cpu_id_get(void);
 int cpu_int_lock(void);
 int cpu_int_unlock(void);

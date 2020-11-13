@@ -112,7 +112,7 @@ static int acpi_unmap(virt_addr_t addr, virt_size_t size)
     if(size % PAGE_SIZE)
         size = ALIGN_UP(size, PAGE_SIZE);
 
-    status = (virt_addr_t) vmmgr_unmap(NULL, (void*)align_addr, size);
+    status = (virt_addr_t) vmmgr_unmap(NULL, align_addr, size);
 
     return(status);
 }

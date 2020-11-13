@@ -41,12 +41,12 @@ typedef struct ipi_packet_t
 
 typedef struct intc_api_t
 {
-    int  (*enable)          (dev_t *);
-    int  (*disable)         (dev_t *);
-    int  (*send_ipi)        (dev_t *, ipi_packet_t *);
+    int  (*enable)          (device_t *);
+    int  (*disable)         (device_t *);
+    int  (*send_ipi)        (device_t *, ipi_packet_t *);
 }intc_api_t;
 
-int intc_disable(dev_t *dev);
-int intc_enable(dev_t *dev);
-int intc_send_ipi(dev_t *dev, ipi_packet_t *ipi);
+int intc_disable(device_t *dev);
+int intc_enable(device_t *dev);
+int intc_send_ipi(device_t *dev, ipi_packet_t *ipi);
 #endif
