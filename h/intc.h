@@ -35,7 +35,7 @@ typedef struct ipi_packet_t
     uint8_t level;
     uint8_t vector;
     uint8_t trigger;
-    uint8_t dest_cpu;
+    uint32_t dest_cpu;
 }ipi_packet_t;
 
 

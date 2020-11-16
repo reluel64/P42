@@ -16,15 +16,11 @@ typedef struct interrupt_t
     void *pv;
 }interrupt_t;
 
-
 static list_head_t handlers[MAX_HANDLERS];
 static list_head_t eoi_handlers;
 static spinlock_t  lock;
 
-extern virt_addr_t dummy_interrupt;
-extern void __lidt(void *idtr);
-extern void __sti();
-extern void __cli();
+
 
 int isr_init(void)
 {
@@ -59,7 +55,6 @@ int isr_install
         linked_list_add_head(&handlers[index], &intr->node);
     else
         linked_list_add_head(&eoi_handlers, &intr->node);
-
 
     return(0);
 }
@@ -132,12 +127,11 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
     list_head_t *int_lh = NULL;
     interrupt_t *intr = NULL;
     list_node_t *node = NULL;
-
     
     if(index >= MAX_HANDLERS)
         return;
 
- //   kprintf("INTERRUPT 0x%x EC %x\n",index, error_code);
+    /*kprintf("INTERRUPT 0x%x EC %x CPUID %d\n",index, error_code, cpu_id_get());*/
 
     int_lh = &handlers[index];
 

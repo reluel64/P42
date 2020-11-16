@@ -8,15 +8,18 @@
 static list_head_t timers;
 static spinlock_t lock;
 
+
+static int fired = 0;
+
 void timer_update(uint32_t interval)
 {
     timer_t *tm = NULL;
     list_node_t *node = NULL;
     list_node_t *next = NULL;
-
-    spinlock_lock(&lock);
+    int int_status = 0;
+    spinlock_lock_interrupt(&lock, &int_status);
     node = linked_list_first(&timers);
-
+    
     while(node)
     {
         next = linked_list_next(node);
@@ -35,7 +38,8 @@ void timer_update(uint32_t interval)
 
         node = next;
     }
-    spinlock_unlock(&lock);
+   
+    spinlock_unlock_interrupt(&lock, int_status);
 }
 
 void *timer_arm
@@ -47,40 +51,40 @@ void *timer_arm
 )
 {
     timer_t *timer = NULL;
-
+    int     int_status = 0;
     timer = kcalloc(1, sizeof(timer_t));
     
-
     timer->handler = cb;
     timer->data = data;
     timer->ttime = delay;
-    spinlock_lock(&lock);
-    linked_list_add_head(&timers, &timer->node);
-    spinlock_unlock(&lock);
 
+    spinlock_lock_interrupt(&lock, &int_status);
+
+    linked_list_add_tail(&timers, &timer->node);
+
+    spinlock_unlock_interrupt(&lock, int_status);
     return(timer);
     
 }
 
 static int timer_sleep_callback(void *pv)
 {
-    spinlock_unlock((spinlock_t*)pv);
+    __sync_fetch_and_add((int*)pv, 1);
     return(1);
 }
 
 void timer_loop_delay(device_t *dev, uint32_t delay)
 {
-    spinlock_t wait;
     timer_t *timer = NULL;
-    spinlock_init(&wait);
+    int wait;
+    wait = 0;
 
-    /* deliberately lock the spinlock */
-    spinlock_lock(&wait);
+    timer = timer_arm(dev, timer_sleep_callback, (void*)&wait, delay);
 
-    timer = timer_arm(dev, timer_sleep_callback, &wait, delay);
-
-    spinlock_lock(&wait);
+    while(!__sync_bool_compare_and_swap(&wait, 1, 0))
+    {
+        __pause();
+    }
 
     kfree(timer);
-
 }

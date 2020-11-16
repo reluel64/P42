@@ -15,12 +15,6 @@
 #include <platform.h>
 #include <timer.h>
 
-extern void __sti();
-extern void __cli();
-extern int  __geti();
-extern void __lidt(idt64_ptr_t *p);
-extern uint64_t __read_apic_base(void);
-
 extern void __cpu_switch_stack
 (
     virt_addr_t *new_top,
@@ -28,19 +22,10 @@ extern void __cpu_switch_stack
     virt_addr_t *old_base
 );
 
-extern void __cpuid
-(
-    uint32_t *eax,
-    uint32_t *ebx,
-    uint32_t *ecx,
-    uint32_t *edx
-);
-
-
-
-extern phys_addr_t __read_cr3(void);
-extern virt_addr_t __stack_pointer(void);
-extern void        halt();
+extern void __sti();
+extern void __cli();
+extern int  __geti();
+extern void __lidt(idt64_ptr_t *);
 
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
@@ -64,7 +49,7 @@ extern virt_addr_t isr_no_ec_sz_end;
 extern virt_addr_t isr_ec_sz_start;
 extern virt_addr_t isr_ec_sz_end;
 
-static void pcpu_entry_point(void);
+
 
 #define _BSP_STACK_TOP ((virt_addr_t)&kstack_top)
 #define _BSP_STACK_BASE ((virt_addr_t)&kstack_base)
@@ -73,10 +58,15 @@ static void pcpu_entry_point(void);
 
 static volatile int cpu_on = 0;
 static spinlock_t lock;
+static void pcpu_entry_point(void);
 
 static int pcpu_is_bsp(void)
 {
-    return(!!((__read_apic_base() & (1 << 8))));
+    phys_addr_t apic_base = 0;
+
+    apic_base = __rdmsr(APIC_BASE_MSR);
+
+    return (!!(apic_base & (1 << 8)));
 }
 
 static uint32_t pcpu_id_get(void)
@@ -129,6 +119,49 @@ static uint32_t pcpu_id_get(void)
 
     return((ebx >> 24) & 0xFF);
 }
+
+static phys_addr_t pcpu_max_phys_address(void)
+{
+    uint32_t    eax       = 0;
+    uint32_t    ebx       = 0;
+    uint32_t    ecx       = 0;
+    uint32_t    edx       = 0;
+    phys_addr_t phys_addr = 1;
+
+    eax = 0x80000008;
+
+    __cpuid(&eax, &ebx, &ecx, &edx);
+
+    /* clear other stuff */
+    eax = eax & 0xFF;
+
+    /* compute the maximum physical address */
+    phys_addr = phys_addr << eax;
+
+    return(phys_addr - 1);
+}
+
+static virt_addr_t pcpu_max_virt_address(void)
+{
+    uint32_t    eax       = 0;
+    uint32_t    ebx       = 0;
+    uint32_t    ecx       = 0;
+    uint32_t    edx       = 0;
+    virt_addr_t virt_addr = 1;
+
+    eax = 0x80000008;
+
+    __cpuid(&eax, &ebx, &ecx, &edx);
+
+    /* clear other stuff */
+    eax = (eax >> 8) & 0xFF;
+
+    /* compute the maximum physical address */
+    virt_addr = virt_addr << eax;
+
+    return(virt_addr - 1);
+}
+
 
 static int pcpu_idt_entry_encode
 (
@@ -287,8 +320,6 @@ static void pcpu_stack_relocate
                        new_stack_top,
                        old_stack_base
                       );
-
-
 }
 
 
@@ -349,36 +380,50 @@ static int pcpu_bring_cpu_up
 
     /* wipe the ipi garbage */
     memset(&ipi, 0, sizeof(ipi_packet_t));
+
+    /* wipe the temporary stack */
     memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
+
+    /* set up some common stuff */
     ipi.dest      = IPI_DEST_NO_SHORTHAND;
     ipi.level     = IPI_LEVEL_ASSERT;
     ipi.dest_mode = IPI_DEST_MODE_PHYS;
     ipi.trigger   = IPI_TRIGGER_EDGE;
     ipi.vector    = 0x8;
-
-
+    
+    /* INIT IPI */
     ipi.type      = IPI_INIT;
     ipi.dest_cpu  = cpu;
 
     intc_send_ipi(issuer, &ipi);
 
-     ipi.type = IPI_START_AP;
-    cpu_on = 0;
-    for(uint16_t attempt = 0; attempt < 1000; attempt++)
+    /* Start-up SIPI */
+    ipi.type = IPI_START_AP;
+    
+    /* prepare cpu_on flag */
+    __sync_fetch_and_and(&cpu_on, 0);
+    
+    timer_loop_delay(NULL, 100);
+
+    /* Start up the CPU */
+    for(uint16_t attempt = 0; attempt < 100; attempt++)
     {
         intc_send_ipi(issuer, &ipi);
 
         /* wait for about 1ms */
-        timer_loop_delay(NULL, 100);
+        
+        for(uint32_t i = 0; i < 10;i++)
+        {   
+            timer_loop_delay(NULL, 1);
 
-        if(cpu_on)
-            break;
+            if(__sync_bool_compare_and_swap(&cpu_on, 1, 0))
+                return(0);
+        }
 
         if(attempt + 1 == 100)
         {
             vga_print("TIMED_OUT\n",0,0);
         }
-    
     }
 }
 
@@ -449,9 +494,11 @@ static int pcpu_ap_start(uint32_t num)
                 x2lapic = (ACPI_MADT_LOCAL_X2APIC*)subhdr;
 
                 if(cpu_id == x2lapic->LocalApicId)
+                {
                     continue;
+                }
                 else if(((x2lapic->LapicFlags & 0x1) == 0) && 
-                ((x2lapic->LapicFlags & 0x1) == 0))
+                        ((x2lapic->LapicFlags & 0x1) == 0))
                 {
                     continue;
                 }
@@ -468,9 +515,11 @@ static int pcpu_ap_start(uint32_t num)
                 lapic = (ACPI_MADT_LOCAL_APIC*)subhdr;
 
                 if(cpu_id == lapic->Id)
+                {
                     continue;
+                }
                 else if(((lapic->LapicFlags & 0x1) == 0) && 
-                ((lapic->LapicFlags & 0x1) == 0))
+                        ((lapic->LapicFlags & 0x1) == 0))
                 {
                     continue;
                 }
@@ -481,12 +530,16 @@ static int pcpu_ap_start(uint32_t num)
             }
         }
     }
-
+    /* unmap the 1:1 trampoline */
     vmmgr_temp_identity_unmap(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);
 
+    /* clear the trampoline from the area */
     memset((void*)trampoline, 0, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
 
+    /* unmap the trampoline */
     vmmgr_unmap(NULL, trampoline, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
+
+    AcpiPutTable((ACPI_TABLE_HEADER*)madt);
 
     return(0);
 }
@@ -496,14 +549,11 @@ static void pcpu_entry_point(void)
     uint32_t cpu_id = 0;
     device_t *dev = NULL;
 
-    ipi_packet_t ipi;
-
-
-   // kprintf("STARTED CPU %d\n", pcpu_id_get());
-
+    cpu_id = cpu_id_get();
+    /* Add cpu to the deivce manager */
     if(!devmgr_dev_create(&dev))
     {
-        cpu_id = pcpu_id_get();
+            
         devmgr_dev_name_set(dev,PLATFORM_CPU_NAME);
         devmgr_dev_type_set(dev, CPU_DEVICE_TYPE);
         devmgr_dev_index_set(dev, cpu_id);
@@ -512,44 +562,20 @@ static void pcpu_entry_point(void)
         {
             kprintf("FAILED TO ADD BSP CPU\n");
         }
-    }
+    }   
+    /* signal that the cpu is up and running */
 
+    __sync_fetch_and_or(&cpu_on, 1);
 
+    /* at this point we should jump in the scheduler */
 
-    if(cpu_id == 1)
-    {
-       // timer_loop_delay(NULL,1000);
-            
-
-       // timer_loop_delay(NULL,1000);
-            dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, 1);
-        kprintf("DEV NAME %s\n",devmgr_dev_type_get(dev));
-            if(dev == NULL)
-            {
-                kprintf("Warnign\n");
-                while(1);
-            }
-            
-
-
-    memset(&ipi, 0, sizeof(ipi));
-
-    ipi.dest = IPI_DEST_ALL;
-    ipi.vector = 64;
-    ipi.level     = IPI_LEVEL_ASSERT;
-    ipi.trigger   = IPI_TRIGGER_EDGE;
-    ipi.type      = 0;
-
-
-    intc_send_ipi(dev, &ipi);
-    kprintf("HELLO\n");
-    
-
-    }
-
-    cpu_on = 1;
+    while(1)
+        halt();
+   
 }
-
+/* Setup platform specific cpu stuff 
+ * this should be called in the context of the cpu
+ */ 
 static int pcpu_setup(cpu_t *cpu)
 {
     device_t *apic_dev = NULL;
@@ -585,7 +611,6 @@ static int pcpu_setup(cpu_t *cpu)
         {
             kprintf("%s %d failed to add device\n");
             return(-1);
-           /* devmgr_dev_delete(dev); */
         }
 
         kprintf("DEV_TYPE %s\n",devmgr_dev_type_get(apic_dev));
@@ -640,12 +665,9 @@ static uint32_t pcpu_get_domain
     return(domain);
 }
 
-static int pcpu_init(device_t *dev)
+static int pcpu_dev_init(device_t *dev)
 {
-    cpu_t *cpu = NULL;
-    uint32_t id = devmgr_dev_index_get(dev);
     cpu_setup(dev);
-
     return(0);
 }
 
@@ -715,7 +737,9 @@ static cpu_api_t cpu_api =
     .int_unlock     = __sti,
     .int_check      = __geti,
     .is_bsp         = pcpu_is_bsp,
-    .start_ap       = pcpu_ap_start
+    .start_ap       = pcpu_ap_start,
+    .max_virt_addr  = pcpu_max_virt_address,
+    .max_phys_addr  = pcpu_max_phys_address
 };
 
 static driver_t x86_cpu = 
@@ -723,17 +747,22 @@ static driver_t x86_cpu =
     .drv_name   = PLATFORM_CPU_NAME,
     .drv_type   = CPU_DEVICE_TYPE,
     .dev_probe  = pcpu_probe,
-    .dev_init   = pcpu_init,
+    .dev_init   = pcpu_dev_init,
     .dev_uninit = NULL,
     .drv_init   = pcpu_drv_init,
     .drv_uninit = NULL,
     .drv_api    = &cpu_api
 };
 
-int pcpu_register(cpu_api_t **api)
+int pcpu_init(void)
 {
-    (*api) = &cpu_api;
     devmgr_drv_add(&x86_cpu);
     devmgr_drv_init(&x86_cpu);
+    return(0);
+}
+
+int pcpu_api_register(cpu_api_t **api)
+{
+    *api = &cpu_api;
     return(0);
 }

@@ -7,7 +7,7 @@ global __start_ap_nx_on
 global __start_ap_stack
 global __start_ap_entry_pt
 
-extern  cpu_entry_point
+extern  pcpu_entry_point
 
 section .ap_init
 
@@ -88,9 +88,8 @@ enable_paging:
 
     mov ebx, cr0                      ; Activate long mode -
     or  ebx, 0x80000001                 ; - by enabling paging and protection simultaneously.
-  
     mov cr0, ebx                    
-    
+     
     lgdt [GDT_PTR64 - __start_ap_begin]
 
     jmp 0x8:(0x8000  + start_64 - __start_ap_begin)
@@ -130,13 +129,10 @@ GDT_PTR64_ADDR:
 
 ; define data
 __start_ap_pt_base  dq 0x0
-__start_ap_cpu_on   db 0x0
 __start_ap_pml5_on  db 0x0
 __start_ap_nx_on    db 0x0
 __start_ap_stack    dq 0x0
 __start_ap_entry_pt dq 0x0
-
-
 
 __start_ap_end:
 
@@ -152,7 +148,6 @@ ap_start_higher:
     mov ds, rax
     mov fs, rax
     mov gs, rax
-
 
     mov rsp, qword [0x8000 + __start_ap_stack - __start_ap_begin]
     mov rbp, rsp

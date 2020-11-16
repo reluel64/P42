@@ -370,13 +370,13 @@ static int ioapic_device_init
     }
 
     /* set up interrupt vectors */
-    for(uint32_t i = 0; i < ioapic->redir_tbl_count;i++)
+    for(uint32_t i = 0; i <= ioapic->redir_tbl_count;i++)
     {
         vector = i + ioapic->irq_base;
         tbl[i].intvec = vector;
     }
 
-    for(uint32_t i = 0; i < ioapic->redir_tbl_count; i++)
+    for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
     {
         vector = i + ioapic->irq_base;
         redir_vector = vector;
@@ -420,10 +420,10 @@ static int ioapic_device_init
             tbl[i] = tbl[redir_vector - ioapic->irq_base];
             tbl[redir_vector - ioapic->irq_base] = temp_tbl;
         }
-
+        
     }
 
-    for(uint32_t i = 0; i < ioapic->redir_tbl_count; i++)
+    for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
     {
         tbl[i].intvec += IRQ0;
         ioapic_write(dev, 0x10 + i * 2, tbl + i, sizeof(ioredtbl_t));

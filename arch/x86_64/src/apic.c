@@ -10,27 +10,10 @@
 #include <timer.h>
 #include <devmgr.h>
 #include <intc.h>
-
+#include <platform.h>
 #define LVT_ERROR_VECTOR (254)
-#define SPURIOUS_VECTOR  (255)
+#define SPURIOUS_VECTOR  (63)
 #define TIMER_VECTOR      (32)
-
-extern uint64_t __read_apic_base(void);
-extern void     __write_apic_base(uint64_t base);
-extern uint8_t  __check_x2apic(void);
-extern uint64_t  __max_physical_address();
-
-
-uint32_t apic_id_get(void);
-
-
-extern void __cpuid
-(
-    uint32_t *eax,
-    uint32_t *ebx,
-    uint32_t *ecx,
-    uint32_t *edx
-);
 
 static int apic_probe(device_t *dev)
 {
@@ -62,6 +45,8 @@ static int apic_lvt_error_handler(void *pv, uint64_t error)
     apic_device_t *apic = NULL;
     apic_reg_t *reg = NULL;
     
+
+    kprintf("ERROR %d\n",cpu_id_get());
  #if 0   
     apic = apic_get();
 
@@ -74,23 +59,16 @@ static int apic_lvt_error_handler(void *pv, uint64_t error)
     return(0);
 }
 
-static phys_addr_t apic_get_phys_addr(void)
+static phys_addr_t apic_phys_addr(void)
 {
     phys_addr_t apic_base = 0;
-    phys_addr_t max_phys_mask = 0;
 
-    apic_base = __read_apic_base();
-    max_phys_mask =  __max_physical_address();
+    apic_base = __rdmsr(APIC_BASE_MSR);
 
-    max_phys_mask -= 1;
-    max_phys_mask =  ((1ull << max_phys_mask) - 1);
+    apic_base &= ~((1 << 12) - 1);
 
-    apic_base &= ~(uint64_t)0xFFF;
-    apic_base &= max_phys_mask;
-
-   return(apic_base);
+    return(apic_base);
 }
-
 
 static int apic_send_ipi
 (
@@ -103,7 +81,7 @@ static int apic_send_ipi
     uint32_t reg_hi  = 0;
     
     apic = devmgr_dev_data_get(dev);
-    kprintf("IPI FROM %d\n",apic->apic_id);
+    
     reg_hi = ((uint32_t)ipi->dest_cpu) << 24;
    
     reg_low = ipi->vector;
@@ -119,7 +97,7 @@ static int apic_send_ipi
             break;
         
         default:
-            reg_low &= ~0b1110000000;
+           reg_low &= ~0b1110000000;
             break;
     }
 
@@ -180,10 +158,9 @@ static int apic_eoi_handler(void *pv, uint64_t ec)
 
 static int apic_cpu_init(device_t *dev)
 {
-    kprintf("initializing instance\n");
     volatile apic_reg_t *reg = NULL;
     apic_device_t *apic = NULL;
-
+    uint64_t apic_msr = 0;
     cpu_int_lock();
     
     apic = kmalloc(sizeof(apic_device_t));
@@ -193,7 +170,7 @@ static int apic_cpu_init(device_t *dev)
 
     kprintf("INIT_APIC\n");
 
-    apic->paddr   = apic_get_phys_addr();
+    apic->paddr   = apic_phys_addr();
     
     apic->apic_id = devmgr_dev_index_get(dev);
 
@@ -202,10 +179,11 @@ static int apic_cpu_init(device_t *dev)
                                 VMM_ATTR_WRITABLE |
                                 VMM_ATTR_STRONG_UNCACHED);
 
-    kprintf("APIC_BASE %x\n",apic->paddr);
+    kprintf("APIC_BASE 0x%x APIC ID %d\n",apic->paddr, apic->apic_id);
 
     if(apic->reg == NULL)
     {
+        kprintf("FAILED TO ALLOC\n");
         kfree(apic);
         return(-1);
     }
@@ -228,7 +206,7 @@ static int apic_cpu_init(device_t *dev)
     /* Enable APIC */
     (*reg->svr)     |= APIC_SVR_ENABLE_BIT | 
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
-        
+
     (*reg->eoi) = 0;
 
     cpu_int_unlock();

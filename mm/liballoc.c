@@ -256,6 +256,7 @@ void* PREFIX(malloc)(size_t req_size)
     struct liballoc_minor* min;
     struct liballoc_minor* new_min;
     size_t size = req_size;
+    int int_status = 0;
 
     // For alignment, we adjust size so there's enough space to align.
     if (ALIGNMENT > 1)
@@ -265,7 +266,7 @@ void* PREFIX(malloc)(size_t req_size)
     // So, ideally, we really want an alignment of 0 or 1 in order
     // to save space.
 
-    liballoc_lock();
+    liballoc_lock(&int_status);
 
     if (size == 0)
     {
@@ -275,7 +276,7 @@ void* PREFIX(malloc)(size_t req_size)
             __builtin_return_address(0));
         FLUSH();
 #endif
-        liballoc_unlock();
+        liballoc_unlock(int_status);
         return PREFIX(malloc)(1);
     }
 
@@ -294,7 +295,7 @@ void* PREFIX(malloc)(size_t req_size)
         l_memRoot = allocate_new_page(size);
         if (l_memRoot == NULL)
         {
-            liballoc_unlock();
+            liballoc_unlock(int_status);
 #ifdef DEBUG
             printf("liballoc: initial l_memRoot initialization failed\n", p);
             FLUSH();
@@ -409,7 +410,7 @@ void* PREFIX(malloc)(size_t req_size)
             printf("CASE 2: returning %x\n", p);
             FLUSH();
 #endif
-            liballoc_unlock();		// release the lock
+            liballoc_unlock(int_status);		// release the lock
 
             
             return p;
@@ -447,7 +448,7 @@ void* PREFIX(malloc)(size_t req_size)
             printf("CASE 3: returning %x\n", p);
             FLUSH();
 #endif
-            liballoc_unlock();		// release the lock
+            liballoc_unlock(int_status);		// release the lock
             return p;
         }
 
@@ -494,7 +495,7 @@ void* PREFIX(malloc)(size_t req_size)
                     printf("CASE 4.1: returning %x\n", p);
                     FLUSH();
 #endif
-                    liballoc_unlock();		// release the lock
+                    liballoc_unlock(int_status);		// release the lock
                     return p;
                 }
             }
@@ -537,7 +538,7 @@ void* PREFIX(malloc)(size_t req_size)
                     FLUSH();
 #endif
 
-                    liballoc_unlock();		// release the lock
+                    liballoc_unlock(int_status);		// release the lock
                     return p;
                 }
             }	// min->next != NULL
@@ -579,7 +580,7 @@ void* PREFIX(malloc)(size_t req_size)
 
 
 
-    liballoc_unlock();		// release the lock
+    liballoc_unlock(int_status);		// release the lock
 
 #ifdef DEBUG
     printf("All cases exhausted. No memory available.\n");
@@ -605,7 +606,7 @@ void PREFIX(free)(void* ptr)
 {
     struct liballoc_minor* min;
     struct liballoc_major* maj;
-
+    int int_status = 0;
     if (ptr == NULL)
     {
         l_warningCount += 1;
@@ -619,7 +620,7 @@ void PREFIX(free)(void* ptr)
 
     UNALIGN(ptr);
 
-    liballoc_lock();		// lockit
+    liballoc_lock(&int_status);		// lockit
 
 
     min = (struct liballoc_minor*)((uintptr_t)ptr - sizeof(struct liballoc_minor));
@@ -666,7 +667,7 @@ void PREFIX(free)(void* ptr)
         }
 
         // being lied to...
-        liballoc_unlock();		// release the lock
+        liballoc_unlock(int_status);		// release the lock
         return;
     }
     
@@ -725,7 +726,7 @@ void PREFIX(free)(void* ptr)
     FLUSH();
 #endif
 
-    liballoc_unlock();		// release the lock
+   liballoc_unlock(int_status);		// release the lock
 }
 
 
@@ -753,7 +754,7 @@ void* PREFIX(realloc)(void* p, size_t size)
     void* ptr;
     struct liballoc_minor* min;
     size_t real_size;
-
+    int int_status = 0;
     // Honour the case of size == 0 => free old and return NULL
     if (size == 0)
     {
@@ -768,7 +769,7 @@ void* PREFIX(realloc)(void* p, size_t size)
     ptr = p;
     UNALIGN(ptr);
 
-    liballoc_lock();		// lockit
+    liballoc_lock(&int_status);		// lockit
 
     min = (struct liballoc_minor*)((uintptr_t)ptr - sizeof(struct liballoc_minor));
 
@@ -814,7 +815,7 @@ void* PREFIX(realloc)(void* p, size_t size)
         }
 
         // being lied to...
-        liballoc_unlock();		// release the lock
+        liballoc_unlock(int_status);		// release the lock
         return NULL;
     }
 
@@ -825,11 +826,11 @@ void* PREFIX(realloc)(void* p, size_t size)
     if (real_size >= size)
     {
         min->req_size = size;
-        liballoc_unlock();
+        liballoc_unlock(int_status);
         return p;
     }
 
-    liballoc_unlock();
+    liballoc_unlock(int_status);
 
     // If we got here then we're reallocating to a block bigger than us.
     ptr = PREFIX(malloc)(size);					// We need to allocate new memory
@@ -846,9 +847,9 @@ void* PREFIX(realloc)(void* p, size_t size)
  * \return 0 if the lock was acquired successfully. Anything else is
  * failure.
  */
-int liballoc_lock()
+int liballoc_lock(int *int_status)
 {
-    spinlock_lock_interrupt(&lock);
+    spinlock_lock_interrupt(&lock, int_status);
     return(0);
 }
 
@@ -858,9 +859,9 @@ int liballoc_lock()
  *
  * \return 0 if the lock was successfully released.
  */
-int liballoc_unlock()
+int liballoc_unlock(int int_status)
 {
-    spinlock_unlock_interrupt(&lock);
+    spinlock_unlock_interrupt(&lock, int_status);
     return(0);
 }
 

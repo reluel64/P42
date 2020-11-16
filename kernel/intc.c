@@ -41,7 +41,7 @@ int intc_send_ipi(device_t *dev, ipi_packet_t *ipi)
 
     if(!devmgr_dev_type_match(dev, INTERRUPT_CONTROLLER))
         return(-1);
-
+kprintf("MATCH\n");
     api = devmgr_dev_api_get(dev);
 
     if(api == NULL || api->send_ipi ==  NULL)

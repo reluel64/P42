@@ -53,6 +53,7 @@ static int pic8259_drv_init(driver_t *drv)
 
     if(!devmgr_dev_create(&dev))
     {
+
         devmgr_dev_name_set(dev, PIC8259_DRIVER_NAME);
         devmgr_dev_type_set(dev, INTERRUPT_CONTROLLER);
         devmgr_dev_index_set(dev, 0);

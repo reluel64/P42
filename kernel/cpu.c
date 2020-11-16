@@ -6,20 +6,20 @@
 #include <platform.h>
 #include <vmmgr.h>
 
-static int cpu_dummy(void);
+extern int pcpu_api_register(cpu_api_t **api);
+extern int pcpu_init(void);
 
-static cpu_api_t dummy_funcs = 
+static cpu_api_t *api = NULL;
+
+
+int cpu_api_register(void)
 {
-    .int_lock   = cpu_dummy,
-    .int_unlock = cpu_dummy,
-    .int_check  = cpu_dummy
-};
-
-static cpu_api_t *api = &dummy_funcs;
+    pcpu_api_register(&api);
+}
 
 int cpu_init(void)
 {
-    return(pcpu_register(&api));
+    pcpu_init();
 }
 
 uint32_t cpu_id_get(void)
@@ -42,6 +42,9 @@ int cpu_setup(device_t *dev)
 
     api->int_lock();
 
+    /* set up some per-cpu stuff */
+    pagemgr_per_cpu_init();
+
     cpu_id = api->cpu_id_get();
 
     cpu = kcalloc(1, sizeof(cpu_t));
@@ -54,7 +57,7 @@ int cpu_setup(device_t *dev)
     stack = (virt_addr_t)vmmgr_alloc(NULL, 0x0, 
                                       PER_CPU_STACK_SIZE,
                                       VMM_ATTR_WRITABLE);
-    
+
     if(!stack)
     {
         kfree(cpu);
@@ -85,9 +88,6 @@ int cpu_setup(device_t *dev)
 
     /* Perform platform specific cpu setup */
     api->cpu_setup(cpu);
-    
-    /* set up some per-cpu stuff */
-    pagemgr_per_cpu_init();
 
     api->int_unlock();
     memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
@@ -116,12 +116,18 @@ int cpu_int_check(void)
     return(api->int_check());
 }
 
-static int cpu_dummy(void)
-{
-    return(0);
-}
-
 int cpu_ap_start(void)
 {
     return(api->start_ap(-1));
 }
+
+virt_addr_t cpu_virt_max(void)
+{
+    return(api->max_virt_addr());
+}
+
+phys_addr_t cpu_phys_max(void)
+{
+    return(api->max_phys_addr());
+}
+

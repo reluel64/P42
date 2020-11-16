@@ -10,7 +10,8 @@
 #define COMMAND_PORT 0x43
 #define CH0_PORT    0x40
 
-#define INTERRUPT_INTERVAL 16
+#define INTERRUPT_INTERVAL 1
+
 
 static int i = 0;
 static int seconds = 0;

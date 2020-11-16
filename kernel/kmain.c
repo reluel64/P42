@@ -14,6 +14,7 @@
 #include <timer.h>
 #include <cpu.h>
 #include <intc.h>
+#include <utils.h>
 int smp_start_cpus(void);
 
 extern int cpu_ap_setup(uint32_t cpu_id);
@@ -29,6 +30,9 @@ void kmain()
     uint32_t bus = 0;
     uint32_t base = 0;
 
+    /*register CPU API */
+    cpu_api_register();
+
     /* init polling console */
     init_serial();
 
@@ -37,7 +41,7 @@ void kmain()
     
     /* initialize early page frame manager */
     pfmgr_early_init();
-    
+ 
     /* initialize device manager */
     if(devmgr_init())
         return;
@@ -67,9 +71,23 @@ void kmain()
     /* initialize the CPU driver and the BSP */
     cpu_init();
 
-    cpu_ap_start();
 
-    vga_print("KERNEL_UP\n",0,0);
+   cpu_ap_start();
 
+#if 0
+    int j = 0;
+    while(1)
+    {
+        
+
+        kprintf("LOOPING %d\n", ++j);
+        timer_loop_delay(NULL, 10);
+    }
+#endif
+    kprintf("MAX_VIRT %x\n",cpu_virt_max());
+    kprintf("MAX_PHYS %x\n",cpu_phys_max());
+    cpu_int_check();
+
+
+    vmmgr_list_entries();
 }
-

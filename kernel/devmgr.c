@@ -129,9 +129,9 @@ int devmgr_dev_add(device_t *dev, device_t *parent)
       }
 
     status = devmgr_dev_probe(dev);
-    
+             
     devmgr_dev_add_to_parent(dev, parent);
-
+ 
     kprintf("PROBE_STATUS %d\n",status);
     /* If we found the driver, then initialize the device */
     if(!status)
@@ -139,7 +139,7 @@ int devmgr_dev_add(device_t *dev, device_t *parent)
         status = devmgr_dev_init(dev);
         kprintf("INIT_STATUS %d\n",status);
     }
-    
+
     return(status);
 }
 
@@ -150,6 +150,8 @@ int devmgr_dev_add(device_t *dev, device_t *parent)
 int devmgr_drv_add(driver_t *drv)
 {
     int status = 0;
+    
+    int int_status = 0;
 
     if(drv == NULL)
         return(-1);
@@ -162,11 +164,11 @@ int devmgr_drv_add(driver_t *drv)
     }
     else
     {
-        spinlock_lock_interrupt(&drv_list_lock);
+        spinlock_lock_interrupt(&drv_list_lock, &int_status);
 
         linked_list_add_tail(&drv_list, &drv->drv_node);
 
-        spinlock_unlock_interrupt(&drv_list_lock);
+        spinlock_unlock_interrupt(&drv_list_lock, int_status);
     }
 
     return(status);
@@ -179,11 +181,12 @@ int devmgr_drv_add(driver_t *drv)
 int devmgr_drv_remove(driver_t *drv)
 {
     int status = 0;
+    int int_status = 0;
 
     if(drv == NULL)
         return(-1);
 
-    spinlock_lock_interrupt(&drv_list_lock);
+    spinlock_lock_interrupt(&drv_list_lock, &int_status);
 
     /* If the driver is not in the list, then bail out */
     if(linked_list_find_node(&drv_list, &drv->drv_node))
@@ -192,7 +195,7 @@ int devmgr_drv_remove(driver_t *drv)
     else
         linked_list_remove(&drv_list, &drv->drv_node);
     
-    spinlock_unlock_interrupt(&drv_list_lock);
+    spinlock_unlock_interrupt(&drv_list_lock, int_status);
 
     return(status);
 }
@@ -256,10 +259,11 @@ static int devmgr_dev_add_to_parent
 
 driver_t *devmgr_drv_find(const char *name)
 {
-    driver_t       *drv  = NULL;
+    driver_t    *drv  = NULL;
     list_node_t *node = NULL;
+    int         int_status = 0;
 
-    spinlock_lock_interrupt(&drv_list_lock);
+    spinlock_lock_interrupt(&drv_list_lock, &int_status);
     node = linked_list_first(&drv_list);
     
     while(node)
@@ -276,7 +280,7 @@ driver_t *devmgr_drv_find(const char *name)
         node = linked_list_next(node);
     }
 
-    spinlock_unlock_interrupt(&drv_list_lock);
+    spinlock_unlock_interrupt(&drv_list_lock, int_status);
 
     return(drv);
 }
@@ -303,8 +307,9 @@ int devmgr_dev_probe(device_t *dev)
     int status        = -1;
     list_node_t *node = NULL;
     driver_t       *drv  = NULL;
+    int int_status = 0;
 
-    spinlock_lock_interrupt(&drv_list_lock);
+    spinlock_lock_interrupt(&drv_list_lock, &int_status);
 
     node = linked_list_first(&drv_list);
 
@@ -337,7 +342,7 @@ int devmgr_dev_probe(device_t *dev)
         node = linked_list_next(node);
     }
 
-    spinlock_unlock_interrupt(&drv_list_lock);
+    spinlock_unlock_interrupt(&drv_list_lock, int_status);
 
     return(status);
 }

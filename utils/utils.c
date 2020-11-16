@@ -9,7 +9,7 @@ void* memset(void* ptr, int value, size_t num)
     uint8_t* start = (uint8_t*)ptr;
     size_t   pos = 0;
     size_t wval = 0;
-
+#if 0
     wval = value & 0xff;
 
     for (int i = 1; i < sizeof(size_t); i++)
@@ -42,6 +42,9 @@ void* memset(void* ptr, int value, size_t num)
         *(uint16_t*)(&start[pos]) = (uint16_t)wval;
         pos += sizeof(uint16_t);
     }
+
+
+#endif
 
     while (num - pos >= sizeof(uint8_t))
     {

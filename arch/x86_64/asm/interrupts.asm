@@ -170,9 +170,10 @@ __sti:
 __geti:
     pushfq
     pop rax
-    and rax, (1 << 10)
-    shr rax, 10
+    shr rax, 9
+    and rax, 1
     ret
+
 
 ; Load the Interrupt Descriptor Table Register
 ; RDI is the address of the structure that 

@@ -7,7 +7,7 @@
 #include <vmmgr.h>
 #include <stddef.h>
 #include <utils.h>
-
+#include <cpu.h>
 
 extern virt_size_t __max_linear_address(void);
 
@@ -103,13 +103,16 @@ int vmmgr_init(void)
     vmmgr_free_mem_hdr_t *fh          = NULL;
 
     virt_addr_t           vmmgr_base  = 0;
+    virt_addr_t           vmmgr_max = 0;
+
+    vmmgr_max = cpu_virt_max();
 
     memset(&vmmgr_kernel_ctx, 0, sizeof(vmmgr_ctx_t));
-
+    
     if(pagemgr_init(&vmmgr_kernel_ctx.pagemgr) == -1)
         return(-1);
 
-    vmmgr_base = ~0ull - ((1ull << __max_linear_address() - 1) - 1);
+    vmmgr_base = (~vmmgr_base) - (vmmgr_max >> 1);
 
     kprintf("Initializing Virtual Memory Manager BASE - 0x%x\n",vmmgr_base);
 
@@ -128,10 +131,9 @@ int vmmgr_init(void)
                                                 vmmgr_kernel_ctx.vmmgr_base + VMM_FREE_OFFSET,
                                                 PAGE_SIZE,
                                                 PAGE_WRITABLE | PAGE_WRITE_THROUGH);
-    
 
-    kprintf("rsrvd_start 0x%x\n",rh);
-    kprintf("free_start 0x%x\n",fh);
+    kprintf("rsrvd_start 0x%x\n", rh);
+    kprintf("free_start 0x%x\n", fh);
 
     if(rh == NULL || fh == NULL)
         return(-1);
@@ -189,7 +191,6 @@ int vmmgr_init(void)
                   PAGE_SIZE,
                   VMM_RES_RSRVD);
 
-    
     return(0);
 }
 
@@ -709,21 +710,20 @@ int vmmgr_reserve
     uint32_t type
 )
 {
-    vmmgr_free_mem_hdr_t *fh = NULL;
-    vmmgr_rsrvd_mem_hdr_t *rh = NULL;
-
-    list_node_t      *fn        = NULL;
-    list_node_t      *next_fn   = NULL;
-    vmmgr_free_mem_t *fdesc        = NULL;
-    vmmgr_free_mem_t  rem;
+    vmmgr_free_mem_hdr_t  *fh      = NULL;
+    vmmgr_rsrvd_mem_hdr_t *rh      = NULL;
+    list_node_t           *fn      = NULL;
+    list_node_t           *next_fn = NULL;
+    vmmgr_free_mem_t      *fdesc   = NULL;
+    vmmgr_free_mem_t      rem;
     vmmgr_rsrvd_mem_t     rsrvd;
-
+    int                   int_status = 0;
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
     
-    spinlock_lock_interrupt(&ctx->lock);
+    spinlock_lock_interrupt(&ctx->lock, &int_status);
 
     fn           = linked_list_first(&ctx->free_mem);
     rsrvd.base   = virt;
@@ -746,7 +746,7 @@ int vmmgr_reserve
                 if(rem.length != 0)
                     vmmgr_put_free_mem(ctx, &rem);
 
-                spinlock_unlock_interrupt(&ctx->lock);
+                spinlock_unlock_interrupt(&ctx->lock, int_status);
                 return(0);
             }
         }
@@ -762,7 +762,7 @@ int vmmgr_reserve
 
     vmmgr_add_reserved(ctx, &rsrvd);
     
-    spinlock_unlock_interrupt(&ctx->lock);
+    spinlock_unlock_interrupt(&ctx->lock, int_status);
 
     return(0);
 }
@@ -777,14 +777,15 @@ virt_addr_t vmmgr_map
     uint32_t attr
 )
 {
-    list_node_t          *fn        = NULL;
-    list_node_t          *next_fn   = NULL;
-    vmmgr_free_mem_t     *fdesc     = NULL;
+    list_node_t          *fn         = NULL;
+    list_node_t          *next_fn    = NULL;
+    vmmgr_free_mem_t     *fdesc      = NULL;
     vmmgr_free_mem_t      rem;
-    vmmgr_free_mem_t     *from_slot = NULL;
-    vmmgr_free_mem_hdr_t *fh        = NULL;
-    virt_addr_t           ret_addr  = virt;
-    virt_addr_t           map_addr  = 0;
+    vmmgr_free_mem_t     *from_slot  = NULL;
+    vmmgr_free_mem_hdr_t *fh         = NULL;
+    virt_addr_t           ret_addr   = virt;
+    virt_addr_t           map_addr   = 0;
+    int                   int_status = 0;
 
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
@@ -794,7 +795,7 @@ virt_addr_t vmmgr_map
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
 
-    spinlock_lock_interrupt(&ctx->lock);
+    spinlock_lock_interrupt(&ctx->lock, &int_status);
 
     fn = linked_list_first(&ctx->free_mem);
 
@@ -862,7 +863,7 @@ virt_addr_t vmmgr_map
 
     if(from_slot->length < len)
     {
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(0);
     }
 
@@ -880,7 +881,7 @@ virt_addr_t vmmgr_map
 		pagemgr_unmap(&ctx->pagemgr,
                        from_slot->base, 
                        len);
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(0);
 	}
 
@@ -891,7 +892,7 @@ virt_addr_t vmmgr_map
         vmmgr_put_free_mem(ctx, &rem);
     }
 
-    spinlock_unlock_interrupt(&ctx->lock);
+    spinlock_unlock_interrupt(&ctx->lock, int_status);
 
     return(ret_addr);
 }
@@ -905,15 +906,16 @@ virt_addr_t vmmgr_alloc
     uint32_t attr
 )
 {
-    list_node_t          *fn        = NULL;
-    list_node_t          *next_fn   = NULL;
-    virt_addr_t           ret_addr  = 0;
-    virt_size_t           dist      = 0;
-    vmmgr_free_mem_t     *fdesc     = NULL;
+    list_node_t          *fn         = NULL;
+    list_node_t          *next_fn    = NULL;
+    virt_addr_t           ret_addr   = 0;
+    virt_size_t           dist       = 0;
+    vmmgr_free_mem_t     *fdesc      = NULL;
     vmmgr_free_mem_t      rem;
-    vmmgr_free_mem_t     *from_slot = NULL;
-    vmmgr_free_mem_hdr_t *fh        = NULL;
-    virt_addr_t           near_virt = 0;
+    vmmgr_free_mem_t     *from_slot  = NULL;
+    vmmgr_free_mem_hdr_t *fh         = NULL;
+    virt_addr_t           near_virt  = 0;
+    int                   int_status = 0;
 
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
@@ -923,7 +925,7 @@ virt_addr_t vmmgr_alloc
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
 
-    spinlock_lock_interrupt(&ctx->lock);
+    spinlock_lock_interrupt(&ctx->lock, &int_status);
     
     fn = linked_list_first(&ctx->free_mem);
 
@@ -994,7 +996,7 @@ virt_addr_t vmmgr_alloc
                 from_slot->length, 
                 len);
 
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(0);
     }
 
@@ -1006,7 +1008,7 @@ virt_addr_t vmmgr_alloc
     if(ret_addr == 0)
 	{
         kprintf("PG_ALLOC_FAIL\n");
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(0);
 	}
 
@@ -1017,7 +1019,7 @@ virt_addr_t vmmgr_alloc
         vmmgr_put_free_mem(ctx, &rem);
     }      
 
-    spinlock_unlock_interrupt(&ctx->lock);
+    spinlock_unlock_interrupt(&ctx->lock, int_status);
 
     return(ret_addr);
 }
@@ -1031,9 +1033,10 @@ int vmmgr_free
     virt_size_t len
 )
 {
-    virt_addr_t virt = (virt_addr_t)vaddr;
+    virt_addr_t      virt = (virt_addr_t)vaddr;
     vmmgr_free_mem_t mm;
-    int status  = 0;
+    int              status     = 0;
+    int              int_status = 0;
 
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
@@ -1047,17 +1050,17 @@ int vmmgr_free
     if(virt == 0)
         return(-1);
     
-    spinlock_lock_interrupt(&ctx->lock);
+    spinlock_lock_interrupt(&ctx->lock, &int_status);
     
     if(vmmgr_is_free(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(-1);
     }
 
     if(vmmgr_is_reserved(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(-1);
     }
 
@@ -1069,7 +1072,7 @@ int vmmgr_free
     if(status == 0)
         status = pagemgr_free(&ctx->pagemgr, virt, len);
 
-    spinlock_unlock_interrupt(&ctx->lock);
+    spinlock_unlock_interrupt(&ctx->lock, int_status);
 
     return(status);
 }
@@ -1085,6 +1088,7 @@ int vmmgr_unmap
     virt_addr_t virt = (virt_addr_t)vaddr;
     vmmgr_free_mem_t mm;
     int status  = 0;
+    int int_status = 0;
 
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
@@ -1098,16 +1102,16 @@ int vmmgr_unmap
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
 
-    spinlock_lock_interrupt(&ctx->lock);
+    spinlock_lock_interrupt(&ctx->lock, &int_status);
 
     if(vmmgr_is_free(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(-1);
     }
     if(vmmgr_is_reserved(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(-1);
     }
 
@@ -1119,7 +1123,7 @@ int vmmgr_unmap
     if(status == 0)
         status = pagemgr_unmap(&ctx->pagemgr, virt, len);
     
-    spinlock_unlock_interrupt(&ctx->lock);
+    spinlock_unlock_interrupt(&ctx->lock, int_status);
 
     return(status);
 }
@@ -1134,30 +1138,30 @@ int vmmgr_change_attrib
 )
 {
     int status = 0;
-
+    int int_status = 0;
     if(len == 0 || virt == 0)
         return(-1);
 
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
 
-    spinlock_lock_interrupt(&ctx->lock);
+    spinlock_lock_interrupt(&ctx->lock, &int_status);
 
     if(vmmgr_is_reserved(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(-1);
     }
     
     if(vmmgr_is_free(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock);
+        spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(-1);
     }
 
     status = pagemgr_attr_change(&ctx->pagemgr, virt, len, attr);
     
-    spinlock_unlock_interrupt(&ctx->lock);
+    spinlock_unlock_interrupt(&ctx->lock, int_status);
 
     return(status);
 }

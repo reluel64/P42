@@ -1,80 +1,27 @@
-global __has_nx
-global __max_linear_address
-global __max_physical_address
-global __enable_nx
-global __enable_pml5
-global __enable_wp
-global __read_apic_base
-global __write_apic_base
 global __wbinvd
 global __pause
-global __check_x2apic
-global __has_smt
 global __cpu_switch_stack
 global __stack_pointer
-global __freq_info
 global __cpuid
 global __wrmsr
 global __rdmsr
-global __tsc_info
 global __invd
+global __write_cr3
+global __read_cr3
+global __invlpg
+global __read_cr2
+global __write_cr2
+global __read_cr4
+global __write_cr4
+global __read_cr0
+global __write_cr0
 
-extern kstack_top
-extern kstack_base
-;----------------------------------------
-__has_nx:
-    xor rax, rax
-    mov eax, 0x80000001
-    cpuid
-    and edx, (1 << 20)
-    shr edx, 20
-    xor rax, rax
-    mov eax, edx
-    ret
 ;----------------------------------------
 __enable_nx:
     mov ecx, 0xC0000080               ; Read from the EFER MSR. 
     rdmsr    
     or eax, (1 << 11)                ; Set the NXE bit.
     wrmsr
-    ret
-;----------------------------------------
-__max_linear_address:
-    xor rax, rax
-    mov eax, 0x80000008
-    cpuid
-    and eax, 0xFF00
-    shr eax, 8
-    ret
-;----------------------------------------
-__max_physical_address:
-    xor rax, rax
-    mov eax, 0x80000008
-    cpuid
-    and eax, 0xFF
-    ret
-;----------------------------------------
-__read_apic_base:
-    mov ecx, 0x1B
-    rdmsr
-    shl rdx, 32
-    or rax, rdx
-    ret
-;----------------------------------------
-__write_apic_base:
-    mov ecx, 0x1B
-    mov eax, edi
-    wrmsr
-    ret
-;----------------------------------------
-__check_x2apic:
-    xor rax, rax
-    xor rcx, rcx
-    mov rax, 0x1
-    cpuid
-    and rcx, (1 << 21)
-    shr rcx, 21
-    mov rax, rcx
     ret
 ;----------------------------------------
 __wbinvd:
@@ -85,21 +32,7 @@ __pause:
     pause
     ret
 ;----------------------------------------
-__enable_wp:
-    mov rax, cr0
-    or eax, (1 << 16)
-    mov cr0, rax
-    ret
-;----------------------------------------
-__has_smt:
-    mov rax, 1
-    xor rdx,rdx
-    xor rcx, rcx
-    cpuid
-    and rdx, (1 << 28)
-    shr rdx, 28
-    mov rax, rdx
-    ret
+
 ;----------------------------------------
 ;RDI -> new stack base
 ;RSI -> new stack top
@@ -123,14 +56,6 @@ __stack_pointer:
     add rax, 8 ; compensate the push made for this call
     ret
 
-;----------------------------------------
-__has_apic:
-    mov eax, 0x1
-    cpuid
-    mov eax, edx
-    and eax, (1 << 9)
-    shr eax, 9
-    ret
 ;----------------------------------------
 ; RDI -> RAX
 ; RSI -> RBX
@@ -189,7 +114,46 @@ __wrmsr:
     mov edx, esi
     wrmsr
     ret
-
+;----------------------------------------
 __invd:
     invd
     ret
+;----------------------------------------
+__read_cr4:
+    mov rax, cr4
+    ret
+;----------------------------------------
+__write_cr4:
+    mov cr4, rdi
+    ret
+;----------------------------------------
+__write_cr3:
+    mov cr3, rdi
+    ret
+;----------------------------------------
+__read_cr3:
+    mov rax, cr3
+    ret
+;----------------------------------------
+__write_cr2:
+    mov rax, rdi
+    mov cr2, rax
+    ret
+;----------------------------------------
+__read_cr2:
+    mov rax, cr2
+    ret
+;----------------------------------------
+__write_cr0:
+    mov rax, rdi
+    mov cr0, rax
+    ret
+;----------------------------------------
+__read_cr0:
+    mov rax, cr0
+    ret
+;----------------------------------------
+__invlpg:
+    invlpg [rdi]
+    ret
+

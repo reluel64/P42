@@ -187,7 +187,7 @@ fill_pml4:
     mov cr4, eax
     
     mov eax, cr0
-    and eax, 0x7FFFFFFF                   ;clear bit 31 (PAGING)
+    and eax, ~(1 << 31)                   ;clear bit 31 (PAGING)
     mov cr0, eax
 
 ;Load CR3 with the PML4

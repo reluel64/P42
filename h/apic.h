@@ -4,6 +4,54 @@
 #include <stddef.h>
 
 #define APIC_DRIVER_NAME "APIC"
+#define APIC_BASE_MSR (0x1B)
+
+
+#define APIC_SVR_ENABLE_BIT (1 << 8)
+#define APIC_SVR_VEC_MASK(x)   (0xFF & (x))
+
+#define APIC_LVT_INT_MASK       (1 << 16)
+#define APIC_LVT_VECTOR_MASK(x)    (0xFF & (x))
+
+/* APIC ICR delivery mode*/
+#define APIC_ICR_DELIVERY_FIXED         (0b000)
+#define APIC_ICR_DELIVERY_LOWEST        (0b001)
+#define APIC_ICR_DELIVERY_SMI           (0b010)
+#define APIC_ICR_DELIVERY_RESERVED      (0b011)
+#define APIC_ICR_DELIVERY_NMI           (0b100)
+#define APIC_ICR_DELIVERY_INIT          (0b101)
+#define APIC_ICR_DELIVERY_INIT_DEASSERT (0b101)
+#define APIC_ICR_DELIVERY_START         (0b110)
+
+/* APIC ICR destination mode */
+#define APIC_ICR_DEST_MODE_PHYSICAL    (0x0)
+#define APIC_ICR_DEST_MODE_LOGICAL     (0x1)
+
+/* APIC destination shortland */
+#define APIC_ICR_DEST_SHORTLAND_NO              (0b00)
+#define APIC_ICR_DEST_SHORTLAND_SELF            (0b01)
+#define APIC_ICR_DEST_SHORTLAND_ALL_AND_SELF    (0b10)
+#define APIC_ICR_DEST_SHORTLAND_ALL_NO_SELF     (0b11)
+
+#define APIC_ICR_LEVEL_DEASSERT (0x0)
+#define APIC_ICR_LEVEL_ASSERT (0x1)
+
+/* APIC ICR trigger mode */
+#define APIC_ICR_TRIGGER_EDGE   (0x0)
+#define APIC_ICR_TRIGGER_LEVEL     (0x1)
+
+#define APIC_ICR_DELIVERY_STATUS_MASK (0x1000)
+
+#define APIC_ID_SMT(x)     ((x)         & 0xF)
+#define APIC_ID_CORE(x)    (((x) >> 4)  & 0xF)
+#define APIC_ID_MODULE(x)  (((x) >> 8)  & 0xF)
+#define APIC_ID_TILE(x)    (((x) >> 16) & 0xF)
+#define APIC_ID_DIE(x)     (((x) >> 20) & 0xF)
+#define APIC_ID_PACKAGE(x) (((x) >> 24) & 0xF)
+#define APIC_ID_CLUSTER(x) (((x) >> 28) & 0xF)
+
+
+
 
 typedef struct apic_reg_t
 {
@@ -68,50 +116,6 @@ typedef struct apic_drv_private_t
 }apic_drv_private_t;
 
 
-#define APIC_SVR_ENABLE_BIT (1 << 7)
-#define APIC_SVR_VEC_MASK(x)   (0xFF & (x))
-
-#define APIC_LVT_INT_MASK       (1 << 16)
-#define APIC_LVT_VECTOR_MASK(x)    (0xFF & (x))
-
-/* APIC ICR delivery mode*/
-#define APIC_ICR_DELIVERY_FIXED         (0b000)
-#define APIC_ICR_DELIVERY_LOWEST        (0b001)
-#define APIC_ICR_DELIVERY_SMI           (0b010)
-#define APIC_ICR_DELIVERY_RESERVED      (0b011)
-#define APIC_ICR_DELIVERY_NMI           (0b100)
-#define APIC_ICR_DELIVERY_INIT          (0b101)
-#define APIC_ICR_DELIVERY_INIT_DEASSERT (0b101)
-#define APIC_ICR_DELIVERY_START         (0b110)
-
-/* APIC ICR destination mode */
-#define APIC_ICR_DEST_MODE_PHYSICAL    (0x0)
-#define APIC_ICR_DEST_MODE_LOGICAL     (0x1)
-
-/* APIC destination shortland */
-#define APIC_ICR_DEST_SHORTLAND_NO              (0b00)
-#define APIC_ICR_DEST_SHORTLAND_SELF            (0b01)
-#define APIC_ICR_DEST_SHORTLAND_ALL_AND_SELF    (0b10)
-#define APIC_ICR_DEST_SHORTLAND_ALL_NO_SELF     (0b11)
-
-#define APIC_ICR_LEVEL_DEASSERT (0x0)
-#define APIC_ICR_LEVEL_ASSERT (0x1)
-
-/* APIC ICR trigger mode */
-#define APIC_ICR_TRIGGER_EDGE   (0x0)
-#define APIC_ICR_TRIGGER_LEVEL     (0x1)
-
-#define APIC_ICR_DELIVERY_STATUS_MASK (0x1000)
-
-#define APIC_ID_SMT(x)     ((x)         & 0xF)
-#define APIC_ID_CORE(x)    (((x) >> 4)  & 0xF)
-#define APIC_ID_MODULE(x)  (((x) >> 8)  & 0xF)
-#define APIC_ID_TILE(x)    (((x) >> 16) & 0xF)
-#define APIC_ID_DIE(x)     (((x) >> 20) & 0xF)
-#define APIC_ID_PACKAGE(x) (((x) >> 24) & 0xF)
-#define APIC_ID_CLUSTER(x) (((x) >> 28) & 0xF)
-
-uint8_t apic_is_bsp(void);
 
 
 #endif

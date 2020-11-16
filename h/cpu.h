@@ -28,6 +28,8 @@ typedef struct cpu_api_t
     int (*int_check)(void);
     int (*is_bsp)(void);
     int (*start_ap)(uint32_t num);
+    virt_addr_t (*max_virt_addr)(void);
+    phys_addr_t (*max_phys_addr)(void);
 }cpu_api_t;
 
 
@@ -37,4 +39,7 @@ int cpu_int_lock(void);
 int cpu_int_unlock(void);
 int cpu_int_check(void);
 int cpu_init(void);
+virt_addr_t cpu_virt_max();
+phys_addr_t cpu_phys_max();
+int cpu_api_register(void);
 #endif
