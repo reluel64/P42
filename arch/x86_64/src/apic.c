@@ -12,7 +12,7 @@
 #include <intc.h>
 #include <platform.h>
 #define LVT_ERROR_VECTOR (254)
-#define SPURIOUS_VECTOR  (63)
+#define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
 static int apic_spurious_handler(void *pv, uint64_t error)
@@ -22,20 +22,6 @@ static int apic_spurious_handler(void *pv, uint64_t error)
 
 static int apic_lvt_error_handler(void *pv, uint64_t error)
 {
-    apic_device_t *apic = NULL;
-    apic_reg_t *reg = NULL;
-    
-
-    kprintf("ERROR %d\n",cpu_id_get());
- #if 0   
-    apic = apic_get();
-
-    if(apic == NULL)
-        return(-1);
-
-    reg = (apic_reg_t*)apic->reg;
-    reg->eoi[0] = 0x1;    
-#endif
     return(0);
 }
 
@@ -65,7 +51,7 @@ static int apic_send_ipi
 
     uint32_t reg_low = 0;
     uint32_t reg_hi  = 0;
-    
+    kprintf("ISSUING\n");
     drv = devmgr_dev_drv_get(dev);
 
     apic_drv = devmgr_drv_data_get(drv);

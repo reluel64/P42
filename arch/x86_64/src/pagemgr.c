@@ -1465,12 +1465,15 @@ static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
     return(0);
 }
 
+volatile  int pend = 0;
+
 static int pagemgr_per_cpu_invl_handler
 (
     void *pv, 
     uint64_t error_code
 )
 {
+    __write_cr3(__read_cr3());
     return(0);
 }
 
