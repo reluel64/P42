@@ -473,11 +473,9 @@ void *devmgr_dev_api_get(device_t *dev)
 device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
 {
     device_t *dev = NULL;
-    device_t **dev_stack = NULL;
+    device_t *dev_stack[DEVMGR_SRCH_STACK];
     list_node_t *node        = NULL;
     int          stack_index = 0;
-
-    dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(device_t));
 
     memset(dev_stack, 0, sizeof(dev_stack));
 

@@ -112,7 +112,9 @@ typedef struct apic_device_t
 
 typedef struct apic_drv_private_t
 {
-    char holder;
+    phys_addr_t paddr;
+    virt_addr_t vaddr;
+    volatile apic_reg_t *reg;
 }apic_drv_private_t;
 
 

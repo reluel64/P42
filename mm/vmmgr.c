@@ -1145,6 +1145,9 @@ int vmmgr_change_attrib
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
 
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
     spinlock_lock_interrupt(&ctx->lock, &int_status);
 
     if(vmmgr_is_reserved(ctx, virt, len))

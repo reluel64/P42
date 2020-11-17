@@ -249,7 +249,7 @@ static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
 
     cpu_drv->idt_ptr.addr = (virt_addr_t)idt;
     cpu_drv->idt_ptr.limit = IDT_TABLE_SIZE - 1;
- 
+
     return(0);
 }
 
@@ -702,6 +702,9 @@ static int pcpu_drv_init(driver_t *drv)
     /* Setup the IDT */
     pcpu_idt_setup(cpu_drv);
     
+    /* make IDT read-only */
+    vmmgr_change_attrib(NULL, (virt_addr_t)cpu_drv->idt, IDT_TABLE_SIZE, ~VMM_ATTR_WRITABLE);
+
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);
     
