@@ -1,3 +1,4 @@
+
 #include <spinlock.h>
 #include <liballoc.h>
 #include <utils.h>
@@ -5,6 +6,7 @@
 #include <cpu.h>
 #include <platform.h>
 #include <vmmgr.h>
+#include <intc.h>
 
 extern int pcpu_api_register(cpu_api_t **api);
 extern int pcpu_init(void);
@@ -131,3 +133,29 @@ phys_addr_t cpu_phys_max(void)
     return(api->max_phys_addr());
 }
 
+int cpu_issue_ipi
+(
+    uint8_t dest, 
+    uint32_t cpu,
+    uint32_t type
+)
+{
+    uint32_t vector = 0xFF;
+
+    switch(type)
+    {
+        case IPI_RESCHED:
+            vector = PLATFORM_RESCHED_VECTOR;
+            break;
+
+        case IPI_INVLPG:
+            vector = PLATFORM_PG_INVALIDATE_VECTOR;
+            break;
+
+        default:
+            return(-1);
+            break;
+    }
+    
+    return(api->ipi_issue(dest, cpu, vector));
+}

@@ -22,6 +22,10 @@ extern virt_addr_t kstack_top;
 #define MAX_HANDLERS       (256)
 
 
+#define PLATFORM_RESCHED_VECTOR (240)
+#define PLATFORM_PG_INVALIDATE_VECTOR  (127)
+#define PLATFORM_PG_FAULT_VECTOR       (14)
+
 /* Interrupt Descriptor */
 typedef struct _idt_entry
 {
@@ -53,6 +57,7 @@ typedef struct cpu_platform_t
 
 typedef struct cpu_platfrom_driver_t
 {
+    uint8_t       cpu_name[64];
     idt64_entry_t *idt;
     idt64_ptr_t    idt_ptr;
 }cpu_platform_driver_t;

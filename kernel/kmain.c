@@ -59,20 +59,21 @@ void kmain()
     /* initialize interrupt handler */
     if(isr_init())
         return;
-
+kprintf("HELLO WORLKD\n");
     /* install ISR handlers for the page manager */
     if(pagemgr_install_handler())
         return;
 
-    kprintf("HELLO WORLKD\n");
+    
 
     platform_early_init();
 
     /* initialize the CPU driver and the BSP */
     cpu_init();
 
+    cpu_ap_start();
 
-   cpu_ap_start();
+    devmgr_show_devices();
 
 #if 0
     int j = 0;
@@ -84,20 +85,10 @@ void kmain()
         timer_loop_delay(NULL, 10);
     }
 #endif
-#include <intc.h>
-    device_t *dev = devmgr_dev_get_by_name("APIC", 0);
-    ipi_packet_t ipi;
 
-    memset(&ipi, 0, sizeof(ipi_packet_t));
 
-    ipi.dest = IPI_DEST_ALL;
-    ipi.vector = 64;
-    ipi.trigger = IPI_TRIGGER_EDGE;
-    ipi.level = IPI_LEVEL_ASSERT;
-    intc_send_ipi(dev, &ipi);
 
-    kprintf("MAX_VIRT %x\n",cpu_virt_max());
-    kprintf("MAX_PHYS %x\n",cpu_phys_max());
+
    // cpu_int_check();
 
 

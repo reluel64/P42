@@ -14,6 +14,7 @@ extern int pic8259_register(void);
 extern int acpi_mem_mgr_on(void);
 extern int ioapic_register(void);
 extern int pit8254_register(void);
+extern int apic_timer_register(void);
 
 int platform_register(void)
 {
@@ -42,5 +43,9 @@ int platform_early_init(void)
     pit8254_register();
 
     apic_register();
+    apic_timer_register();
 
+    return(0);
 }
+
+

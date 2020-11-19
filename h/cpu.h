@@ -30,6 +30,7 @@ typedef struct cpu_api_t
     int (*start_ap)(uint32_t num);
     virt_addr_t (*max_virt_addr)(void);
     phys_addr_t (*max_phys_addr)(void);
+    int (*ipi_issue)(uint8_t, uint32_t, uint32_t);
 }cpu_api_t;
 
 
@@ -42,4 +43,10 @@ int cpu_init(void);
 virt_addr_t cpu_virt_max();
 phys_addr_t cpu_phys_max();
 int cpu_api_register(void);
+int cpu_issue_ipi
+(
+    uint8_t dest, 
+    uint32_t cpu,
+    uint32_t type
+);
 #endif

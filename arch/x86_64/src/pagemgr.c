@@ -13,6 +13,7 @@
 #include <spinlock.h>
 #include <vmmgr.h>
 #include <platform.h>
+#include <intc.h>
 
 typedef struct pagemgr_root_t
 {
@@ -105,8 +106,15 @@ static int         pagemgr_per_cpu_invl_handler
 
 int pagemgr_install_handler(void)
 {
-    isr_install(pagemgr_page_fault_handler, &page_manager, 14, 0);
-    isr_install(pagemgr_per_cpu_invl_handler, NULL, 64, 0);
+    isr_install(pagemgr_page_fault_handler, 
+                &page_manager, 
+                PLATFORM_PG_FAULT_VECTOR, 
+                0);
+
+    isr_install(pagemgr_per_cpu_invl_handler, 
+                NULL, 
+                PLATFORM_PG_INVALIDATE_VECTOR, 
+                0);
 }
 
 uint8_t pagemgr_pml5_support(void)
@@ -805,6 +813,7 @@ static inline void pagemgr_invalidate(virt_addr_t addr)
     __invlpg(addr);
 
     /* For other CPUs we should at least send IPI */
+    cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
 
 }
 
@@ -1318,6 +1327,7 @@ virt_addr_t pagemgr_alloc
         kprintf("NO MORE BMP\n");
         spinlock_unlock_interrupt(&ctx->lock, int_status);
         pagemgr_free(ctx, virt, path.virt_off);
+        kprintf("RELEASED\n");
         return(0);
     }
 
@@ -1391,7 +1401,7 @@ int pagemgr_free
     PAGE_PATH_RESET(&path);
     
     spinlock_lock_interrupt(&ctx->lock, &int_status);
-
+  
     ret = pagemgr_check_page_path(&path);
 
     if(ret != 0)
@@ -1466,13 +1476,18 @@ static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
 }
 
 volatile  int pend = 0;
-
+static spinlock_t tlock;
 static int pagemgr_per_cpu_invl_handler
 (
     void *pv, 
     uint64_t error_code
 )
 {
+    int status = 0;
+  //  spinlock_lock_interrupt(&tlock, &status);
+    
+   // kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
+   // spinlock_unlock_interrupt(&tlock, status);
     __write_cr3(__read_cr3());
     return(0);
 }

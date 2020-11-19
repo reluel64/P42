@@ -20,8 +20,8 @@ typedef struct timer_t
 
 typedef struct timer_api_t
 {
-    int (*arm_timer)(device_t *, uint32_t delay);
-    int (*disarm_timer)(device_t *);
+    int (*arm_timer)(device_t *, timer_t *);
+    int (*disarm_timer)(device_t *, timer_t *);
 
 }timer_api_t;
 
@@ -34,5 +34,5 @@ void *timer_arm
 );
 void timer_loop_delay(device_t *dev, uint32_t delay);
 
-void timer_update(uint32_t interval);
+void timer_update(list_head_t *queue, uint32_t interval);
 #endif

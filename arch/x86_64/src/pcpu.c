@@ -14,6 +14,8 @@
 #include <devmgr.h>
 #include <platform.h>
 #include <timer.h>
+#include <i8254.h>
+#include <apic_timer.h>
 
 extern void __cpu_switch_stack
 (
@@ -376,7 +378,8 @@ static int pcpu_bring_cpu_up
     uint32_t cpu
 )
 {
-    ipi_packet_t           ipi;
+    ipi_packet_t ipi;
+    device_t     *timer_dev = NULL;
 
     /* wipe the ipi garbage */
     memset(&ipi, 0, sizeof(ipi_packet_t));
@@ -403,7 +406,9 @@ static int pcpu_bring_cpu_up
     /* prepare cpu_on flag */
     __sync_fetch_and_and(&cpu_on, 0);
     
-    timer_loop_delay(NULL, 100);
+    timer_dev = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
+
+    timer_loop_delay(timer_dev, 100);
 
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < 100; attempt++)
@@ -414,7 +419,7 @@ static int pcpu_bring_cpu_up
         
         for(uint32_t i = 0; i < 10;i++)
         {   
-            timer_loop_delay(NULL, 1);
+            timer_loop_delay(timer_dev, 1);
 
             if(__sync_bool_compare_and_swap(&cpu_on, 1, 0))
                 return(0);
@@ -425,6 +430,36 @@ static int pcpu_bring_cpu_up
             vga_print("TIMED_OUT\n",0,0);
         }
     }
+
+    return(-1);
+}
+
+static int pcpu_issue_ipi
+(
+    uint8_t dest, 
+    uint32_t cpu,
+    uint32_t vector
+)
+{
+    ipi_packet_t ipi;
+    device_t *dev   = NULL;
+    uint32_t cpu_id = 0;
+
+    memset(&ipi, 0, sizeof(ipi_packet_t));
+
+    ipi.dest      = dest;
+    ipi.level     = IPI_LEVEL_ASSERT;
+    ipi.dest_mode = IPI_DEST_MODE_PHYS;
+    ipi.trigger   = IPI_TRIGGER_EDGE;
+    ipi.vector    = vector;
+    ipi.dest_cpu  = cpu;
+
+    cpu_id = cpu_id_get();
+    dev    = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
+
+    intc_send_ipi(dev, &ipi);
+
+    return(0);
 }
 
 static int pcpu_ap_start(uint32_t num)
@@ -439,6 +474,7 @@ static int pcpu_ap_start(uint32_t num)
     ACPI_SUBTABLE_HEADER   *subhdr  = NULL;
     int                    use_x2_apic = 0;
 
+    kprintf("STARTING APs\n");
     cpu_id = pcpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id); 
 
@@ -498,7 +534,7 @@ static int pcpu_ap_start(uint32_t num)
                     continue;
                 }
                 else if(((x2lapic->LapicFlags & 0x1) == 0) && 
-                        ((x2lapic->LapicFlags & 0x1) == 0))
+                        ((x2lapic->LapicFlags & 0x2) == 0))
                 {
                     continue;
                 }
@@ -519,7 +555,7 @@ static int pcpu_ap_start(uint32_t num)
                     continue;
                 }
                 else if(((lapic->LapicFlags & 0x1) == 0) && 
-                        ((lapic->LapicFlags & 0x1) == 0))
+                        ((lapic->LapicFlags & 0x2) == 0))
                 {
                     continue;
                 }
@@ -578,9 +614,10 @@ static void pcpu_entry_point(void)
  */ 
 static int pcpu_setup(cpu_t *cpu)
 {
-    device_t *apic_dev = NULL;
-    driver_t *drv = NULL;
-    cpu_platform_t *pcpu = NULL;
+    device_t *apic_dev          = NULL;
+    device_t *apic_timer_dev    = NULL;
+    driver_t *drv               = NULL;
+    cpu_platform_t *pcpu        = NULL;
     cpu_platform_driver_t *pdrv = NULL;
 
     drv = devmgr_dev_drv_get(cpu->dev);
@@ -607,13 +644,27 @@ static int pcpu_setup(cpu_t *cpu)
         devmgr_dev_type_set(apic_dev, INTERRUPT_CONTROLLER);
         devmgr_dev_index_set(apic_dev, cpu->cpu_id);
 
-        if(devmgr_dev_add(apic_dev, NULL))
+        if(devmgr_dev_add(apic_dev, cpu->dev))
         {
-            kprintf("%s %d failed to add device\n");
+            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
             return(-1);
         }
 
         kprintf("DEV_TYPE %s\n",devmgr_dev_type_get(apic_dev));
+    }
+  
+
+    if(!devmgr_dev_create(&apic_timer_dev))
+    {
+        devmgr_dev_name_set(apic_timer_dev, APIC_TIMER_NAME);
+        devmgr_dev_type_set(apic_timer_dev, TIMER_DEVICE_TYPE);
+        devmgr_dev_index_set(apic_timer_dev, cpu->cpu_id);
+
+        if(devmgr_dev_add(apic_timer_dev, apic_dev))
+        {
+            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
+            return(-1);
+        }
     }
 
     return(0);
@@ -692,18 +743,23 @@ static int pcpu_drv_init(driver_t *drv)
     uint32_t cpu_id = 0;
     cpu_platform_driver_t *cpu_drv = NULL;
 
+
     spinlock_init(&lock);
 
 
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
 
-    cpu_drv->idt = (idt64_entry_t*)vmmgr_alloc(NULL, 0x0, IDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
+    cpu_drv->idt = (idt64_entry_t*)vmmgr_alloc(NULL, 0x0, 
+                                               IDT_TABLE_SIZE, 
+                                               VMM_ATTR_WRITABLE);
 
     /* Setup the IDT */
     pcpu_idt_setup(cpu_drv);
     
     /* make IDT read-only */
-    vmmgr_change_attrib(NULL, (virt_addr_t)cpu_drv->idt, IDT_TABLE_SIZE, ~VMM_ATTR_WRITABLE);
+    vmmgr_change_attrib(NULL, (virt_addr_t)cpu_drv->idt, 
+                        IDT_TABLE_SIZE, 
+                        ~VMM_ATTR_WRITABLE);
 
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);
@@ -742,7 +798,8 @@ static cpu_api_t cpu_api =
     .is_bsp         = pcpu_is_bsp,
     .start_ap       = pcpu_ap_start,
     .max_virt_addr  = pcpu_max_virt_address,
-    .max_phys_addr  = pcpu_max_phys_address
+    .max_phys_addr  = pcpu_max_phys_address,
+    .ipi_issue      = pcpu_issue_ipi
 };
 
 static driver_t x86_cpu = 

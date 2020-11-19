@@ -5,20 +5,18 @@
 #include <utils.h>
 #include <liballoc.h>
 
-static list_head_t timers;
-static spinlock_t lock;
-
-
-static int fired = 0;
-
-void timer_update(uint32_t interval)
+void timer_update
+(
+    list_head_t *queue, 
+    uint32_t interval
+)
 {
     timer_t *tm = NULL;
     list_node_t *node = NULL;
     list_node_t *next = NULL;
     int int_status = 0;
-    spinlock_lock_interrupt(&lock, &int_status);
-    node = linked_list_first(&timers);
+
+    node = linked_list_first(queue);
     
     while(node)
     {
@@ -29,7 +27,7 @@ void timer_update(uint32_t interval)
         {
             if(tm->handler(tm->data))
             {
-                linked_list_remove(&timers, &tm->node);
+                linked_list_remove(queue, &tm->node);
             }
             tm->ctime = 0;
         }
@@ -38,8 +36,6 @@ void timer_update(uint32_t interval)
 
         node = next;
     }
-   
-    spinlock_unlock_interrupt(&lock, int_status);
 }
 
 void *timer_arm
@@ -50,19 +46,25 @@ void *timer_arm
     uint32_t delay
 )
 {
+    timer_api_t *api = NULL;
     timer_t *timer = NULL;
     int     int_status = 0;
+    
+    api = devmgr_dev_api_get(dev);
+
+
+    if(api == NULL)
+        return(NULL);
+    
     timer = kcalloc(1, sizeof(timer_t));
     
     timer->handler = cb;
     timer->data = data;
     timer->ttime = delay;
 
-    spinlock_lock_interrupt(&lock, &int_status);
+   
+    api->arm_timer(dev, timer);
 
-    linked_list_add_tail(&timers, &timer->node);
-
-    spinlock_unlock_interrupt(&lock, int_status);
     return(timer);
     
 }
@@ -78,8 +80,14 @@ void timer_loop_delay(device_t *dev, uint32_t delay)
     timer_t *timer = NULL;
     int wait;
     wait = 0;
-
+    kprintf("TIMER_DEVICE %x\n",dev);
     timer = timer_arm(dev, timer_sleep_callback, (void*)&wait, delay);
+
+    if(timer == NULL)
+    {
+        
+        return;
+    }
 
     while(!__sync_bool_compare_and_swap(&wait, 1, 0))
     {

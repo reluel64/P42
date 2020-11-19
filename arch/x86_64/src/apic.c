@@ -51,7 +51,7 @@ static int apic_send_ipi
 
     uint32_t reg_low = 0;
     uint32_t reg_hi  = 0;
-    kprintf("ISSUING\n");
+
     drv = devmgr_dev_drv_get(dev);
 
     apic_drv = devmgr_drv_data_get(drv);
@@ -171,7 +171,7 @@ static int apic_dev_init(device_t *dev)
     if(apic == NULL)
         return(-1);
 
-    kprintf("INIT_APIC\n");
+    kprintf("INIT_APIC 0x%x\n", dev);
 
     apic->apic_id = devmgr_dev_index_get(dev);
 
@@ -193,9 +193,9 @@ static int apic_dev_init(device_t *dev)
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
 
     (*reg->eoi) = 0;
-
+ 
     cpu_int_unlock();
-
+   
     return(0);
 }
 
@@ -220,7 +220,6 @@ static int apic_drv_init(driver_t *drv)
     isr_install(apic_lvt_error_handler, drv, LVT_ERROR_VECTOR,0);
     isr_install(apic_spurious_handler, drv, SPURIOUS_VECTOR,0);
     isr_install(apic_eoi_handler, drv, 0, 1);
-
     devmgr_drv_data_set(drv, apic_drv);
 
     return(0);

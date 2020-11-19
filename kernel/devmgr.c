@@ -27,7 +27,7 @@ static int devmgr_dev_add_to_parent
 
 int devmgr_show_devices(void)
 {
-        device_t *dev = NULL;
+    device_t *dev = NULL;
     device_t **dev_stack = NULL;
     list_node_t *node        = NULL;
     int          stack_index = 0;
@@ -50,7 +50,7 @@ int devmgr_show_devices(void)
                     dev_stack[stack_index++] = dev;
             }
 
-            kprintf("DEVICE %s TYPE %s Index %d\n",dev->dev_name,dev->dev_type, dev->index);
+            kprintf("DEVICE %s TYPE %s Index %d PARENT 0x%x\n",dev->dev_name,dev->dev_type, dev->index,dev->parent);
 
             node = linked_list_next(node);
         }
@@ -513,7 +513,7 @@ device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
         if(node == NULL)
             break;
     }
-    kfree(dev_stack);
+
     return(NULL);
 }
 
