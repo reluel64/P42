@@ -120,18 +120,15 @@ int isr_uninstall
     return(0);
 }
 
-
-void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
+void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 {
     int status = 0;
     list_head_t *int_lh = NULL;
     interrupt_t *intr = NULL;
     list_node_t *node = NULL;
-    
+    interrupt_frame_t *int_frame = 0;
     if(index >= MAX_HANDLERS)
         return;
-
-    /*kprintf("INTERRUPT 0x%x EC %x CPUID %d\n",index, error_code, cpu_id_get());*/
 
     int_lh = &handlers[index];
 
@@ -142,7 +139,7 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
         intr = (interrupt_t*)node;
 
         if(intr->ih)
-            status = intr->ih(intr->pv, error_code);
+            status = intr->ih(intr->pv, iframe);
 
 
         if(!status)
@@ -163,7 +160,7 @@ void isr_dispatcher(uint64_t index, uint64_t error_code, uint64_t ip)
         intr = (interrupt_t*)node;
 
         if(intr->ih)
-            status = intr->ih(intr->pv, error_code);
+            status = intr->ih(intr->pv, iframe);
 
         if(!status)
         {

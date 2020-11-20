@@ -40,7 +40,7 @@ isr_%1:
 
     cld
     mov rdi, %1
-    mov rsi, 0
+    mov rsi, rbp
     call isr_dispatcher
     
     pop rax
@@ -76,8 +76,9 @@ isr_%1:
 
     cld
     mov rdi, %1
-    mov rsi, [rbp + 0x8]
-    mov rdx, [rbp + 0x10]
+    mov rsi, rbp
+    add rsi, 0x8
+
     call isr_dispatcher
 
     pop rax

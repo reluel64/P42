@@ -20,7 +20,7 @@ typedef struct pit8254_dev_t
     spinlock_t  lock; 
 }pit8254_dev_t;
 
-static int pit8254_irq_handler(void *dev, uint64_t ec)
+static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
 {
     pit8254_dev_t *pit_dev = NULL;
     int int_status = 0;

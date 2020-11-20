@@ -76,11 +76,11 @@ static pfmgr_t       *pfmgr        = NULL;
 
 static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
 static int         pagemgr_temp_unmap(virt_addr_t vaddr);
-static int         pagemgr_page_fault_handler(void *pv, uint64_t error_code);
+static int         pagemgr_page_fault_handler(void *pv, virt_addr_t iframe);
 static int         pagemgr_per_cpu_invl_handler
 (
     void *pv, 
-    uint64_t error_code
+    virt_addr_t iframe
 );
 
 /* This piece code is the intermediate layer
@@ -1464,23 +1464,30 @@ int pagemgr_unmap
     return(0);
 }
 
-static int pagemgr_page_fault_handler(void *pv, uint64_t error_code)
+static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
 {
-    virt_addr_t fault_address = __read_cr2();
+    interrupt_frame_t *int_frame = 0;
+    virt_addr_t fault_address = 0;
+
+    fault_address = __read_cr2();
+    int_frame = (interrupt_frame_t*)iframe;
+
     
-    kprintf("ADDRESS 0x%x ERROR 0x%x\n",fault_address, error_code);
-        kprintf("CPU_ID_GET_TEST %d\n",cpu_id_get());
+    kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x\n",
+            fault_address,  \
+            int_frame->error_code, \
+            int_frame->rip,
+            int_frame->ss);
+
     while(1);
 
     return(0);
 }
 
-volatile  int pend = 0;
-static spinlock_t tlock;
 static int pagemgr_per_cpu_invl_handler
 (
     void *pv, 
-    uint64_t error_code
+    virt_addr_t iframe
 )
 {
     int status = 0;

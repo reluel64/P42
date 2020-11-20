@@ -86,7 +86,9 @@ kprintf("HELLO WORLKD\n");
     }
 #endif
 
-
+    uint8_t *tt = 0;
+    uint8_t j = 0;
+    j = *tt;
 
 
    // cpu_int_check();

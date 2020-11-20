@@ -62,6 +62,16 @@ typedef struct cpu_platfrom_driver_t
     idt64_ptr_t    idt_ptr;
 }cpu_platform_driver_t;
 
+typedef struct interrupt_frame_t
+{
+    uint64_t error_code;
+    uint64_t rip;
+    uint64_t cs;
+    uint64_t rflags;
+    uint64_t rsp;
+    uint64_t ss;
+}interrupt_frame_t;
+
 int pcpu_register(cpu_api_t **api);
 
 extern void        __wrmsr(uint64_t reg, uint64_t val);
