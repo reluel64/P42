@@ -27,10 +27,9 @@ static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
     pit_dev = devmgr_dev_data_get(dev);
 
     spinlock_lock_interrupt(&pit_dev->lock, &int_status);
- #if 1 
-    if(linked_list_count(&pit_dev->queue))
-        timer_update(&pit_dev->queue, INTERRUPT_INTERVAL);
-    #endif
+
+    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL);
+
     spinlock_unlock_interrupt(&pit_dev->lock, int_status);
 
     return(0);
@@ -69,7 +68,6 @@ static int pit8254_drv_init(driver_t *drv)
         devmgr_dev_type_set(dev, TIMER_DEVICE_TYPE);
         devmgr_dev_index_set(dev, 0);
         
-        
         if(!devmgr_dev_add(dev, NULL))
         {
             pit_dev = (pit8254_dev_t*)kcalloc(sizeof(pit8254_dev_t), 1);
@@ -78,6 +76,7 @@ static int pit8254_drv_init(driver_t *drv)
             {
                 spinlock_init(&pit_dev->lock);
                 linked_list_init(&pit_dev->queue);
+                linked_list_init(&pit_dev->dead_queue);
                 devmgr_dev_data_set(dev, pit_dev);
             }
     
@@ -95,7 +94,9 @@ static int pit8254_arm_timer(device_t *dev, timer_t *tm)
     pit_dev = devmgr_dev_data_get(dev);
 
     spinlock_lock_interrupt(&pit_dev->lock, &int_status);
+
     linked_list_add_tail(&pit_dev->queue, &tm->node);
+
     spinlock_unlock_interrupt(&pit_dev->lock, int_status);
 
     return(0);

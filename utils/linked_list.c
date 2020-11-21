@@ -1,6 +1,8 @@
 #include <stddef.h>
 #include <linked_list.h>
 
+
+
 /*
  * linked_list_init - initializes list head 
  */
@@ -64,15 +66,22 @@ int linked_list_add_tail(list_head_t *lh, list_node_t *ln)
 
 int linked_list_remove(list_head_t *lh, list_node_t *ln)
 {
+    /* if this is the first node,
+     *  then we will need to update the head
+     */
     if(ln->prev == NULL)
-        lh->list.prev = ln->prev;
+        lh->list.next = ln->next;
     
+    /* Otherwise, just relink the adjacent nodes */
     else
         ln->prev->next = ln->next;
     
+    /* If this is the last node,
+     * then the tail needs to be updated */
     if(ln->next == NULL)
-        lh->list.next  = ln->next;
-        
+        lh->list.prev  = ln->prev;
+
+    /* Otherwise, relink the adjacent nodes */
     else
         ln->next->prev = ln->prev;
     

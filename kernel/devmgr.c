@@ -11,7 +11,8 @@
 
 static list_head_t drv_list;
 static spinlock_t  drv_list_lock;
-static device_t       root_bus;
+static device_t     root_bus;
+static spinlock_t  dev_list_lock;
 
 static int devmgr_add_device_to_drv
 (
@@ -72,6 +73,7 @@ int devmgr_init(void)
 {
     linked_list_init(&drv_list);
     spinlock_init(&drv_list_lock);
+    spinlock_init(&dev_list_lock);
     memset(&root_bus, 0, sizeof(device_t));
     devmgr_dev_name_set(&root_bus, "root_bus");
     devmgr_dev_type_set(&root_bus, DEVMGR_ROOT_BUS);
@@ -264,6 +266,7 @@ driver_t *devmgr_drv_find(const char *name)
     int         int_status = 0;
 
     spinlock_lock_interrupt(&drv_list_lock, &int_status);
+    
     node = linked_list_first(&drv_list);
     
     while(node)
@@ -418,7 +421,7 @@ void *devmgr_dev_data_get(const device_t *dev)
     return(dev->dev_data);
 }
 
-device_t *devmgr_parent_get(const device_t *dev)
+device_t *devmgr_dev_parent_get(const device_t *dev)
 {
     if(dev == NULL)
         return(NULL);
@@ -476,8 +479,11 @@ device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
     device_t *dev_stack[DEVMGR_SRCH_STACK];
     list_node_t *node        = NULL;
     int          stack_index = 0;
+    int          int_status = 0;
 
     memset(dev_stack, 0, sizeof(dev_stack));
+    
+    spinlock_lock_interrupt(&dev_list_lock, &int_status);
 
     node = linked_list_first(&root_bus.children);
 
@@ -499,6 +505,7 @@ device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
                !strcmp(dev->dev_name, name))
             {
                 kfree(dev_stack);
+                spinlock_unlock_interrupt(&dev_list_lock, int_status);
                 return(dev);
             }
             node = linked_list_next(node);
@@ -513,6 +520,8 @@ device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
         if(node == NULL)
             break;
     }
+
+    spinlock_unlock_interrupt(&dev_list_lock, int_status);
 
     return(NULL);
 }
@@ -612,7 +621,6 @@ device_t *devmgr_dev_next(dev_srch_t *sh)
 
     return(NULL);
 }
-
 
 int devmgr_dev_end(dev_srch_t *sh)
 {

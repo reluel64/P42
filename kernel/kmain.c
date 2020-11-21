@@ -64,14 +64,42 @@ kprintf("HELLO WORLKD\n");
     if(pagemgr_install_handler())
         return;
 
-    
-
     platform_early_init();
 
     /* initialize the CPU driver and the BSP */
     cpu_init();
 
     cpu_ap_start();
+
+
+
+   list_head_t head;
+   list_node_t *node = NULL;
+   list_node_t *next = NULL;
+
+
+   linked_list_init(&head);
+
+
+   for(int  i = 0; i < 200; i++)
+   {
+       node = kcalloc(1, sizeof(list_node_t));
+       linked_list_add_tail(&head, node);
+   }
+
+    node = linked_list_first(&head);
+
+    while(node)
+    {
+        next = linked_list_next(node);
+
+        linked_list_remove(&head, node);
+
+        kfree(node);
+        node = next;
+    }
+
+
 
     devmgr_show_devices();
 
@@ -86,10 +114,21 @@ kprintf("HELLO WORLKD\n");
     }
 #endif
 
-    uint8_t *tt = 0;
-    uint8_t j = 0;
-    j = *tt;
 
+
+
+
+
+    uint32_t eax = 0;
+    uint32_t ebx = 0;
+    uint32_t ecx = 0;
+    uint32_t edx = 0;
+    eax = 0x6;
+
+    __cpuid(&eax,&ebx,&ecx,&edx);
+
+
+    kprintf("EAX %x EBX %x ECX %x EDX %x\n",eax & (1 << 2),ebx,ecx,edx);
 
    // cpu_int_check();
 

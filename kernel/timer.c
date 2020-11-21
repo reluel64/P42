@@ -7,7 +7,7 @@
 
 void timer_update
 (
-    list_head_t *queue, 
+    list_head_t *queue,
     uint32_t interval
 )
 {
@@ -15,7 +15,7 @@ void timer_update
     list_node_t *node = NULL;
     list_node_t *next = NULL;
     int int_status = 0;
-
+ 
     node = linked_list_first(queue);
     
     while(node)
@@ -25,10 +25,14 @@ void timer_update
 
         if(tm->ttime <= tm->ctime)
         {
-            if(tm->handler(tm->data))
+            if(tm->handler)
             {
-                linked_list_remove(queue, &tm->node);
+                if(tm->handler(tm->data))
+                {
+                    linked_list_remove(queue, node);
+                }
             }
+
             tm->ctime = 0;
         }
         else
@@ -46,12 +50,11 @@ void *timer_arm
     uint32_t delay
 )
 {
-    timer_api_t *api = NULL;
-    timer_t *timer = NULL;
+    timer_api_t *api   = NULL;
+    timer_t     *timer = NULL;
     int     int_status = 0;
     
     api = devmgr_dev_api_get(dev);
-
 
     if(api == NULL)
         return(NULL);
@@ -62,7 +65,6 @@ void *timer_arm
     timer->data = data;
     timer->ttime = delay;
 
-   
     api->arm_timer(dev, timer);
 
     return(timer);
@@ -80,12 +82,10 @@ void timer_loop_delay(device_t *dev, uint32_t delay)
     timer_t *timer = NULL;
     int wait;
     wait = 0;
-    kprintf("TIMER_DEVICE %x\n",dev);
     timer = timer_arm(dev, timer_sleep_callback, (void*)&wait, delay);
 
     if(timer == NULL)
     {
-        
         return;
     }
 

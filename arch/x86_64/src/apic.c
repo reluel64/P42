@@ -20,8 +20,16 @@ static int apic_spurious_handler(void *pv, uint64_t error)
     return(0);
 }
 
-static int apic_lvt_error_handler(void *pv, uint64_t error)
+static int apic_lvt_error_handler(void *pv, virt_addr_t iframe)
 {
+    apic_drv_private_t *apic_drv = NULL;
+
+    apic_drv = devmgr_drv_data_get(pv);
+
+    (*apic_drv->reg->esr) = 0;
+
+    kprintf("ERROR %x\n",(*apic_drv->reg->esr));
+
     return(0);
 }
 
@@ -108,17 +116,6 @@ static int apic_send_ipi
 
     /* wait for it to be 0 */
     while(apic_drv->reg->icr[0] & APIC_ICR_DELIVERY_STATUS_MASK);
-
-    return(0);
-}
-
-static int apic_timer(void *pv, uint64_t ec)
-{
-    apic_drv_private_t *apic_drv = NULL;
-
-    apic_drv = devmgr_drv_data_get(pv);
-
-    (*apic_drv->reg->eoi)=0;
 
     return(0);
 }

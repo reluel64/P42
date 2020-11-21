@@ -81,7 +81,7 @@ int devmgr_drv_data_set(driver_t *drv, void *data);
 void *devmgr_drv_data_get(const driver_t *drv);
 int devmgr_dev_data_set(device_t *dev, void *data);
 void *devmgr_dev_data_get(const device_t *dev);
-device_t *devmgr_parent_get(const device_t *dev);
+device_t *devmgr_dev_parent_get(const device_t *dev);
 char *devmgr_dev_name_get(const device_t *dev);
 int devmgr_dev_name_match(const device_t *dev, char *name);
 int devmgr_dev_name_set(device_t *dev, char *name);

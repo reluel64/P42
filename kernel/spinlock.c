@@ -16,27 +16,22 @@ void spinlock_init(spinlock_t *s)
 
 void spinlock_lock(spinlock_t *s)
 {  
-
     cpu_int_lock();
 
     while(!__sync_bool_compare_and_swap(&s->lock, 0, 1))
     {
         __pause();
     }
-
 }
 
 void spinlock_unlock(spinlock_t *s)
 {
-
    __sync_bool_compare_and_swap(&s->lock, 1, 0);
    cpu_int_unlock();
-
 }
 
 void spinlock_lock_interrupt(spinlock_t *s, int *state)
 {
-
     *state = cpu_int_check();
     
     if(*state)

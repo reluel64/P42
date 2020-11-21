@@ -408,7 +408,7 @@ static int pcpu_bring_cpu_up
     
     timer_dev = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
-    timer_loop_delay(timer_dev, 100);
+    timer_loop_delay(timer_dev, 10);
 
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < 100; attempt++)
@@ -424,6 +424,7 @@ static int pcpu_bring_cpu_up
             if(__sync_bool_compare_and_swap(&cpu_on, 1, 0))
                 return(0);
         }
+
 
         if(attempt + 1 == 100)
         {
@@ -599,6 +600,7 @@ static void pcpu_entry_point(void)
             kprintf("FAILED TO ADD BSP CPU\n");
         }
     }   
+
     /* signal that the cpu is up and running */
 
     __sync_fetch_and_or(&cpu_on, 1);
@@ -764,7 +766,6 @@ static int pcpu_drv_init(driver_t *drv)
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);
     
-
     if(!devmgr_dev_create(&cpu_bsp))
     {
         devmgr_dev_name_set(cpu_bsp,PLATFORM_CPU_NAME);

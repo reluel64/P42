@@ -2,20 +2,91 @@
 #include <devmgr.h>
 #include <timer.h>
 #include <apic_timer.h>
+#include <liballoc.h>
+#include <linked_list.h>
+#include <spinlock.h>
+#include <isr.h>
+#include <i8254.h>
 
-
-static int apic_timer_probe(void)
+typedef struct apic_timer_t
 {
+    list_head_t queue;
+    spinlock_t lock;
+    volatile apic_reg_t *reg;
+    uint32_t calib_value;
+}apic_timer_t;
+
+static spinlock_t lock;
+
+static int apic_timer_isr(void *pv, virt_addr_t iframe)
+{
+    int int_status = 0;
+    spinlock_lock_interrupt(&lock, &int_status);
+
+    kprintf("LE INTERRUPT %d\n",cpu_id_get());
+
+    spinlock_unlock_interrupt(&lock, int_status);
     return(0);
 }
 
-static int apic_timer_init(void)
+static int apic_timer_probe(device_t *dev)
 {
+    if(devmgr_dev_name_match(dev, APIC_TIMER_NAME) && 
+        devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
+        return(0);
+
+    return(-1);
+}
+
+static int apic_timer_init(device_t *dev)
+{
+    device_t           *apic_dev    = NULL;
+    driver_t           *apic_drv    = NULL;
+    apic_device_t      *apic        = NULL;
+    apic_drv_private_t *apic_drv_pv = NULL;
+    apic_timer_t       *apic_timer  = NULL;
+    device_t           *pit         = NULL;
+    volatile apic_reg_t *reg = NULL;
+ 
+    apic_dev    = devmgr_dev_parent_get(dev);
+    apic_drv    = devmgr_dev_drv_get(apic_dev);
+    apic_drv_pv = devmgr_drv_data_get(apic_drv);
+
+    apic_timer  = kcalloc(sizeof(apic_timer_t), 1);
+    
+    if(apic_timer == NULL)
+        return(-1);
+
+    apic_timer->reg = apic_drv_pv->reg;
+    reg = apic_timer->reg;
+  
+    isr_install(apic_timer_isr, dev, 82, 0);
+
+    spinlock_init(&apic_timer->lock);
+    linked_list_init(&apic_timer->queue);
+
+    devmgr_dev_data_set(dev, apic_timer);
+
+    pit = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
+
+    (*reg->timer_div) = 0b0011;
+
+    /* Let's calibrate this */
+    (*reg->timer_icnt) = UINT32_MAX;
+
+   timer_loop_delay(pit, 1);
+    apic_timer->calib_value = UINT32_MAX - (*reg->timer_ccnt);
+    kprintf("APIC_TIMER_CALIB %d\n",apic_timer->calib_value);
+   
+
+    (*reg->lvt_timer) = APIC_LVT_VECTOR_MASK(82) | 0b01 << 17;
+
+     (*reg->timer_icnt) = apic_timer->calib_value;
 
     return(0);
 }
 
-static int apic_timer_drv_init(void)
+static int apic_timer_drv_init(driver_t *drv)
 {
     return(0);
 }

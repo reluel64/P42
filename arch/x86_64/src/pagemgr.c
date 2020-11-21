@@ -1464,6 +1464,7 @@ int pagemgr_unmap
     return(0);
 }
 
+
 static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
 {
     interrupt_frame_t *int_frame = 0;
@@ -1472,7 +1473,6 @@ static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
     fault_address = __read_cr2();
     int_frame = (interrupt_frame_t*)iframe;
 
-    
     kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x\n",
             fault_address,  \
             int_frame->error_code, \
@@ -1480,7 +1480,6 @@ static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
             int_frame->ss);
 
     while(1);
-
     return(0);
 }
 
