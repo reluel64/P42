@@ -37,7 +37,6 @@ void timer_loop_delay(device_t *dev, uint32_t delay);
 void timer_update
 (
     list_head_t *queue,
-    list_head_t *dqueue, 
     uint32_t interval
 );
 #endif

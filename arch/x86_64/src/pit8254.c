@@ -12,7 +12,7 @@
 #define COMMAND_PORT 0x43
 #define CH0_PORT    0x40
 
-#define INTERRUPT_INTERVAL 1
+#define INTERRUPT_INTERVAL_MS 1ull
 
 typedef struct pit8254_dev_t
 {
@@ -28,7 +28,7 @@ static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
 
     spinlock_lock_interrupt(&pit_dev->lock, &int_status);
 
-    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL);
+    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS);
 
     spinlock_unlock_interrupt(&pit_dev->lock, int_status);
 
@@ -47,8 +47,14 @@ static int pit8254_probe(device_t *dev)
 static int pit8254_init(device_t *dev)
 {
     uint8_t command = 0;
-    uint16_t divider = (INTERRUPT_INTERVAL * 3579545ul) / 3000;
+    uint16_t divider = 0;
     command = 0b000110100;
+
+  /*  divider = (INTERRUPT_INTERVAL_US * 3579545ul) / 3000;*/
+
+    divider = 1193;
+
+    kprintf("PIT DIVIDER %d\n",divider);
 
     __outb(COMMAND_PORT, command);
     __outb(CH0_PORT, divider & 0xff);
@@ -76,7 +82,6 @@ static int pit8254_drv_init(driver_t *drv)
             {
                 spinlock_init(&pit_dev->lock);
                 linked_list_init(&pit_dev->queue);
-                linked_list_init(&pit_dev->dead_queue);
                 devmgr_dev_data_set(dev, pit_dev);
             }
     
@@ -110,12 +115,12 @@ static timer_api_t pit8254_api =
 
 static driver_t pit8254 = 
 {
-    .drv_name = PIT8254_TIMER,
-    .drv_type = TIMER_DEVICE_TYPE,
+    .drv_name  = PIT8254_TIMER,
+    .drv_type  = TIMER_DEVICE_TYPE,
     .dev_probe = pit8254_probe,
-    .dev_init =  pit8254_init,
-    .drv_init =  pit8254_drv_init,
-    .drv_api  = &pit8254_api
+    .dev_init  = pit8254_init,
+    .drv_init  = pit8254_drv_init,
+    .drv_api   = &pit8254_api
 };
 
 int pit8254_register(void)

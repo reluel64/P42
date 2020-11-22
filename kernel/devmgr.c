@@ -51,7 +51,7 @@ int devmgr_show_devices(void)
                     dev_stack[stack_index++] = dev;
             }
 
-            kprintf("DEVICE %s TYPE %s Index %d PARENT 0x%x\n",dev->dev_name,dev->dev_type, dev->index,dev->parent);
+            kprintf("DEVICE %s TYPE %s Index %d PARENT %s\n",dev->dev_name,dev->dev_type, dev->index,dev->parent->dev_name);
 
             node = linked_list_next(node);
         }

@@ -43,6 +43,7 @@ int cpu_init(void);
 virt_addr_t cpu_virt_max();
 phys_addr_t cpu_phys_max();
 int cpu_api_register(void);
+int cpu_ap_start(void);
 int cpu_issue_ipi
 (
     uint8_t dest, 

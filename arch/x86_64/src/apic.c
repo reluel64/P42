@@ -11,11 +11,133 @@
 #include <devmgr.h>
 #include <intc.h>
 #include <platform.h>
+#define LVT_LINT_VECTOR (252)
 #define LVT_ERROR_VECTOR (254)
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
-static int apic_spurious_handler(void *pv, uint64_t error)
+
+static int apic_nmi_fill
+(
+    apic_device_t *apic
+)
+{
+    ACPI_STATUS                 status  = AE_OK;
+    ACPI_TABLE_MADT             *madt   = NULL;
+    ACPI_SUBTABLE_HEADER        *subhdr = NULL;
+    ACPI_MADT_LOCAL_APIC_NMI    *nmi    = NULL;
+    ACPI_MADT_LOCAL_X2APIC_NMI  *x2nmi  = NULL;
+    int                         found   = 0;
+
+    status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
+
+    if(ACPI_FAILURE(status))
+    {
+        kprintf("FAIL\n");
+        return(0);
+    }
+
+    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
+        i < madt->Header.Length;
+        i += subhdr->Length)
+    {
+        subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
+
+        if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_X2APIC_NMI)
+        {
+            x2nmi = (ACPI_MADT_LOCAL_X2APIC_NMI*)subhdr;
+
+            if ((apic->apic_id == x2nmi->Uid) || 
+                (x2nmi->Uid == UINT32_MAX))
+            {
+                apic->polarity = x2nmi->IntiFlags & ACPI_MADT_POLARITY_MASK;
+                apic->trigger = x2nmi->IntiFlags & ACPI_MADT_TRIGGER_MASK;
+                apic->lint    = x2nmi->Lint;
+                switch(apic->polarity)
+                {
+                    case ACPI_MADT_POLARITY_CONFORMS:
+                    case ACPI_MADT_POLARITY_ACTIVE_LOW:
+                    case ACPI_MADT_POLARITY_RESERVED:
+                        apic->polarity = 0;
+                        break;
+                    case ACPI_MADT_POLARITY_ACTIVE_HIGH:
+                        apic->polarity = 1;
+                        break;
+                }
+
+                switch(apic->trigger)
+                {
+                    case ACPI_MADT_TRIGGER_CONFORMS:
+                    case ACPI_MADT_TRIGGER_EDGE:
+                    case ACPI_MADT_TRIGGER_RESERVED:
+                        apic->trigger = 0;
+                        break;
+                    case ACPI_MADT_TRIGGER_LEVEL:
+                        apic->trigger = 1;
+                        break;
+                }
+                found = 1;
+                break;
+            }
+        }
+    }
+
+    if(!found)
+    {
+        for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
+            i < madt->Header.Length;
+            i += subhdr->Length)
+        {
+            subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
+
+            if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_APIC_NMI)
+            {
+                nmi = (ACPI_MADT_LOCAL_APIC_NMI*)subhdr;
+
+                if((apic->apic_id == nmi->ProcessorId) || 
+                (nmi->ProcessorId == UINT8_MAX))
+                {
+                    apic->lint     = nmi->Lint;
+                    apic->polarity = nmi->IntiFlags & ACPI_MADT_POLARITY_MASK;
+                    apic->trigger = nmi->IntiFlags & ACPI_MADT_TRIGGER_MASK;
+
+                    switch(apic->polarity)
+                    {
+                        case ACPI_MADT_POLARITY_CONFORMS:
+                        case ACPI_MADT_POLARITY_ACTIVE_LOW:
+                        case ACPI_MADT_POLARITY_RESERVED:
+                            apic->polarity = 0;
+                            break;
+                        case ACPI_MADT_POLARITY_ACTIVE_HIGH:
+                            apic->polarity = 1;
+                            break;
+                    }
+
+                    switch(apic->trigger)
+                    {
+                        case ACPI_MADT_TRIGGER_CONFORMS:
+                        case ACPI_MADT_TRIGGER_EDGE:
+                        case ACPI_MADT_TRIGGER_RESERVED:
+                            apic->trigger = 0;
+                            break;
+                        case ACPI_MADT_TRIGGER_LEVEL:
+                            apic->trigger = 1;
+                            break;
+                    }
+                    break;
+                }
+
+                kprintf("HAZ_NMI %d %d\n",nmi->ProcessorId, nmi->Lint);
+            }
+        }
+    }
+
+    AcpiPutTable((ACPI_TABLE_HEADER*)madt);
+
+    return(found ? 0 : -1);
+}
+
+static int apic_spurious_handler(void *pv, virt_addr_t iframe)
 {
     return(0);
 }
@@ -120,7 +242,7 @@ static int apic_send_ipi
     return(0);
 }
 
-static int apic_eoi_handler(void *pv, uint64_t ec)
+static int apic_eoi_handler(void *pv, virt_addr_t iframe)
 {
     apic_drv_private_t *apic_drv = NULL;
    
@@ -153,11 +275,15 @@ static int apic_probe(device_t *dev)
 
 static int apic_dev_init(device_t *dev)
 {
-    volatile apic_reg_t *reg = NULL;
-    apic_device_t *apic = NULL;
-    driver_t *drv = NULL;
-    apic_drv_private_t *apic_drv = NULL;
-
+    volatile apic_reg_t *reg      = NULL;
+    apic_device_t       *apic     = NULL;
+    driver_t            *drv      = NULL;
+    apic_drv_private_t  *apic_drv = NULL;
+    uint32_t            lint      = 0;
+    uint32_t            flags     = 0;
+    uint8_t             polarity  = 0;
+    uint8_t             trigger   = 0;
+    
     cpu_int_lock();
     
     drv = devmgr_dev_drv_get(dev);
@@ -176,6 +302,8 @@ static int apic_dev_init(device_t *dev)
 
     devmgr_dev_data_set(dev, apic);
     
+    apic_nmi_fill(apic);
+
     reg = apic_drv->reg;
 
     /* Stop APIC */
@@ -183,10 +311,26 @@ static int apic_dev_init(device_t *dev)
 
     /* Set up LVT error handling */
     (*reg->lvt_err) &= ~APIC_LVT_INT_MASK;
-    (*reg->lvt_err) |= APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
+    (*reg->lvt_err) = APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
 
+
+    /* Set up LINT */
+    if(apic->lint == 0)
+    {
+        (*reg->lvt_lint0) = LVT_LINT_VECTOR                    | 
+                            (((uint32_t)apic->polarity) << 13) | 
+                            (((uint32_t)apic->trigger)  << 15);
+    }
+    else
+    {
+        (*reg->lvt_lint1) = LVT_LINT_VECTOR                    | 
+                            (((uint32_t)apic->polarity) << 13) | 
+                            (((uint32_t)apic->trigger)  << 15);
+
+    }           
+    
     /* Enable APIC */
-    (*reg->svr)     |= APIC_SVR_ENABLE_BIT | 
+    (*reg->svr)     = APIC_SVR_ENABLE_BIT | 
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
 
     (*reg->eoi) = 0;
@@ -201,6 +345,8 @@ static int apic_drv_init(driver_t *drv)
     apic_drv_private_t  *apic_drv = NULL;
     volatile apic_reg_t *reg = NULL;
 
+    __write_cr8(0);
+    
     apic_drv = kmalloc(sizeof(apic_drv_private_t));
     
     if(apic_drv == NULL)
@@ -245,5 +391,6 @@ int apic_register(void)
 {
     devmgr_drv_add(&apic_drv);
     devmgr_drv_init(&apic_drv);
+
     return(0);
 }

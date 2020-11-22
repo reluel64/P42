@@ -90,16 +90,18 @@ extern void        __wbinvd();
 extern void        __wrmsr(uint64_t reg, uint64_t val);
 extern uint64_t    __rdmsr(uint64_t msr);
 extern uint64_t    __read_cr4();
-extern void       __write_cr4(uint64_t cr4);
+extern void        __write_cr4(uint64_t cr4);
 extern uint64_t    __read_cr0();
-extern void       __write_cr0(uint64_t cr0);
-extern void __cpuid
+extern void        __write_cr0(uint64_t cr0);
+extern uint64_t    __read_cr8();
+extern void        __write_cr8(uint64_t cr8);
+extern void        __cpuid
 (
     uint32_t *eax,
     uint32_t *ebx,
     uint32_t *ecx,
     uint32_t *edx
 );
-
+int platform_early_init(void);
 
 #endif

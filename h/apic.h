@@ -108,6 +108,9 @@ typedef struct apic_device_t
     phys_addr_t paddr;
     virt_addr_t vaddr;
     uint32_t apic_id;
+    uint8_t polarity;
+    uint8_t trigger;
+    uint8_t lint;
 }apic_device_t ;
 
 typedef struct apic_drv_private_t

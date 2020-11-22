@@ -15,7 +15,8 @@ global __read_cr4
 global __write_cr4
 global __read_cr0
 global __write_cr0
-
+global __read_cr8
+global __write_cr8
 ;----------------------------------------
 __enable_nx:
     mov ecx, 0xC0000080               ; Read from the EFER MSR. 
@@ -152,6 +153,15 @@ __write_cr0:
 __read_cr0:
     mov rax, cr0
     ret
+;----------------------------------------
+__read_cr8:
+    mov rax, cr8
+    ret
+
+__write_cr8:
+    mov cr8, rdi
+    ret
+
 ;----------------------------------------
 __invlpg:
     invlpg [rdi]
