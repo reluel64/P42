@@ -33,7 +33,7 @@ void spinlock_unlock(spinlock_t *s)
 void spinlock_lock_interrupt(spinlock_t *s, int *state)
 {
     *state = cpu_int_check();
-    
+
     if(*state)
         cpu_int_lock();
 

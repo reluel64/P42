@@ -15,6 +15,13 @@
 #include <cpu.h>
 #include <intc.h>
 #include <utils.h>
+#include <isr.h>
+int isr_test(void)
+{
+    kprintf("%s\n",__FUNCTION__);
+    while(1);
+    return(0);
+}
 
 void kmain()
 {
@@ -62,19 +69,25 @@ void kmain()
 
     devmgr_show_devices();
 
-
-
+   
     device_t *dev = devmgr_dev_get_by_name("APIC_TIMER", 5);
 
-    
+        
 #if 1
-    int j = 0;
+    int *j = 0;
+
+
     while(1)
     {
-        
+        cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, 0, 140);
 
-        kprintf("LOOPING %d\n", ++j);
-        timer_loop_delay(dev, 1);
+
+       // test_interrupt();
+
+       // kprintf("LOOPING %d\n", ++j);
+       /* timer_loop_delay(dev, 1);*/
+
+   
     }
 #endif
     while(1)

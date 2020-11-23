@@ -145,7 +145,7 @@ static int apic_spurious_handler(void *pv, virt_addr_t iframe)
 static int apic_lvt_error_handler(void *pv, virt_addr_t iframe)
 {
     apic_drv_private_t *apic_drv = NULL;
-
+    kprintf("APIC_ERROR_HANDLER\n");
     apic_drv = devmgr_drv_data_get(pv);
 
     (*apic_drv->reg->esr) = 0;
@@ -201,7 +201,7 @@ static int apic_send_ipi
             break;
         
         default:
-           reg_low &= ~0b1110000000;
+           reg_low &= ~0b11100000000;
             break;
     }
 
@@ -313,7 +313,7 @@ static int apic_dev_init(device_t *dev)
     (*reg->lvt_err) &= ~APIC_LVT_INT_MASK;
     (*reg->lvt_err) = APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
 
-
+#if 1
     /* Set up LINT */
     if(apic->lint == 0)
     {
@@ -328,7 +328,7 @@ static int apic_dev_init(device_t *dev)
                             (((uint32_t)apic->trigger)  << 15);
 
     }           
-    
+    #endif
     /* Enable APIC */
     (*reg->svr)     = APIC_SVR_ENABLE_BIT | 
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);

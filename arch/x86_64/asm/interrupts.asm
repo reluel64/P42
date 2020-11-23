@@ -52,7 +52,7 @@ isr_%1:
     pop r9
     pop r10
     pop r11
-    pop rbp
+    leave
     iretq
 %endmacro
 
@@ -90,7 +90,9 @@ isr_%1:
     pop r9
     pop r10
     pop r11
-    pop rbp
+    
+    leave
+    
     add rsp, 8
     
     iretq
@@ -233,5 +235,5 @@ __flush_gdt:
 
 global test_interrupt
 test_interrupt:
-int 64
+int 140
 ret

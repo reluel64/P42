@@ -153,7 +153,7 @@ int cpu_issue_ipi
             break;
 
         default:
-            return(-1);
+            vector = type;
             break;
     }
     

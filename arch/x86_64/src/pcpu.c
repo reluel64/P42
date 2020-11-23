@@ -206,7 +206,7 @@ static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
     for(uint16_t i = 0; i < IDT_TABLE_COUNT; i++)
     {
 
-        if(i >= RESERVED_ISR_BEGIN && i <=RESERVED_ISR_END || i == 15)
+        if((i >= RESERVED_ISR_BEGIN && i <=RESERVED_ISR_END) || i == 15)
             continue;
             
         else if(i < RESERVED_ISR_BEGIN)
@@ -251,7 +251,7 @@ static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
 
     cpu_drv->idt_ptr.addr = (virt_addr_t)idt;
     cpu_drv->idt_ptr.limit = IDT_TABLE_SIZE - 1;
-
+ 
     return(0);
 }
 
@@ -547,7 +547,7 @@ static int pcpu_ap_start(uint32_t num)
         }
         else
         {
-             if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_APIC)
+            if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_APIC)
             {
                 lapic = (ACPI_MADT_LOCAL_APIC*)subhdr;
 
@@ -654,7 +654,6 @@ static int pcpu_setup(cpu_t *cpu)
 
         kprintf("DEV_TYPE %s\n",devmgr_dev_type_get(apic_dev));
     }
-  
 
     if(!devmgr_dev_create(&apic_timer_dev))
     {
