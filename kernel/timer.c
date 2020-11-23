@@ -27,16 +27,22 @@ void timer_update
         {
             if(tm->handler)
             {
-                if(tm->handler(tm->data))
-                {
-                    linked_list_remove(queue, node);
-                }
+                tm->handler(tm->data);
             }
 
-            tm->ctime = 0;
+            if(tm->flags & TIMER_PERIODIC)
+            {
+                tm->ctime = 0;
+            }
+            else
+            {
+                linked_list_remove(queue, node);
+            }
         }
         else
+        {
             tm->ctime += interval;
+        }
 
         node = next;
     }
@@ -97,4 +103,34 @@ void timer_loop_delay(device_t *dev, uint32_t delay)
     }
 
     kfree(timer);
+}
+
+int timer_periodic_install
+(
+    device_t *dev,
+    timer_handler_t cb, 
+    void *pv, 
+    uint32_t period
+)
+{
+    timer_t *tm = NULL;
+    timer_api_t *api = NULL;
+
+    tm = kcalloc(sizeof(timer_t), 1);
+    api = devmgr_dev_api_get(dev);
+
+    if(tm == NULL)
+    {
+        kprintf("FAILED\n");
+        return(-1);
+    }
+    tm->handler = cb;
+    tm->data = pv;
+    tm->ttime = period;
+
+    tm->flags |= TIMER_PERIODIC;
+ 
+    api->arm_timer(dev, tm);
+
+    return(0);
 }

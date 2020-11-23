@@ -5,7 +5,7 @@
 %define PAGE_PRESENT             (1 << 0)
 %define PAGE_WRITE               (1 << 1)
 %define MULTIBOOT_SIG            0x2BADB002
-%define PML5_ADDR				 (BOOT_PAGING)
+%define PML5_ADDR                (BOOT_PAGING)
 %define PML4_ADDR                (BOOT_PAGING + 0x1000)
 %define PDPT_ADDR                (BOOT_PAGING + 0x2000)
 %define PDT_ADDR                 (BOOT_PAGING + 0x3000)
@@ -14,7 +14,6 @@
 global kernel_init
 global mem_map_sig
 global mem_map_addr
-global halt
 global kstack_base
 global kstack_top
 

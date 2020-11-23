@@ -16,6 +16,7 @@
 #include <timer.h>
 #include <i8254.h>
 #include <apic_timer.h>
+#include <sched.h>
 
 extern void __cpu_switch_stack
 (
@@ -28,7 +29,7 @@ extern void __sti();
 extern void __cli();
 extern int  __geti();
 extern void __lidt(idt64_ptr_t *);
-
+extern void __hlt();
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -475,7 +476,6 @@ static int pcpu_ap_start(uint32_t num)
     ACPI_SUBTABLE_HEADER   *subhdr  = NULL;
     int                    use_x2_apic = 0;
 
-    kprintf("STARTING APs\n");
     cpu_id = pcpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id); 
 
@@ -521,7 +521,6 @@ static int pcpu_ap_start(uint32_t num)
         i < madt->Header.Length;
         i += subhdr->Length)
     {
-
         subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
 
         if(use_x2_apic)
@@ -567,6 +566,7 @@ static int pcpu_ap_start(uint32_t num)
             }
         }
     }
+
     /* unmap the 1:1 trampoline */
     vmmgr_temp_identity_unmap(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);
 
@@ -584,18 +584,19 @@ static int pcpu_ap_start(uint32_t num)
 static void pcpu_entry_point(void)
 {
     uint32_t cpu_id = 0;
-    device_t *dev = NULL;
-
+    device_t *timer = NULL;
+    device_t *cpu_dev = NULL;
+    cpu_t *cpu = NULL;
     cpu_id = cpu_id_get();
     /* Add cpu to the deivce manager */
-    if(!devmgr_dev_create(&dev))
+    if(!devmgr_dev_create(&cpu_dev))
     {
             
-        devmgr_dev_name_set(dev,PLATFORM_CPU_NAME);
-        devmgr_dev_type_set(dev, CPU_DEVICE_TYPE);
-        devmgr_dev_index_set(dev, cpu_id);
+        devmgr_dev_name_set(cpu_dev,PLATFORM_CPU_NAME);
+        devmgr_dev_type_set(cpu_dev, CPU_DEVICE_TYPE);
+        devmgr_dev_index_set(cpu_dev, cpu_id);
 
-        if(devmgr_dev_add(dev, NULL))
+        if(devmgr_dev_add(cpu_dev, NULL))
         {
             kprintf("FAILED TO ADD BSP CPU\n");
         }
@@ -605,10 +606,20 @@ static void pcpu_entry_point(void)
 
     __sync_fetch_and_or(&cpu_on, 1);
 
+    cpu = devmgr_dev_data_get(cpu_dev);
+
     /* at this point we should jump in the scheduler */
+    timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
+
+    if(timer == NULL)
+        timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
+
+    sched_cpu_init(timer, cpu);
 
     while(1)
-        halt();
+    {
+        cpu_halt();
+    }
    
 }
 /* Setup platform specific cpu stuff 
@@ -799,7 +810,8 @@ static cpu_api_t cpu_api =
     .start_ap       = pcpu_ap_start,
     .max_virt_addr  = pcpu_max_virt_address,
     .max_phys_addr  = pcpu_max_phys_address,
-    .ipi_issue      = pcpu_issue_ipi
+    .ipi_issue      = pcpu_issue_ipi,
+    .halt           = __hlt
 };
 
 static driver_t x86_cpu = 

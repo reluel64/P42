@@ -6,6 +6,9 @@
 #include <devmgr.h>
 
 #define TIMER_DEVICE_TYPE "timer"
+#define TIMER_PERIODIC    (1 << 0)
+
+
 
 typedef int (*timer_handler_t)(void *);
 
@@ -16,6 +19,7 @@ typedef struct timer_t
     uint32_t ttime;
     timer_handler_t handler;
     void *data;
+    uint32_t flags;
 }timer_t;
 
 typedef struct timer_api_t
@@ -33,6 +37,13 @@ void *timer_arm
     uint32_t delay
 );
 void timer_loop_delay(device_t *dev, uint32_t delay);
+int timer_periodic_install
+(
+    device_t *dev,
+    timer_handler_t cb, 
+    void *pv, 
+    uint32_t period
+);
 
 void timer_update
 (

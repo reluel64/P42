@@ -16,6 +16,8 @@
 #include <intc.h>
 #include <utils.h>
 #include <isr.h>
+#include <sched.h>
+
 int isr_test(void)
 {
     kprintf("%s\n",__FUNCTION__);
@@ -69,18 +71,21 @@ void kmain()
 
     devmgr_show_devices();
 
-   
-    device_t *dev = devmgr_dev_get_by_name("APIC_TIMER", 5);
+   #include <platform.h>
 
+    device_t *dev = devmgr_dev_get_by_name("APIC_TIMER", 0);
+    device_t *cpu = devmgr_dev_get_by_name(PLATFORM_CPU_NAME,0);
+
+    cpu_t *c = devmgr_dev_data_get(cpu);
         
 #if 1
     int *j = 0;
 
-
+    sched_cpu_init(dev, c);
     while(1)
     {
-        cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, 0, 140);
-
+      
+    
 
        // test_interrupt();
 

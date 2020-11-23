@@ -23,7 +23,7 @@ extern virt_addr_t kstack_top;
 
 
 #define PLATFORM_RESCHED_VECTOR (240)
-#define PLATFORM_PG_INVALIDATE_VECTOR  (127)
+#define PLATFORM_PG_INVALIDATE_VECTOR  (239)
 #define PLATFORM_PG_FAULT_VECTOR       (14)
 
 /* Interrupt Descriptor */

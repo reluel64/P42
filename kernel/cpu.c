@@ -159,3 +159,8 @@ int cpu_issue_ipi
     
     return(api->ipi_issue(dest, cpu, vector));
 }
+
+int cpu_halt(void)
+{
+    api->halt();
+}

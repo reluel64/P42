@@ -158,14 +158,10 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 
     int_lst = &handlers[index];
 
-    if(index == 128)
-    {
-        kprintf("ISSUED %d\n", index);
-        return;
-    }
+
     /* gain exclusive access to the list */
     spinlock_lock_interrupt(&int_lst->lock, &int_status);
-    
+
     node = linked_list_first(&int_lst->head);
 
     while(node)

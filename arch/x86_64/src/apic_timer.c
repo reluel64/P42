@@ -116,7 +116,9 @@ static int apic_timer_arm(device_t *dev, timer_t *tm)
 
     timer = devmgr_dev_data_get(dev);
 
+    kprintf("TEST1\n");
     spinlock_lock_interrupt(&timer->lock, &int_status);
+kprintf("TEST2\n");
     linked_list_add_tail(&timer->queue, &tm->node);
     spinlock_unlock_interrupt(&timer->lock, int_status);
 

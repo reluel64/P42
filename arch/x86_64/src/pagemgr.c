@@ -1472,14 +1472,13 @@ static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
 
     fault_address = __read_cr2();
     int_frame = (interrupt_frame_t*)iframe;
-    kprintf("PAGE FAULT\n");
-   #if 1
+
     kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x\n",
             fault_address,  \
             int_frame->error_code, \
             int_frame->rip,
             int_frame->ss);
-            #endif
+
     while(1);
 
     return(0);
@@ -1494,7 +1493,7 @@ static int pagemgr_per_cpu_invl_handler
     int status = 0;
   //  spinlock_lock_interrupt(&tlock, &status);
     
-   // kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
+    kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
    // spinlock_unlock_interrupt(&tlock, status);
     __write_cr3(__read_cr3());
     return(0);
@@ -1502,18 +1501,23 @@ static int pagemgr_per_cpu_invl_handler
 
 int pagemgr_per_cpu_init(void)
 {
-    uint64_t cr0 = 0;
+    virt_addr_t cr0 = 0;
+    virt_addr_t cr3 = 0;
 
     /* enable write protect*/
     cr0 = __read_cr0();
 
     cr0 |= (1 << 16);
     cr0 &= ~((1 << 29) | (1 << 30));
+
     __write_cr0(cr0);
 
     __wbinvd();
     __wrmsr(PAT_MSR, page_manager.pat.pat);
-    __write_cr3(__read_cr3());
+    cr3 = __read_cr3();
+
+    __write_cr3(cr3);
+    
     __wbinvd();
 
     return(0);

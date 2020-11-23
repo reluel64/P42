@@ -15,6 +15,7 @@ typedef struct cpu_t
     virt_addr_t stack_top;
     virt_addr_t stack_bottom;
     void *cpu_pv;
+    void *sched;
 }cpu_t;
 
 typedef struct cpu_api_t
@@ -31,6 +32,7 @@ typedef struct cpu_api_t
     virt_addr_t (*max_virt_addr)(void);
     phys_addr_t (*max_phys_addr)(void);
     int (*ipi_issue)(uint8_t, uint32_t, uint32_t);
+    void (*halt) (void);
 }cpu_api_t;
 
 
@@ -44,6 +46,7 @@ virt_addr_t cpu_virt_max();
 phys_addr_t cpu_phys_max();
 int cpu_api_register(void);
 int cpu_ap_start(void);
+int cpu_halt(void);
 int cpu_issue_ipi
 (
     uint8_t dest, 
