@@ -171,3 +171,11 @@ __invlpg:
 __hlt:
     hlt
     ret
+
+; RDI - new context
+; RSI - old context
+__cpu_context_switch:
+
+
+
+__cpu_thread_stub:

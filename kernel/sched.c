@@ -11,6 +11,7 @@
 typedef struct thread_t
 {
     list_node_t node;
+    void       *owner;
     void       *context;
     uint32_t    id;
     uint16_t    prio;
@@ -26,7 +27,7 @@ typedef struct shced_queue_t
 
 typedef struct sched_exec_unit_t
 {
-    cpu_t *cpu;
+    cpu_t *cpu;             
     list_head_t threads;    /* queue of threads on the current CPU*/
     thread_t *current;      /* current thread */
     spinlock_t lock;        /* lock to protect the queue */
@@ -84,7 +85,17 @@ int shced_start_thread(thread_t *th)
 static int sched_resched_isr(void *pv, virt_addr_t iframe)
 {
     sched_exec_unit_t *unit = pv;
-   // kprintf("Rescheduling on %d\n", unit->cpu->cpu_id);
+    
+    int int_status = 0;
+    thread_t *next = NULL;
+    
+    spinlock_lock_interrupt(&unit->lock, &int_status);
+    
+    
+    next = (thread_t*)linked_list_first(&unit->threads);
+    
+
+    kprintf("Rescheduling on %d\n", unit->cpu->cpu_id);
     return(0);
 }
 
@@ -114,7 +125,7 @@ kprintf("ENTER 2\n");
     timer_periodic_install(timer,
                            sched_resched_isr,
                            unit,
-                           1);
+                           0);
     
  
     //isr_install(sched_resched_isr, NULL, PLATFORM_RESCHED_VECTOR, 0);
