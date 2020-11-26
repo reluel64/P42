@@ -30,6 +30,8 @@ extern void __cli();
 extern int  __geti();
 extern void __lidt(idt64_ptr_t *);
 extern void __hlt();
+extern void __pause();
+
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -466,15 +468,16 @@ static int pcpu_issue_ipi
 
 static int pcpu_ap_start(uint32_t num)
 {
-    int                    status     = 0;
-    virt_addr_t           trampoline = 0;
-    device_t                  *dev       = NULL;
-    uint32_t                cpu_id     = 0;
-    ACPI_TABLE_MADT        *madt    = NULL;
-    ACPI_MADT_LOCAL_APIC   *lapic   = NULL;
-    ACPI_MADT_LOCAL_X2APIC *x2lapic = NULL;
-    ACPI_SUBTABLE_HEADER   *subhdr  = NULL;
+    int                    status      = 0;
+    virt_addr_t            trampoline   = 0;
+    device_t               *dev     = NULL;
+    uint32_t               cpu_id     = 0;
+    ACPI_TABLE_MADT        *madt       = NULL;
+    ACPI_MADT_LOCAL_APIC   *lapic      = NULL;
+    ACPI_MADT_LOCAL_X2APIC *x2lapic    = NULL;
+    ACPI_SUBTABLE_HEADER   *subhdr     = NULL;
     int                    use_x2_apic = 0;
+    uint32_t               started_cpu = 1;
 
     cpu_id = pcpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id); 
@@ -518,9 +521,11 @@ static int pcpu_ap_start(uint32_t num)
     }
 
     for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
-        i < madt->Header.Length;
+        (i < madt->Header.Length) && (started_cpu < num);
         i += subhdr->Length)
     {
+
+        
         subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
 
         if(use_x2_apic)
@@ -541,6 +546,7 @@ static int pcpu_ap_start(uint32_t num)
                 else
                 {
                     pcpu_bring_cpu_up(dev, x2lapic->LocalApicId);
+                    started_cpu++;
                 }
             }
         }
@@ -562,6 +568,7 @@ static int pcpu_ap_start(uint32_t num)
                 else
                 {
                     pcpu_bring_cpu_up(dev, lapic->Id);
+                    started_cpu++;
                 }
             }
         }
@@ -588,6 +595,7 @@ static void pcpu_entry_point(void)
     device_t *cpu_dev = NULL;
     cpu_t *cpu = NULL;
     cpu_id = cpu_id_get();
+    
     /* Add cpu to the deivce manager */
     if(!devmgr_dev_create(&cpu_dev))
     {
@@ -811,7 +819,8 @@ static cpu_api_t cpu_api =
     .max_virt_addr  = pcpu_max_virt_address,
     .max_phys_addr  = pcpu_max_phys_address,
     .ipi_issue      = pcpu_issue_ipi,
-    .halt           = __hlt
+    .halt           = __hlt,
+    .pause          = __pause
 };
 
 static driver_t x86_cpu = 

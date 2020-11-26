@@ -67,9 +67,9 @@ void kmain()
     cpu_init();
 
     /* Start APs */
-    cpu_ap_start();
+    cpu_ap_start(-1);
 
-    devmgr_show_devices();
+  
 
    #include <platform.h>
 
@@ -77,11 +77,14 @@ void kmain()
     device_t *cpu = devmgr_dev_get_by_name(PLATFORM_CPU_NAME,0);
 
     cpu_t *c = devmgr_dev_data_get(cpu);
-        
+       
 #if 1
     int *j = 0;
 
     sched_cpu_init(dev, c);
+    kprintf("Hello\n");
+    timer_loop_delay(dev, 1000);
+      devmgr_show_devices();
     while(1)
     {
       
@@ -95,6 +98,7 @@ void kmain()
    
     }
 #endif
+
     while(1)
         halt();
 }

@@ -826,8 +826,6 @@ AcpiOsCreateSemaphore (
     UINT32              InitialUnits,
     ACPI_HANDLE         *OutHandle)
 {
-   
-    kprintf("%s\n",__FUNCTION__);
 
     if (!OutHandle)
     {

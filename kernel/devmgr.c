@@ -29,11 +29,11 @@ static int devmgr_dev_add_to_parent
 int devmgr_show_devices(void)
 {
     device_t *dev = NULL;
-    device_t **dev_stack = NULL;
+    list_node_t **dev_stack = NULL;
     list_node_t *node        = NULL;
     int          stack_index = 0;
 
-    dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(device_t));
+    dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(list_node_t*));
 
     memset(dev_stack, 0, sizeof(dev_stack));
 
@@ -44,14 +44,28 @@ int devmgr_show_devices(void)
         while(node)
         {
             dev = (device_t*)node;
-
+#if 0
             if(linked_list_count(&dev->children) > 0)
             {
                 if(stack_index < DEVMGR_SRCH_STACK)
                     dev_stack[stack_index++] = dev;
             }
+#endif
+
 
             kprintf("DEVICE %s TYPE %s Index %d PARENT %s\n",dev->dev_name,dev->dev_type, dev->index,dev->parent->dev_name);
+
+                        /* start going down if we have children*/
+            if(linked_list_count(&dev->children) > 0)
+            {
+                /*save the  parent node */
+                if(stack_index < DEVMGR_SRCH_STACK)
+                {
+                    dev_stack[stack_index++] = node;
+                    node = linked_list_first(&dev->children);
+                    continue;
+                }
+            }
 
             node = linked_list_next(node);
         }
@@ -59,10 +73,10 @@ int devmgr_show_devices(void)
         if(stack_index > 0)
         {
             stack_index--;
-            node = linked_list_first(&dev_stack[stack_index]->children);
+            node = linked_list_next(dev_stack[stack_index]);
         }
 
-        if(node == NULL)
+        if(node == NULL && stack_index == 0)
             break;
     }
     kfree(dev_stack);
@@ -473,10 +487,14 @@ void *devmgr_dev_api_get(device_t *dev)
     return(dev->drv->drv_api);
 }
 
-device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
+device_t *devmgr_dev_get_by_name
+(
+    const char     *name, 
+    const uint32_t index
+)
 {
     device_t *dev = NULL;
-    device_t *dev_stack[DEVMGR_SRCH_STACK];
+    list_node_t *dev_stack[DEVMGR_SRCH_STACK];
     list_node_t *node        = NULL;
     int          stack_index = 0;
     int          int_status = 0;
@@ -493,31 +511,45 @@ device_t *devmgr_dev_get_by_name(const char *name, const uint32_t index)
         {
             dev = (device_t*)node;
 
+
+            if(dev->index == index && 
+               !strcmp(dev->dev_name, name))
+            {
+                spinlock_unlock_interrupt(&dev_list_lock, int_status);
+                return(dev);
+            }
+
+            /* start going down if we have children*/
+            if(linked_list_count(&dev->children) > 0)
+            {
+                /*save the  parent node */
+                if(stack_index < DEVMGR_SRCH_STACK)
+                {
+                    dev_stack[stack_index++] = node;
+                    node = linked_list_first(&dev->children);
+                    continue;
+                }
+            }
+
+#if 0
             if(linked_list_count(&dev->children) > 0)
             {
                 if(stack_index < DEVMGR_SRCH_STACK)
                     dev_stack[stack_index++] = dev;
             }
-
+#endif
            // kprintf("DEVICE %s\n",dev->dev_name);
 
-            if(dev->index == index && 
-               !strcmp(dev->dev_name, name))
-            {
-                kfree(dev_stack);
-                spinlock_unlock_interrupt(&dev_list_lock, int_status);
-                return(dev);
-            }
             node = linked_list_next(node);
         }
 
         if(stack_index > 0)
         {
             stack_index--;
-            node = linked_list_first(&dev_stack[stack_index]->children);
+            node = linked_list_next(dev_stack[stack_index]);
         }
 
-        if(node == NULL)
+        if(node == NULL && stack_index == 0)
             break;
     }
 

@@ -5,9 +5,6 @@
 #include <spinlock.h>
 #include <cpu.h>
 
-extern void __pause();
-extern void __wbinvd();
-
 void spinlock_init(spinlock_t *s)
 {
     s->int_status = 0;
@@ -20,7 +17,7 @@ void spinlock_lock(spinlock_t *s)
 
     while(!__sync_bool_compare_and_swap(&s->lock, 0, 1))
     {
-        __pause();
+        cpu_pause();
     }
 }
 
@@ -39,7 +36,7 @@ void spinlock_lock_interrupt(spinlock_t *s, int *state)
 
     while(!__sync_bool_compare_and_swap(&s->lock, 0, 1))
     {
-        __pause();
+        cpu_pause();
     }
 }
 

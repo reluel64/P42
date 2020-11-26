@@ -9,8 +9,8 @@
 
 int linked_list_init(list_head_t *lh)
 {
-   if(lh == NULL)
-    return(-1);
+    if(lh == NULL)
+        return(-1);
     
     lh->list.next  = NULL;
     lh->list.prev  = NULL;
@@ -37,7 +37,9 @@ int linked_list_add_head(list_head_t *lh, list_node_t *ln)
         ln->prev       = NULL;
         lh->list.next  = ln;
    }
+
    lh->count++;
+
    return(0);
 }
 
@@ -59,6 +61,7 @@ int linked_list_add_tail(list_head_t *lh, list_node_t *ln)
         ln->prev->next = ln;
         lh->list.prev  = ln;
    }
+   
    lh->count++;
    
    return(0);

@@ -19,13 +19,6 @@ global __read_cr8
 global __write_cr8
 global __hlt
 ;----------------------------------------
-__enable_nx:
-    mov ecx, 0xC0000080               ; Read from the EFER MSR. 
-    rdmsr    
-    or eax, (1 << 11)                ; Set the NXE bit.
-    wrmsr
-    ret
-;----------------------------------------
 __wbinvd:
     wbinvd
     ret

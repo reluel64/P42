@@ -105,7 +105,6 @@ int isr_uninstall
             if(intr->ih == ih && intr->pv == pv)
             {
                 linked_list_remove(&eoi_handlers, node);
-
                 kfree(intr);
             }
 
@@ -132,9 +131,7 @@ int isr_uninstall
 
             if(intr->ih == ih)
             {
-
                 linked_list_remove(&isr_lst->head, node);
-
                 kfree(intr);
             }
 

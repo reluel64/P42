@@ -26,12 +26,13 @@ int cpu_init(void)
 
 uint32_t cpu_id_get(void)
 {
+
     return(api->cpu_id_get());
 }
 
 int cpu_setup(device_t *dev)
 {
-    device_t      *cpu_dev = NULL;
+    device_t   *cpu_dev = NULL;
     cpu_t      *cpu = NULL;
     uint32_t    cpu_id = 0;
     virt_addr_t stack = 0;
@@ -91,13 +92,10 @@ int cpu_setup(device_t *dev)
     /* Perform platform specific cpu setup */
     api->cpu_setup(cpu);
 
-    api->int_unlock();
     memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
-    return(0);
-}
 
-int cpu_entry_point(void)
-{
+    api->int_unlock();
+
     return(0);
 }
 
@@ -118,9 +116,9 @@ int cpu_int_check(void)
     return(api->int_check());
 }
 
-int cpu_ap_start(void)
+int cpu_ap_start(uint32_t count)
 {
-    return(api->start_ap(-1));
+    return(api->start_ap(count));
 }
 
 virt_addr_t cpu_virt_max(void)
@@ -160,7 +158,12 @@ int cpu_issue_ipi
     return(api->ipi_issue(dest, cpu, vector));
 }
 
-int cpu_halt(void)
+void cpu_halt(void)
 {
     api->halt();
+}
+
+void cpu_pause(void)
+{
+    api->pause();
 }

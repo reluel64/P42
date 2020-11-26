@@ -28,7 +28,10 @@ typedef struct shced_queue_t
 typedef struct sched_exec_unit_t
 {
     cpu_t *cpu;             
-    list_head_t threads;    /* queue of threads on the current CPU*/
+    list_head_t active_q;    /* queue of active threads on the current CPU*/
+    list_head_t blocked_q;   /* queue of blocked threads */
+    list_head_t sleep_q;     /* queue of sleeping threads */
+    list_head_t dead_q;      /* queue of dead threads - for cleanup */
     thread_t *current;      /* current thread */
     spinlock_t lock;        /* lock to protect the queue */
 }sched_exec_unit_t;
@@ -82,18 +85,48 @@ int shced_start_thread(thread_t *th)
     return(0);
 }
 
+static thread_t *sched_acquire_unblocked_thread
+(
+    sched_exec_unit_t *unit
+)
+{
+    list_node_t *node = NULL;
+    thread_t *th =  NULL;
+    node = linked_list_first(&unit->blocked_q);
+
+    while(node)
+    {
+        th = (thread_t*)node;
+
+        
+        node = linked_list_next(node);
+    }
+
+    return(NULL);
+}
+
 static int sched_resched_isr(void *pv, virt_addr_t iframe)
 {
     sched_exec_unit_t *unit = pv;
     
+    return 0;
     int int_status = 0;
     thread_t *next = NULL;
     
     spinlock_lock_interrupt(&unit->lock, &int_status);
     
     
-    next = (thread_t*)linked_list_first(&unit->threads);
+    next = (thread_t*)linked_list_first(&unit->active_q);
     
+    /* if we don't have any active threads, we must check
+     * the other queues
+     */ 
+    if(next == NULL)
+    {
+        kprintf("Checking for blocked q");
+        next = sched_acquire_unblocked_thread(unit);
+        
+    }
 
     kprintf("Rescheduling on %d\n", unit->cpu->cpu_id);
     return(0);
@@ -118,16 +151,17 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
         return(-1);
     }
 
+    /* assign scheduler to the cpu */
     cpu->sched = unit;
+
+    /* tell the scheduler unit on which cpu it belongs */
     unit->cpu = cpu;
-kprintf("ENTER 2\n");
 
     timer_periodic_install(timer,
                            sched_resched_isr,
                            unit,
                            0);
-    
- 
+                           
     //isr_install(sched_resched_isr, NULL, PLATFORM_RESCHED_VECTOR, 0);
 }
 

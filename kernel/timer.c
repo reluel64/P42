@@ -4,7 +4,7 @@
 #include <spinlock.h>
 #include <utils.h>
 #include <liballoc.h>
-
+#include <cpu.h>
 void timer_update
 (
     list_head_t *queue,
@@ -99,7 +99,7 @@ void timer_loop_delay(device_t *dev, uint32_t delay)
 
     while(!__sync_bool_compare_and_swap(&wait, 1, 0))
     {
-        __pause();
+        cpu_pause();
     }
 
     kfree(timer);
