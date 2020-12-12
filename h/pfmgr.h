@@ -1,9 +1,10 @@
 #ifndef pfmgr_h
 #define pfmgr_h
+
 #include <stdint.h>
 #include <defs.h>
 #include <linked_list.h>
-#define PAGE_SIZE (0x1000)
+#include <platform.h>
 #define PF_PER_ITEM (64)
 
 #define LOW_MEMORY   (0x100000)

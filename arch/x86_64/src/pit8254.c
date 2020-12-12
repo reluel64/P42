@@ -28,7 +28,7 @@ static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
 
     spinlock_lock_interrupt(&pit_dev->lock, &int_status);
 
-    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS);
+    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS, iframe);
 
     spinlock_unlock_interrupt(&pit_dev->lock, int_status);
 

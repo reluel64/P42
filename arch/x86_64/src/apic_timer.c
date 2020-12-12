@@ -36,7 +36,7 @@ static int apic_timer_isr(void *dev, virt_addr_t iframe)
     spinlock_lock_interrupt(&timer->lock, &int_status);
 
     if(linked_list_count(&timer->queue) > 0)
-        timer_update(&timer->queue, APIC_TIMER_INTERVAL_MS);
+        timer_update(&timer->queue, APIC_TIMER_INTERVAL_MS, iframe);
 
     (*reg->timer_icnt) = timer->calib_value;
 
@@ -48,7 +48,7 @@ static int apic_timer_isr(void *dev, virt_addr_t iframe)
 static int apic_timer_probe(device_t *dev)
 {
     if(devmgr_dev_name_match(dev, APIC_TIMER_NAME) && 
-        devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
+       devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
     {
         return(0);
     }
@@ -116,9 +116,8 @@ static int apic_timer_arm(device_t *dev, timer_t *tm)
 
     timer = devmgr_dev_data_get(dev);
 
-    kprintf("TEST1\n");
+    
     spinlock_lock_interrupt(&timer->lock, &int_status);
-kprintf("TEST2\n");
     linked_list_add_tail(&timer->queue, &tm->node);
     spinlock_unlock_interrupt(&timer->lock, int_status);
 

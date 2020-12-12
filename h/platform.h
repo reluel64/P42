@@ -5,6 +5,8 @@
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
+#define PAGE_SIZE (0x1000)
+
 #define _BSP_STACK_TOP ((virt_addr_t)&kstack_top)
 #define _BSP_STACK_BASE ((virt_addr_t)&kstack_base)
 
@@ -21,6 +23,7 @@ extern virt_addr_t kstack_top;
 #define RESERVED_ISR_END   (31)
 #define MAX_HANDLERS       (256)
 
+#define PLATFORM_AP_START_TIMEOUT (5000)
 
 #define PLATFORM_RESCHED_VECTOR (240)
 #define PLATFORM_PG_INVALIDATE_VECTOR  (239)
@@ -64,13 +67,12 @@ typedef struct cpu_platfrom_driver_t
 
 typedef struct interrupt_frame_t
 {
-    uint64_t error_code;
     uint64_t rip;
     uint64_t cs;
     uint64_t rflags;
     uint64_t rsp;
     uint64_t ss;
-}interrupt_frame_t;
+}__attribute__((packed))  interrupt_frame_t;
 
 int pcpu_register(cpu_api_t **api);
 

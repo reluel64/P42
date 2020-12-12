@@ -116,9 +116,9 @@ int cpu_int_check(void)
     return(api->int_check());
 }
 
-int cpu_ap_start(uint32_t count)
+int cpu_ap_start(uint32_t count, uint32_t timeout)
 {
-    return(api->start_ap(count));
+    return(api->start_ap(count, timeout));
 }
 
 virt_addr_t cpu_virt_max(void)
@@ -167,3 +167,4 @@ void cpu_pause(void)
 {
     api->pause();
 }
+

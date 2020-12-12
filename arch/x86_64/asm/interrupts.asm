@@ -26,6 +26,7 @@ extern isr_dispatcher
 [BITS 64]
 %macro isr_no_ec_def 1
 isr_%1:
+    cli
     push rbp
     mov rbp, rsp
     push r11
@@ -34,18 +35,21 @@ isr_%1:
     push r8
     push rdi
     push rsi
-    push rcx
     push rdx
+    push rcx
+    push rbx
     push rax
 
     cld
     mov rdi, %1
     mov rsi, rbp
+    add rsi, 0x8
     call isr_dispatcher
     
     pop rax
-    pop rdx
+    pop rbx
     pop rcx
+    pop rdx
     pop rsi
     pop rdi
     pop r8
@@ -53,15 +57,15 @@ isr_%1:
     pop r10
     pop r11
     leave
+
     iretq
 %endmacro
 
 ; ASM stub for ISRs that do have 
 ; error codes
 %macro isr_with_ec_def 1
-extern dummy_isr
 isr_%1:
-
+    cli
     push rbp
     mov rbp, rsp
     push r11
@@ -70,20 +74,22 @@ isr_%1:
     push r8
     push rdi
     push rsi
-    push rcx
     push rdx
+    push rcx
+    push rbx
     push rax
-
+   
     cld
     mov rdi, %1
     mov rsi, rbp
-    add rsi, 0x8
+    add rsi, 0x10
 
     call isr_dispatcher
 
     pop rax
-    pop rdx
+    pop rbx
     pop rcx
+    pop rdx
     pop rsi
     pop rdi
     pop r8
@@ -94,7 +100,6 @@ isr_%1:
     leave
     
     add rsp, 8
-    
     iretq
 %endmacro
 
@@ -182,7 +187,7 @@ __geti:
 ; RDI is the address of the structure that 
 ; holds the linear address and the limit
 __lidt:
-    lidt[rdi]
+    lidt [rdi]
     ret
 
 ; Load the Global Descriptor Table Register

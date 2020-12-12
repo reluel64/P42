@@ -26,8 +26,6 @@ extern virt_size_t __max_linear_address(void);
 
 static vmmgr_ctx_t vmmgr_kernel_ctx;
 
-
-
 static inline int vmmgr_split_free_block
 (
     vmmgr_free_mem_t    *from,

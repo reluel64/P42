@@ -25,6 +25,44 @@ int isr_test(void)
     return(0);
 }
 
+long int multiplyNumbers(int n) {
+    if (n>=1)
+        return n*multiplyNumbers(n-1);
+    else
+        return 1;
+}
+
+
+int entry_pt(void *p)
+{
+    kprintf("p %x\n",p);
+    while(1)
+    {
+       //kprintf("FACT1 %d\n",multiplyNumbers(10));
+    }
+}
+int entry_pt2(void *p)
+{//
+    kprintf("p %x\n",p);
+    
+    while(1)
+    {
+       // kprintf("FACT2 %d\n",multiplyNumbers(5));
+    }
+}
+
+int entry_pt3(void *p)
+{//
+    kprintf("p %x\n",p);
+    
+    while(1)
+    {
+       // kprintf("FACT3 %d\n",multiplyNumbers(2));
+    }
+}
+
+
+
 void kmain()
 {
     /*register CPU API */
@@ -67,24 +105,40 @@ void kmain()
     cpu_init();
 
     /* Start APs */
-    cpu_ap_start(-1);
+    cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
 
-  
+    sched_init();
 
    #include <platform.h>
-
+    
     device_t *dev = devmgr_dev_get_by_name("APIC_TIMER", 0);
     device_t *cpu = devmgr_dev_get_by_name(PLATFORM_CPU_NAME,0);
 
     cpu_t *c = devmgr_dev_data_get(cpu);
        
 #if 1
-    int *j = 0;
+    sched_thread_t th1;
+    sched_thread_t th2;
+    sched_thread_t th3;
 
+    memset(&th1, 0, sizeof(sched_thread_t));
+    memset(&th2, 0, sizeof(sched_thread_t));
+    memset(&th3, 0, sizeof(sched_thread_t));
     sched_cpu_init(dev, c);
-    kprintf("Hello\n");
+
+    kprintf("Hello World\n");
     timer_loop_delay(dev, 1000);
-      devmgr_show_devices();
+    devmgr_show_devices();
+
+    sched_init_thread(&th1, entry_pt, 0x1000, 0,0x11223344);
+    sched_init_thread(&th2, entry_pt2, 0x1000, 0, 0xAABBCCDD);
+    sched_init_thread(&th3, entry_pt3, 0x1000, 0, 0xAABBCCDD);
+    
+
+    sched_start_thread(&th2);
+    sched_start_thread(&th1);
+    sched_start_thread(&th3);
+
     while(1)
     {
       
@@ -99,6 +153,5 @@ void kmain()
     }
 #endif
 
-    while(1)
-        halt();
+  
 }

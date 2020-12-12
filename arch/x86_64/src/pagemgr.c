@@ -1455,6 +1455,7 @@ int pagemgr_unmap
         spinlock_unlock_interrupt(&ctx->lock, int_status);
         return(-1);
     }
+
     PAGE_PATH_RESET(&path);
 
     while(pagemgr_free_or_unmap_cb(&dummy_phys, &dummy_count, &path));
@@ -1469,15 +1470,17 @@ static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
 {
     interrupt_frame_t *int_frame = 0;
     virt_addr_t fault_address = 0;
+    virt_addr_t error_code = *(virt_addr_t*)(iframe - sizeof(uint64_t));
 
     fault_address = __read_cr2();
     int_frame = (interrupt_frame_t*)iframe;
 
-    kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x\n",
+    kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x RFLAGS 0x%x\n",
             fault_address,  \
-            int_frame->error_code, \
+            error_code, \
             int_frame->rip,
-            int_frame->ss);
+            int_frame->ss,
+            int_frame->rflags);
 
     while(1);
 
@@ -1514,6 +1517,7 @@ int pagemgr_per_cpu_init(void)
 
     __wbinvd();
     __wrmsr(PAT_MSR, page_manager.pat.pat);
+    
     cr3 = __read_cr3();
 
     __write_cr3(cr3);

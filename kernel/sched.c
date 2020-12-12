@@ -7,23 +7,8 @@
 #include <isr.h>
 #include <platform.h>
 #include <timer.h>
-
-typedef struct thread_t
-{
-    list_node_t node;
-    void       *owner;
-    void       *context;
-    uint32_t    id;
-    uint16_t    prio;
-    virt_addr_t stack;
-    virt_size_t stack_sz;
-    void       *entry_point;
-}thread_t;
-
-typedef struct shced_queue_t
-{
-
-}sched_queue_t;
+#include <sched.h>
+#include <vmmgr.h>
 
 typedef struct sched_exec_unit_t
 {
@@ -32,30 +17,42 @@ typedef struct sched_exec_unit_t
     list_head_t blocked_q;   /* queue of blocked threads */
     list_head_t sleep_q;     /* queue of sleeping threads */
     list_head_t dead_q;      /* queue of dead threads - for cleanup */
-    thread_t *current;      /* current thread */
-    spinlock_t lock;        /* lock to protect the queue */
+    sched_thread_t *current;       /* current thread */
+    sched_thread_t *idle;
+    spinlock_t lock;         /* lock to protect the queue */
+
 }sched_exec_unit_t;
 
 
 static list_head_t new_threads;
 static spinlock_t  list_lock;
+static int sched_idle_loop(void);
 
-
-int shced_init_thread
+extern  void *pcpu_initialize_context
 (
-    thread_t    *th,
+    sched_thread_t *th,
+    uint8_t is_user
+);
+
+void pcpu_prepare_context_switch(virt_addr_t iframe, void *ctx);
+void pcpu_context_save(virt_addr_t iframe, void *context);
+
+int sched_init_thread
+(
+    sched_thread_t    *th,
     void        *entry_pt,
     virt_size_t stack_sz,
-    uint32_t    prio
+    uint32_t    prio,
+    void *pv
     
 )
 {
     if(th == NULL)
         return(-1);
 
-    memset(th, 0, sizeof(thread_t));
+    memset(th, 0, sizeof(sched_thread_t));
 
-    th->stack = (virt_addr_t)kcalloc(stack_sz, 1);
+    th->stack = vmmgr_alloc(NULL, 0, stack_sz, VMM_ATTR_WRITABLE);
 
     if(!th->stack)
     {
@@ -66,11 +63,13 @@ int shced_init_thread
     th->stack_sz = stack_sz;
     th->entry_point = entry_pt;
     th->prio        = prio;
+    th->pv          = pv;
+    th->context = pcpu_initialize_context(th, 0);
 
     return(0);
 }
 
-int shced_start_thread(thread_t *th)
+int sched_start_thread(sched_thread_t *th)
 {
     int int_status = 0;
 
@@ -80,57 +79,85 @@ int shced_start_thread(thread_t *th)
 
     spinlock_unlock_interrupt(&list_lock, int_status);
     
-    cpu_issue_ipi(IPI_DEST_ALL, 0, IPI_RESCHED);
+    /*cpu_issue_ipi(IPI_DEST_ALL, 0, IPI_RESCHED);*/
 
     return(0);
 }
 
-static thread_t *sched_acquire_unblocked_thread
+#include <pcpu.h>
+extern void __test_func(void);
+ static pcpu_context_t *ctx = NULL;
+static uint8_t *stack = NULL;
+
+
+void sched_resched
 (
+    virt_addr_t iframe, 
     sched_exec_unit_t *unit
 )
 {
-    list_node_t *node = NULL;
-    thread_t *th =  NULL;
-    node = linked_list_first(&unit->blocked_q);
+    int               int_status = 0;
+    sched_thread_t          *next      = NULL;
+    sched_thread_t          *current   = NULL;
+    sched_thread_t          *new_thread = NULL;
+    list_node_t       *node      = NULL;
 
-    while(node)
+    spinlock_lock_interrupt(&unit->lock, &int_status);
+
+    /* Check if we have new threads that await first
+     * execution
+     */ 
+    spinlock_lock_interrupt(&list_lock, &int_status);
+    
+    new_thread = (sched_thread_t*)linked_list_first(&new_threads);
+
+    if(new_thread != NULL)
     {
-        th = (thread_t*)node;
-
-        
-        node = linked_list_next(node);
+        linked_list_remove(&new_threads, &new_thread->node);
+        linked_list_add_head(&unit->active_q, &new_thread->node);
     }
 
-    return(NULL);
+    spinlock_unlock_interrupt(&list_lock, int_status);
+
+    /* Add the pre-empted task to the end of active queue list */
+    if(unit->current)
+    {
+        pcpu_context_save(iframe,  unit->current->context);
+        linked_list_add_tail(&unit->active_q, &unit->current->node);
+    }
+
+    next = (sched_thread_t*)linked_list_first(&unit->active_q);
+
+    if(next != NULL)
+    {
+        linked_list_remove(&unit->active_q, &next->node);
+        unit->current = next;
+        pcpu_prepare_context_switch(iframe, next->context);
+    }
+
+   // kprintf("REscheduling %x CPU %d\n",next, unit->cpu->cpu_id);
+    spinlock_unlock_interrupt(&unit->lock, int_status);
+
+
 }
+extern void pcpu_prepare_context_switch(virt_addr_t iframe, void *ctx);
 
 static int sched_resched_isr(void *pv, virt_addr_t iframe)
 {
-    sched_exec_unit_t *unit = pv;
-    
-    return 0;
-    int int_status = 0;
-    thread_t *next = NULL;
-    
-    spinlock_lock_interrupt(&unit->lock, &int_status);
-    
-    
-    next = (thread_t*)linked_list_first(&unit->active_q);
-    
-    /* if we don't have any active threads, we must check
-     * the other queues
-     */ 
-    if(next == NULL)
-    {
-        kprintf("Checking for blocked q");
-        next = sched_acquire_unblocked_thread(unit);
+    sched_exec_unit_t *unit      = NULL;
+    cpu_t             *cpu       = NULL;
         
-    }
+    unit = (sched_exec_unit_t*)pv;
+    cpu = unit->cpu;
 
-    kprintf("Rescheduling on %d\n", unit->cpu->cpu_id);
+    if(cpu->cpu_id != cpu_id_get())
+        return(0);
+
+    sched_resched(iframe, unit);
+    
     return(0);
 }
+
 
 int sched_init(void)
 {
@@ -139,36 +166,53 @@ int sched_init(void)
 
     return(0);
 }
+#include <vmmgr.h>
 
 int sched_cpu_init(device_t *timer, cpu_t *cpu)
 {
     sched_exec_unit_t *unit = NULL;
-
+    kprintf("Initializing Scheduler for CPU %d\n",cpu->cpu_id);
     unit = kcalloc(sizeof(sched_exec_unit_t), 1);
-    kprintf("ENTER\n");
+
     if(unit == NULL)
     {
         return(-1);
     }
 
+    
     /* assign scheduler to the cpu */
     cpu->sched = unit;
 
     /* tell the scheduler unit on which cpu it belongs */
     unit->cpu = cpu;
 
+    linked_list_init(&unit->active_q);
+    linked_list_init(&unit->blocked_q);
+    linked_list_init(&unit->sleep_q);
+    linked_list_init(&unit->dead_q);
+
+    spinlock_init(&unit->lock);
+
     timer_periodic_install(timer,
                            sched_resched_isr,
                            unit,
                            0);
-                           
-    //isr_install(sched_resched_isr, NULL, PLATFORM_RESCHED_VECTOR, 0);
+
+    unit->idle = kcalloc(sizeof(sched_thread_t), 1);
+  //  isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0);
+ //   sched_init_thread(unit->idle, sched_idle_loop, PAGE_SIZE, 0);
+   // sched_start_thread(unit->idle);
+
+    return(0);
+ 
 }
 
 static int sched_idle_loop(void)
 {
+    kprintf("Entered idle loop\n");
     while(1)
     {
         cpu_halt();
     }
+    return(0);
 }

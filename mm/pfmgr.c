@@ -9,7 +9,7 @@
 #include <pagemgr.h>
 #include <vmmgr.h>
 
-typedef struct 
+typedef struct pfmgr_init_t
 {
     phys_addr_t busy_start;
     phys_size_t busy_len;

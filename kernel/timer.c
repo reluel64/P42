@@ -8,7 +8,8 @@
 void timer_update
 (
     list_head_t *queue,
-    uint32_t interval
+    uint32_t interval,
+    virt_addr_t iframe
 )
 {
     timer_t *tm = NULL;
@@ -27,7 +28,7 @@ void timer_update
         {
             if(tm->handler)
             {
-                tm->handler(tm->data);
+                tm->handler(tm->data, iframe);
             }
 
             if(tm->flags & TIMER_PERIODIC)
@@ -79,7 +80,7 @@ void *timer_arm
 
 static int timer_sleep_callback(void *pv)
 {
-    kprintf("CPU %d\n",cpu_id_get());
+    //kprintf("CPU %d\n",cpu_id_get());
     __sync_fetch_and_add((int*)pv, 1);
    
     return(1);

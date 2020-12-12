@@ -45,26 +45,26 @@ int linked_list_add_head(list_head_t *lh, list_node_t *ln)
 
 int linked_list_add_tail(list_head_t *lh, list_node_t *ln)
 {
-   if(lh->list.next == NULL && lh->list.prev == NULL)
-   {
+    if(lh->list.next == NULL && lh->list.prev == NULL)
+    {
         /* mark the node as head and tail */
         lh->list.next = lh->list.prev = ln;
         
         /* This is the only entry at the moment */
         ln->next = NULL;
         ln->prev = NULL;
-   }
-   else
-   {
+    }
+    else
+    {
         ln->next       = NULL;
         ln->prev       = lh->list.prev;
         ln->prev->next = ln;
         lh->list.prev  = ln;
-   }
-   
-   lh->count++;
-   
-   return(0);
+    }
+    
+    lh->count++;
+    
+    return(0);
 }
 
 int linked_list_remove(list_head_t *lh, list_node_t *ln)

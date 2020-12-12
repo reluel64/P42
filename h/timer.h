@@ -2,6 +2,7 @@
 #define timerh
 
 #include <stdint.h>
+#include <defs.h>
 #include <linked_list.h>
 #include <devmgr.h>
 
@@ -10,7 +11,7 @@
 
 
 
-typedef int (*timer_handler_t)(void *);
+typedef int (*timer_handler_t)(void *, virt_addr_t);
 
 typedef struct timer_t
 {
@@ -48,6 +49,7 @@ int timer_periodic_install
 void timer_update
 (
     list_head_t *queue,
-    uint32_t interval
+    uint32_t interval,
+    virt_addr_t iframe
 );
 #endif

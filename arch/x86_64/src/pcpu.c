@@ -17,7 +17,7 @@
 #include <i8254.h>
 #include <apic_timer.h>
 #include <sched.h>
-
+#include <pcpu.h>
 extern void __cpu_switch_stack
 (
     virt_addr_t *new_top,
@@ -31,7 +31,7 @@ extern int  __geti();
 extern void __lidt(idt64_ptr_t *);
 extern void __hlt();
 extern void __pause();
-
+extern void __cpu_context_restore(void);
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -378,7 +378,9 @@ static virt_addr_t pcpu_prepare_trampoline(void)
 static int pcpu_bring_cpu_up
 (
     device_t *issuer, 
-    uint32_t cpu
+    uint32_t cpu,
+    uint32_t timeout
+    
 )
 {
     ipi_packet_t ipi;
@@ -414,7 +416,7 @@ static int pcpu_bring_cpu_up
     timer_loop_delay(timer_dev, 10);
 
     /* Start up the CPU */
-    for(uint16_t attempt = 0; attempt < 100; attempt++)
+    for(uint16_t attempt = 0; attempt < timeout / 10; attempt++)
     {
         intc_send_ipi(issuer, &ipi);
 
@@ -423,15 +425,9 @@ static int pcpu_bring_cpu_up
         for(uint32_t i = 0; i < 10;i++)
         {   
             timer_loop_delay(timer_dev, 1);
-
+           
             if(__sync_bool_compare_and_swap(&cpu_on, 1, 0))
                 return(0);
-        }
-
-
-        if(attempt + 1 == 100)
-        {
-            vga_print("TIMED_OUT\n",0,0);
         }
     }
 
@@ -466,7 +462,11 @@ static int pcpu_issue_ipi
     return(0);
 }
 
-static int pcpu_ap_start(uint32_t num)
+static int pcpu_ap_start
+(
+    uint32_t num,
+    uint32_t timeout
+)
 {
     int                    status      = 0;
     virt_addr_t            trampoline   = 0;
@@ -524,8 +524,6 @@ static int pcpu_ap_start(uint32_t num)
         (i < madt->Header.Length) && (started_cpu < num);
         i += subhdr->Length)
     {
-
-        
         subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
 
         if(use_x2_apic)
@@ -545,7 +543,7 @@ static int pcpu_ap_start(uint32_t num)
                 }
                 else
                 {
-                    pcpu_bring_cpu_up(dev, x2lapic->LocalApicId);
+                    pcpu_bring_cpu_up(dev, x2lapic->LocalApicId, timeout);
                     started_cpu++;
                 }
             }
@@ -567,7 +565,7 @@ static int pcpu_ap_start(uint32_t num)
                 }
                 else
                 {
-                    pcpu_bring_cpu_up(dev, lapic->Id);
+                    pcpu_bring_cpu_up(dev, lapic->Id, timeout);
                     started_cpu++;
                 }
             }
@@ -611,7 +609,7 @@ static void pcpu_entry_point(void)
     }   
 
     /* signal that the cpu is up and running */
-
+    kprintf("CPU_STARTED\n");
     __sync_fetch_and_or(&cpu_on, 1);
 
     cpu = devmgr_dev_data_get(cpu_dev);
@@ -652,7 +650,8 @@ static int pcpu_setup(cpu_t *cpu)
     pcpu = cpu->cpu_pv;
 
     pcpu->esp0  = vmmgr_alloc(NULL, 0, PAGE_SIZE, VMM_ATTR_WRITABLE);
-
+    cpu->context = kcalloc(sizeof(pcpu_context_t), 1);
+    
     /* Prepare the GDT */
     gdt_per_cpu_init(cpu->cpu_pv);
 
@@ -686,6 +685,8 @@ static int pcpu_setup(cpu_t *cpu)
             return(-1);
         }
     }
+
+    
 
     return(0);
 }
@@ -736,13 +737,76 @@ static uint32_t pcpu_get_domain
     return(domain);
 }
 
+void pcpu_context_save(virt_addr_t iframe, void *context)
+{
+    pcpu_context_t *ctx = NULL;
+    virt_addr_t    reg_loc = 0;
+    uint64_t *reg = NULL;
+
+    ctx = context;
+    reg_loc = iframe - sizeof(regs_t);
+       
+    memcpy(&ctx->iframe, (uint8_t*)iframe, sizeof(interrupt_frame_t));
+    memcpy(&ctx->regs, (uint8_t*)reg_loc, sizeof(regs_t));
+}
+
+void pcpu_prepare_context_switch(virt_addr_t iframe, void *ctx)
+{
+    
+    pcpu_context_t *context = NULL;
+    interrupt_frame_t *frame = NULL;
+
+    frame = (interrupt_frame_t*)iframe;
+
+    frame->cs = 0x8;
+    frame->rsp = ((virt_addr_t)ctx);
+    frame->rip = (uint64_t)__cpu_context_restore;
+    frame->ss  = 0x10;
+
+    /* Clear NT and IF */
+    frame->rflags &= ~((1 << 14) | (1 << 9));
+
+    context = ctx;
+
+}
+
+void *pcpu_initialize_context
+(
+    sched_thread_t *th,
+    uint8_t is_user
+)
+{
+    pcpu_context_t *ctx = NULL;
+    uint8_t cs = 0x8;
+    uint8_t ss = 0x10;
+
+    ctx = (pcpu_context_t*)vmmgr_alloc(NULL, 0x0, 
+                                       PAGE_SIZE, 
+                                       VMM_ATTR_WRITABLE);
+
+    if(ctx == NULL)
+        return(NULL);
+    
+    memset(ctx, 0, PAGE_SIZE);
+
+    ctx->iframe.rip = (virt_addr_t)th->entry_point;
+    ctx->iframe.rsp = th->stack + th->stack_sz;
+    ctx->iframe.ss  = ss;
+    /* a new task does not disable interrupts */
+    ctx->iframe.rflags = 0x1 | 0x200;
+    ctx->iframe.cs = cs;
+    ctx->regs.rdi = th->pv;
+
+    return(ctx);
+}
+
 static int pcpu_dev_init(device_t *dev)
 {
     cpu_setup(dev);
     return(0);
 }
 
-static int pcpu_probe(device_t *dev)
+static int pcpu_dev_probe(device_t *dev)
 {
     if(devmgr_dev_name_match(dev, PLATFORM_CPU_NAME) &&
        devmgr_dev_type_match(dev, CPU_DEVICE_TYPE))
@@ -827,7 +891,7 @@ static driver_t x86_cpu =
 {
     .drv_name   = PLATFORM_CPU_NAME,
     .drv_type   = CPU_DEVICE_TYPE,
-    .dev_probe  = pcpu_probe,
+    .dev_probe  = pcpu_dev_probe,
     .dev_init   = pcpu_dev_init,
     .dev_uninit = NULL,
     .drv_init   = pcpu_drv_init,

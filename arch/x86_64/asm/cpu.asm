@@ -1,3 +1,4 @@
+BITS 64 
 global __wbinvd
 global __pause
 global __cpu_switch_stack
@@ -164,11 +165,24 @@ __invlpg:
 __hlt:
     hlt
     ret
-
-; RDI - new context
-; RSI - old context
-__cpu_context_switch:
-
+global __cpu_context_restore
+global __test_call
+extern entry_pt
 
 
-__cpu_thread_stub:
+__cpu_context_restore:
+    cli
+
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop rbp
+
+    iretq

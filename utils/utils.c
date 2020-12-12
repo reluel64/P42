@@ -8,7 +8,7 @@ void* memset(void* ptr, int value, size_t num)
 {
     uint8_t* start = (uint8_t*)ptr;
     size_t   pos = 0;
-    size_t wval = 0;
+    size_t wval = value;
 #if 0
     wval = value & 0xff;
 

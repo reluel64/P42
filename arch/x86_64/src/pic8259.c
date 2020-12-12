@@ -19,8 +19,8 @@
 static int pic8259_isr(void *pv, uint64_t ec)
 {
     kprintf("8259ISR\n");
-    __outb(PIC1_COMMAND,(1<<5));
-    __outb(PIC2_COMMAND,(1<<5));
+    __outb(PIC1_COMMAND,( 1<<5 ));
+    __outb(PIC2_COMMAND,( 1<<5 ));
     return(0);
 }
 
