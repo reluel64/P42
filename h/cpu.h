@@ -4,7 +4,6 @@
 #include <linked_list.h>
 #include <defs.h>
 #include <devmgr.h>
-
 #define CPU_DEVICE_TYPE "cpu"
 
 typedef struct cpu_t
@@ -35,7 +34,9 @@ typedef struct cpu_api_t
     int (*ipi_issue)(uint8_t, uint32_t, uint32_t);
     void (*halt) (void);
     void (*pause)(void);
-    
+    void (*ctx_save)(virt_addr_t, void* th);
+    void (*ctx_restore)(virt_addr_t, void* th);
+    void *(*ctx_init)(void *th);
 }cpu_api_t;
 
 
@@ -57,4 +58,9 @@ int cpu_issue_ipi
     uint32_t cpu,
     uint32_t type
 );
+void cpu_ctx_save(virt_addr_t iframe, void *th);
+void cpu_ctx_restore(virt_addr_t iframe, void *th);
+void *cpu_ctx_init(void *th);
+cpu_t *cpu_current_get(void);
+
 #endif

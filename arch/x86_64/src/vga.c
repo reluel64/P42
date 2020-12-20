@@ -54,8 +54,7 @@ int vga_print_internal(uint8_t *buf)
             memcpy(vga.base, &vga.base[VGA_MAX_COL], 
                    sizeof(uint16_t) * 
                    (VGA_MAX_COL) * 
-                   (VGA_MAX_ROW - 1)
-                  );
+                   (VGA_MAX_ROW - 1));
 
             /* update the variables */
             vga.row = VGA_MAX_ROW - 1;
@@ -98,43 +97,5 @@ void vga_print(uint8_t *buf, uint8_t color, uint64_t len)
     uint8_t ch = 0;
     uint16_t pos;
 
-
     vga_print_internal(buf);
-#if 0
-    if(color == 0x0)
-        color = 0x7;
-    for(uint64_t i = 0; i < len && buf[i] != 0; i++)
-    {
-        ch = buf[i];
-
-        /* This is a newline character
-         * so we must increase the row and move the col to 0
-         */
-       if(ch == '\n')
-       {
-           vga.row++;
-           vga.col = 0;
-           continue;
-       }
-
-        if(vga.col >= VGA_MAX_COL)
-        {
-            vga.row++;
-            vga.col = 0;
-        }
-
-       if(vga.row >= VGA_MAX_ROW)
-       {
-           vga_scroll();
-       }
-
-    
-    pos = vga.row * VGA_MAX_COL + vga.col;
-    vga_ch &= 0xff00; /* clear the character part */
-    vga.base[pos] = (vga_ch | ch);
-    vga.col++;
-
-   }
-
-   #endif
 }

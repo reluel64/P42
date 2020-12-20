@@ -1027,11 +1027,11 @@ virt_addr_t vmmgr_alloc
 int vmmgr_free
 (
     vmmgr_ctx_t *ctx,
-    virt_addr_t *vaddr, 
+    virt_addr_t vaddr, 
     virt_size_t len
 )
 {
-    virt_addr_t      virt = (virt_addr_t)vaddr;
+    virt_addr_t      virt = vaddr;
     vmmgr_free_mem_t mm;
     int              status     = 0;
     int              int_status = 0;

@@ -132,7 +132,6 @@ static void pfmgr_early_mark_bitmap
     phys_size_t pf_pos = 0;
     phys_size_t pos = 0;
     
-
     while(pos < len)
     {
         pf_pos = ((addr + pos) - fmem->hdr.base) / PAGE_SIZE;
@@ -146,7 +145,6 @@ static void pfmgr_early_mark_bitmap
         bmp[0] |= ((virt_addr_t)1 << pf_ix);
         pos += PAGE_SIZE;
         fmem->avail_pf--;
-        
     }
 }
 

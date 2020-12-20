@@ -4,6 +4,7 @@
 #include <utils.h>
 #include <devmgr.h>
 #include <cpu.h>
+
 #include <platform.h>
 #include <vmmgr.h>
 #include <intc.h>
@@ -26,17 +27,14 @@ int cpu_init(void)
 
 uint32_t cpu_id_get(void)
 {
-
     return(api->cpu_id_get());
 }
 
 int cpu_setup(device_t *dev)
 {
-    device_t   *cpu_dev = NULL;
     cpu_t      *cpu = NULL;
     uint32_t    cpu_id = 0;
     virt_addr_t stack = 0;
-    dev_srch_t  *srch = NULL;
 
     /* Get the first cpu */
 
@@ -168,3 +166,31 @@ void cpu_pause(void)
     api->pause();
 }
 
+void cpu_ctx_save(virt_addr_t iframe, void *th)
+{
+    api->ctx_save(iframe, th);
+}
+
+void cpu_ctx_restore(virt_addr_t iframe, void *th)
+{
+    api->ctx_restore(iframe, th);
+}
+
+void *cpu_ctx_init(void *th)
+{
+    return(api->ctx_init(th));
+}
+
+cpu_t *cpu_current_get(void)
+{
+    device_t *dev = NULL;
+    uint32_t cpu_id = 0;
+    cpu_t    *cpu = NULL;
+
+    cpu_id = cpu_id_get();
+    
+    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, cpu_id);
+    cpu = devmgr_dev_data_get(dev);
+
+    return(cpu);
+}

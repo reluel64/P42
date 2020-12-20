@@ -105,6 +105,10 @@ typedef struct gdt_ptr
 }__attribute__((packed)) gdt_ptr_t;
 
 int gdt_per_cpu_init(void *cpu_pv);
-
+void gdt_update_tss
+(
+    void *cpu_pv, 
+    virt_addr_t esp0
+);
 
 #endif

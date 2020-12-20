@@ -889,11 +889,11 @@ void* liballoc_alloc(size_t pages)
  *
  * \return 0 if the memory was successfully freed.
  */
-int liballoc_free(void*p,size_t pages)
+int liballoc_free(void*p, size_t pages)
 {
     int ret = 0;
 
-    ret = vmmgr_free(NULL, p, pages * PAGE_SIZE);
+    ret = vmmgr_free(NULL, (virt_addr_t)p, pages * PAGE_SIZE);
     return(ret);
 }
   

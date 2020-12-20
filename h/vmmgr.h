@@ -104,7 +104,7 @@ int vmmgr_unmap
 int vmmgr_free
 (
     vmmgr_ctx_t *ctx, 
-    virt_addr_t *vaddr, 
+    virt_addr_t vaddr, 
     virt_size_t len
 );
 

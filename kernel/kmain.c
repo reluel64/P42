@@ -16,7 +16,10 @@
 #include <intc.h>
 #include <utils.h>
 #include <isr.h>
-#include <sched.h>
+#include <scheduler.h>
+#include <semaphore.h>
+
+semb_t *sem  = NULL;
 
 int isr_test(void)
 {
@@ -35,33 +38,39 @@ long int multiplyNumbers(int n) {
 
 int entry_pt(void *p)
 {
-    kprintf("p %x\n",p);
+    int x = 0;
     while(1)
     {
-       //kprintf("FACT1 %d\n",multiplyNumbers(10));
+        for(uint32_t i = 0; i< UINT32_MAX/16; i++);
+
+        semb_give(sem);
+        multiplyNumbers(2);
+    kprintf("p %x\n",p);
     }
 }
 int entry_pt2(void *p)
 {//
-    kprintf("p %x\n",p);
-    
+  
     while(1)
     {
-       // kprintf("FACT2 %d\n",multiplyNumbers(5));
+        semb_wait(sem);
+    
+        kprintf("Hello World\n");
     }
 }
 
 int entry_pt3(void *p)
 {//
-    kprintf("p %x\n",p);
     
+        sched_thread_t *th = NULL;
     while(1)
     {
-       // kprintf("FACT3 %d\n",multiplyNumbers(2));
+        multiplyNumbers(2);
+    th = sched_thread_self();
+    //if(th != p)
+        //kprintf("p %x %x\n",th,p);
     }
 }
-
-
 
 void kmain()
 {
@@ -121,24 +130,26 @@ void kmain()
     sched_thread_t th2;
     sched_thread_t th3;
 
+    sem = sem_create(0);
+    
     memset(&th1, 0, sizeof(sched_thread_t));
     memset(&th2, 0, sizeof(sched_thread_t));
     memset(&th3, 0, sizeof(sched_thread_t));
-    sched_cpu_init(dev, c);
+
 
     kprintf("Hello World\n");
     timer_loop_delay(dev, 1000);
     devmgr_show_devices();
 
-    sched_init_thread(&th1, entry_pt, 0x1000, 0,0x11223344);
-    sched_init_thread(&th2, entry_pt2, 0x1000, 0, 0xAABBCCDD);
-    sched_init_thread(&th3, entry_pt3, 0x1000, 0, 0xAABBCCDD);
+    sched_init_thread(&th1, entry_pt, 0x1000, 0,&th1);
+    sched_init_thread(&th2, entry_pt2, 0x1000, 0, &th2);
+    sched_init_thread(&th3, entry_pt3, 0x1000, 0, &th3);
     
 
     sched_start_thread(&th2);
     sched_start_thread(&th1);
     sched_start_thread(&th3);
-
+    sched_cpu_init(dev, c);
     while(1)
     {
       

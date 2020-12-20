@@ -16,7 +16,7 @@
 #include <timer.h>
 #include <i8254.h>
 #include <apic_timer.h>
-#include <sched.h>
+#include <scheduler.h>
 #include <pcpu.h>
 extern void __cpu_switch_stack
 (
@@ -649,7 +649,6 @@ static int pcpu_setup(cpu_t *cpu)
 
     pcpu = cpu->cpu_pv;
 
-    pcpu->esp0  = vmmgr_alloc(NULL, 0, PAGE_SIZE, VMM_ATTR_WRITABLE);
     cpu->context = kcalloc(sizeof(pcpu_context_t), 1);
     
     /* Prepare the GDT */
@@ -737,48 +736,58 @@ static uint32_t pcpu_get_domain
     return(domain);
 }
 
-void pcpu_context_save(virt_addr_t iframe, void *context)
+static void pcpu_ctx_save(virt_addr_t iframe, void *th)
 {
-    pcpu_context_t *ctx = NULL;
+    pcpu_context_t *context = NULL;
     virt_addr_t    reg_loc = 0;
-    uint64_t *reg = NULL;
+    sched_thread_t *thread = NULL;
 
-    ctx = context;
-    reg_loc = iframe - sizeof(regs_t);
+    thread = th;
+    context = thread->context;
+    reg_loc = iframe - sizeof(pcpu_regs_t);
        
-    memcpy(&ctx->iframe, (uint8_t*)iframe, sizeof(interrupt_frame_t));
-    memcpy(&ctx->regs, (uint8_t*)reg_loc, sizeof(regs_t));
+    memcpy(&context->iframe, (uint8_t*)iframe, sizeof(interrupt_frame_t));
+    memcpy(&context->regs, (uint8_t*)reg_loc, sizeof(pcpu_regs_t));
 }
 
-void pcpu_prepare_context_switch(virt_addr_t iframe, void *ctx)
+static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
 {
     
     pcpu_context_t *context = NULL;
     interrupt_frame_t *frame = NULL;
+    cpu_t *cpu = NULL;
+    cpu_platform_t *cpu_pv = NULL;
+    sched_thread_t *thread = NULL;
 
+    thread = th;
+    context = thread->context;
+    cpu     = thread->unit->cpu;
+    cpu_pv  = cpu->cpu_pv;
+    
     frame = (interrupt_frame_t*)iframe;
 
     frame->cs = 0x8;
-    frame->rsp = ((virt_addr_t)ctx);
+    frame->rsp = ((virt_addr_t)context);
     frame->rip = (uint64_t)__cpu_context_restore;
     frame->ss  = 0x10;
 
     /* Clear NT and IF */
     frame->rflags &= ~((1 << 14) | (1 << 9));
-
-    context = ctx;
-
+    
+    gdt_update_tss(cpu_pv, context->esp0);
 }
 
-void *pcpu_initialize_context
+static void *pcpu_ctx_init
 (
-    sched_thread_t *th,
-    uint8_t is_user
+    void *thread
 )
 {
+    sched_thread_t *th = NULL;
     pcpu_context_t *ctx = NULL;
     uint8_t cs = 0x8;
-    uint8_t ss = 0x10;
+    uint8_t seg = 0x10;
+
+    th = thread;
 
     ctx = (pcpu_context_t*)vmmgr_alloc(NULL, 0x0, 
                                        PAGE_SIZE, 
@@ -791,11 +800,23 @@ void *pcpu_initialize_context
 
     ctx->iframe.rip = (virt_addr_t)th->entry_point;
     ctx->iframe.rsp = th->stack + th->stack_sz;
-    ctx->iframe.ss  = ss;
+    ctx->iframe.ss  = seg;
     /* a new task does not disable interrupts */
     ctx->iframe.rflags = 0x1 | 0x200;
     ctx->iframe.cs = cs;
-    ctx->regs.rdi = th->pv;
+
+
+    ctx->regs.rdi = (uint64_t)th->pv;
+    ctx->addr_spc = __read_cr3();
+    ctx->dseg = seg;
+
+    ctx->esp0 = vmmgr_alloc(NULL, 0, PAGE_SIZE, VMM_ATTR_WRITABLE);
+
+    if(ctx->esp0 == 0)
+    {
+        vmmgr_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
+        return(NULL);
+    }
 
     return(ctx);
 }
@@ -827,9 +848,7 @@ static int pcpu_drv_init(driver_t *drv)
     uint32_t cpu_id = 0;
     cpu_platform_driver_t *cpu_drv = NULL;
 
-
     spinlock_init(&lock);
-
 
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
 
@@ -868,7 +887,6 @@ static int pcpu_drv_init(driver_t *drv)
 }
 
 
-
 static cpu_api_t cpu_api = 
 {
     .cpu_setup      = pcpu_setup,
@@ -884,7 +902,10 @@ static cpu_api_t cpu_api =
     .max_phys_addr  = pcpu_max_phys_address,
     .ipi_issue      = pcpu_issue_ipi,
     .halt           = __hlt,
-    .pause          = __pause
+    .pause          = __pause,
+    .ctx_save       = pcpu_ctx_save,
+    .ctx_restore    = pcpu_ctx_restore,
+    .ctx_init       = pcpu_ctx_init
 };
 
 static driver_t x86_cpu = 

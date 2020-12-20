@@ -18,11 +18,13 @@ extern void __flush_gdt(void);
 
 #define DESC_MEM_ALLOC (GDT_TABLE_SIZE + TSS_ENTRY_SIZE)
 
-static int gdt_entry_encode(
+static int gdt_entry_encode
+(
     uint64_t base,
     uint32_t limit,
     uint32_t flags,
-    gdt_entry_t *gdt_entry)
+    gdt_entry_t *gdt_entry
+)
 {
     /* No way */
     if (gdt_entry == NULL)
@@ -121,6 +123,7 @@ int gdt_per_cpu_init(void *cpu_pv)
 
     tss->io_map = sizeof(tss);
 
+
     gdt_entry_encode((uint64_t)tss, sizeof(tss64_entry_t) - 1, flags, &gdt[5]);
 
     /* Yes, TSS takes two GDT entrties */
@@ -128,9 +131,6 @@ int gdt_per_cpu_init(void *cpu_pv)
 
     cpu->gdt = gdt;
     cpu->tss = tss;
-
-    tss->rsp0_low = cpu->esp0 & UINT32_MAX;
-    tss->rsp0_high = (cpu->esp0 >> 32) & UINT32_MAX;
 
     gdt_ptr.addr = (virt_addr_t)gdt;
     gdt_ptr.limit = GDT_TABLE_LIMIT;
@@ -141,4 +141,19 @@ int gdt_per_cpu_init(void *cpu_pv)
 
     kprintf("GDT 0x%x TSS 0x%x\n", gdt, tss);
     return (0);
+}
+
+void gdt_update_tss
+(
+    void *cpu_pv, 
+    virt_addr_t esp0
+)
+{
+    cpu_platform_t *cpu = NULL;
+
+    cpu = cpu_pv;
+
+    cpu->tss->rsp0_low = esp0 & UINT32_MAX;
+    cpu->tss->rsp0_high = (esp0 >> 32) & UINT32_MAX;
+
 }

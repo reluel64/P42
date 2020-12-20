@@ -172,7 +172,24 @@ extern entry_pt
 
 __cpu_context_restore:
     cli
+    ; restore the segments
+    pop rax
+    
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
 
+    ;check if address space needs switching
+    pop rax
+    mov rbx, cr3
+    cmp rbx, rax
+
+    je .no_space_switch
+    
+    mov cr3, rax
+
+.no_space_switch:
     pop rax
     pop rbx
     pop rcx
@@ -183,6 +200,16 @@ __cpu_context_restore:
     pop r9
     pop r10
     pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
     pop rbp
 
     iretq
+
+global __resched_interrupt
+
+__resched_interrupt:
+    int 240
+    ret

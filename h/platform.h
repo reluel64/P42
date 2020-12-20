@@ -54,8 +54,6 @@ typedef struct cpu_platform_t
 {
     gdt_entry_t *gdt;
     tss64_entry_t *tss;
-    virt_addr_t esp0;
-
 }cpu_platform_t;
 
 typedef struct cpu_platfrom_driver_t
