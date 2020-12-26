@@ -101,10 +101,11 @@ int linked_list_find_node(list_head_t *lh, list_node_t *ln)
     {
         if(work_ln == ln)
             return(0);
-        
-        work_ln = linked_list_next(work_ln);
-    }
 
+        work_ln = linked_list_next(work_ln);
+
+    }
+    
     return(-1);
 }
 

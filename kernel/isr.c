@@ -61,19 +61,19 @@ int isr_install
 
     if(!eoi)
     {   
-        spinlock_lock_interrupt(&handlers[index].lock, &int_status);
+        spinlock_lock_int(&handlers[index].lock, &int_status);
 
         linked_list_add_head(&handlers[index].head, &intr->node);
 
-        spinlock_unlock_interrupt(&handlers[index].lock, int_status);
+        spinlock_unlock_int(&handlers[index].lock, int_status);
     }
     else
     {
-        spinlock_lock_interrupt(&eoi_lock, &int_status);
+        spinlock_lock_int(&eoi_lock, &int_status);
 
         linked_list_add_head(&eoi_handlers, &intr->node);
 
-        spinlock_unlock_interrupt(&eoi_lock, int_status);
+        spinlock_unlock_int(&eoi_lock, int_status);
     }
     return(0);
 }
@@ -93,7 +93,7 @@ int isr_uninstall
 
     if(eoi)
     {
-        spinlock_lock_interrupt(&eoi_lock, &int_status);
+        spinlock_lock_int(&eoi_lock, &int_status);
 
         node = linked_list_first(&eoi_handlers);
 
@@ -111,7 +111,7 @@ int isr_uninstall
 
             node = next_node;
         }
-        spinlock_unlock_interrupt(&eoi_lock, int_status);
+        spinlock_unlock_int(&eoi_lock, int_status);
 
         return(0);
     }
@@ -120,7 +120,7 @@ int isr_uninstall
     {
         isr_lst = &handlers[i];
         
-        spinlock_lock_interrupt(&isr_lst->lock, &int_status);
+        spinlock_lock_int(&isr_lst->lock, &int_status);
         
         node = linked_list_first(&isr_lst->head);
 
@@ -158,7 +158,7 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 
 
     /* gain exclusive access to the list */
-    spinlock_lock_interrupt(&int_lst->lock, &int_status);
+    spinlock_lock_int(&int_lst->lock, &int_status);
 
     node = linked_list_first(&int_lst->head);
 
@@ -177,9 +177,9 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
         node = linked_list_next(node);
     }
 
-    spinlock_unlock_interrupt(&int_lst->lock, int_status);
+    spinlock_unlock_int(&int_lst->lock, int_status);
 
-    spinlock_lock_interrupt(&eoi_lock, &int_status);
+    spinlock_lock_int(&eoi_lock, &int_status);
 
     /* Send EOIs */
     node = linked_list_first(&eoi_handlers);
@@ -193,12 +193,12 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 
         if(!status)
         {
-            spinlock_unlock_interrupt(&eoi_lock, int_status);
+            spinlock_unlock_int(&eoi_lock, int_status);
             return;
         }
         node = linked_list_next(node);
     }
 
-    spinlock_unlock_interrupt(&eoi_lock, int_status);
+    spinlock_unlock_int(&eoi_lock, int_status);
 }
 

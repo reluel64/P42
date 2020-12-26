@@ -18,9 +18,12 @@
 #include <isr.h>
 #include <scheduler.h>
 #include <semaphore.h>
+#include <stdatomic.h>
+#include <mutex.h>
 
-semb_t *sem  = NULL;
-
+semaphore_t *sem  = NULL;
+semaphore_t *sem2 = NULL;
+mutex_t *mtx = NULL;
 int isr_test(void)
 {
     kprintf("%s\n",__FUNCTION__);
@@ -35,38 +38,43 @@ long int multiplyNumbers(int n) {
         return 1;
 }
 
+int counter = 0;
 
 int entry_pt(void *p)
 {
     int x = 0;
     while(1)
     {
-        for(uint32_t i = 0; i< UINT32_MAX/16; i++);
-
-        semb_give(sem);
-        multiplyNumbers(2);
-    kprintf("p %x\n",p);
+    mtx_acquire(mtx);
+   // sem_acquire(sem2);
+    kprintf("p %d\n",counter);
+    mtx_release(mtx);
     }
 }
+
 int entry_pt2(void *p)
 {//
   
     while(1)
     {
-        semb_wait(sem);
-    
-        kprintf("Hello World\n");
+        
+        mtx_acquire(mtx);
+       // sched_sleep(1000);
+       //kprintf("Hello\n");
+        counter++;
+        mtx_release(mtx);
+     //  kprintf("Hello World\n");
     }
 }
 
 int entry_pt3(void *p)
 {//
     
-        sched_thread_t *th = NULL;
     while(1)
     {
-        multiplyNumbers(2);
-    th = sched_thread_self();
+      //sem_acquire(sem);
+
+     // kprintf("GOODBYE World\n");
     //if(th != p)
         //kprintf("p %x %x\n",th,p);
     }
@@ -130,15 +138,16 @@ void kmain()
     sched_thread_t th2;
     sched_thread_t th3;
 
-    sem = sem_create(0);
-    
+    sem = sem_create(1);
+    sem2 = sem_create(1);
+    mtx = mtx_create();
     memset(&th1, 0, sizeof(sched_thread_t));
     memset(&th2, 0, sizeof(sched_thread_t));
     memset(&th3, 0, sizeof(sched_thread_t));
 
 
     kprintf("Hello World\n");
-    timer_loop_delay(dev, 1000);
+
     devmgr_show_devices();
 
     sched_init_thread(&th1, entry_pt, 0x1000, 0,&th1);
@@ -148,7 +157,7 @@ void kmain()
 
     sched_start_thread(&th2);
     sched_start_thread(&th1);
-    sched_start_thread(&th3);
+   // sched_start_thread(&th3);
     sched_cpu_init(dev, c);
     while(1)
     {

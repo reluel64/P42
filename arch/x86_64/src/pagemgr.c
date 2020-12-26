@@ -1259,11 +1259,11 @@ virt_addr_t pagemgr_map
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(ctx->page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
 
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
 
     if(pagemgr_build_page_path(&path) < 0)
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
     }
     
@@ -1273,7 +1273,7 @@ virt_addr_t pagemgr_map
 
     pagemgr_alloc_or_map_cb(phys, pg_frames, &path);
     
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
     
     return(virt);
 }
@@ -1304,13 +1304,13 @@ virt_addr_t pagemgr_alloc
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(ctx->page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
     
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
     
     ret = pagemgr_build_page_path(&path);
 
     if(ret < 0)
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
     }   
 
@@ -1325,13 +1325,13 @@ virt_addr_t pagemgr_alloc
     if(ret < 0)
     {
         kprintf("NO MORE BMP\n");
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         pagemgr_free(ctx, virt, path.virt_off);
         kprintf("RELEASED\n");
         return(0);
     }
 
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(virt);
 }
@@ -1366,12 +1366,12 @@ int pagemgr_attr_change
 
     PAGE_PATH_RESET(&path);
     
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
     
     ret = pagemgr_alloc_or_map_cb(0, pg_frames, &path) == pg_frames;
     ret = ret ? 0 : -1;
 
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return((int)ret);
 }
@@ -1400,13 +1400,13 @@ int pagemgr_free
     
     PAGE_PATH_RESET(&path);
     
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
   
     ret = pagemgr_check_page_path(&path);
 
     if(ret != 0)
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
 
@@ -1414,7 +1414,7 @@ int pagemgr_free
     
     pfmgr->dealloc(pagemgr_free_or_unmap_cb, &path);
 
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(0);
 }
@@ -1444,7 +1444,7 @@ int pagemgr_unmap
         path.pml4 = (pml4e_bits_t*)PAGE_STRUCT_TEMP_MAP(ctx->page_phys_base, 
                                                 PAGE_TEMP_REMAP_PML4);
 
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
 
     PAGE_PATH_RESET(&path);
     
@@ -1452,7 +1452,7 @@ int pagemgr_unmap
     
     if(ret != 0)
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
 
@@ -1460,7 +1460,7 @@ int pagemgr_unmap
 
     while(pagemgr_free_or_unmap_cb(&dummy_phys, &dummy_count, &path));
 
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
     
     return(0);
 }
@@ -1494,10 +1494,10 @@ static int pagemgr_per_cpu_invl_handler
 )
 {
     int status = 0;
-  //  spinlock_lock_interrupt(&tlock, &status);
     
-    kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
-   // spinlock_unlock_interrupt(&tlock, status);
+    
+ //   kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
+
     __write_cr3(__read_cr3());
     return(0);
 }

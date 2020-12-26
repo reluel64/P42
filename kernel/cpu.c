@@ -194,3 +194,8 @@ cpu_t *cpu_current_get(void)
 
     return(cpu);
 }
+
+void cpu_resched(void)
+{
+    api->resched();
+}

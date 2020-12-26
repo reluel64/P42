@@ -33,14 +33,14 @@ static int apic_timer_isr(void *dev, virt_addr_t iframe)
     timer = devmgr_dev_data_get(dev);
     reg = timer->reg;
 
-    spinlock_lock_interrupt(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock, &int_status);
 
     if(linked_list_count(&timer->queue) > 0)
         timer_update(&timer->queue, APIC_TIMER_INTERVAL_MS, iframe);
 
     (*reg->timer_icnt) = timer->calib_value;
 
-    spinlock_unlock_interrupt(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock, int_status);
 
     return(0);
 }
@@ -117,9 +117,9 @@ static int apic_timer_arm(device_t *dev, timer_t *tm)
     timer = devmgr_dev_data_get(dev);
 
     
-    spinlock_lock_interrupt(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock, &int_status);
     linked_list_add_tail(&timer->queue, &tm->node);
-    spinlock_unlock_interrupt(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock, int_status);
 
     return(0);
 }

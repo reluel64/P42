@@ -103,8 +103,7 @@ static long long l_warningCount = 0;		///< Number of warnings encountered
 static long long l_errorCount = 0;			///< Number of actual errors
 static long long l_possibleOverruns = 0;	///< Number of possible overruns
 
-static spinlock_t lock = {.lock = 0,
-                          .int_status = 0
+static spinlock_t lock = {.lock = 0
                          };
 
 
@@ -849,7 +848,7 @@ void* PREFIX(realloc)(void* p, size_t size)
  */
 int liballoc_lock(int *int_status)
 {
-    spinlock_lock_interrupt(&lock, int_status);
+    spinlock_lock_int(&lock, int_status);
     return(0);
 }
 
@@ -861,7 +860,7 @@ int liballoc_lock(int *int_status)
  */
 int liballoc_unlock(int int_status)
 {
-    spinlock_unlock_interrupt(&lock, int_status);
+    spinlock_unlock_int(&lock, int_status);
     return(0);
 }
 

@@ -37,6 +37,7 @@ typedef struct cpu_api_t
     void (*ctx_save)(virt_addr_t, void* th);
     void (*ctx_restore)(virt_addr_t, void* th);
     void *(*ctx_init)(void *th);
+    void (*resched)(void);
 }cpu_api_t;
 
 
@@ -62,5 +63,5 @@ void cpu_ctx_save(virt_addr_t iframe, void *th);
 void cpu_ctx_restore(virt_addr_t iframe, void *th);
 void *cpu_ctx_init(void *th);
 cpu_t *cpu_current_get(void);
-
+void cpu_resched(void);
 #endif

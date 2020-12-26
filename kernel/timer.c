@@ -29,11 +29,12 @@ void timer_update
             if(tm->handler)
             {
                 tm->handler(tm->data, iframe);
+                tm->ctime = 0;
             }
 
             if(tm->flags & TIMER_PERIODIC)
             {
-                tm->ctime = 0;
+                tm->ctime += interval;
             }
             else
             {
@@ -45,6 +46,8 @@ void timer_update
             tm->ctime += interval;
         }
 
+        
+        
         node = next;
     }
 }
@@ -81,7 +84,7 @@ void *timer_arm
 static int timer_sleep_callback(void *pv)
 {
     //kprintf("CPU %d\n",cpu_id_get());
-    __sync_fetch_and_add((int*)pv, 1);
+    __atomic_store_n((int*)pv, 1, __ATOMIC_RELEASE);
    
     return(1);
 }
@@ -98,13 +101,15 @@ void timer_loop_delay(device_t *dev, uint32_t delay)
         return;
     }
 
-    while(!__sync_bool_compare_and_swap(&wait, 1, 0))
+    while(__atomic_load_n(&wait, __ATOMIC_ACQUIRE) <= 0)
     {
         cpu_pause();
     }
 
     kfree(timer);
 }
+
+
 
 int timer_periodic_install
 (

@@ -32,6 +32,7 @@ extern void __lidt(idt64_ptr_t *);
 extern void __hlt();
 extern void __pause();
 extern void __cpu_context_restore(void);
+extern void __resched_interrupt(void);
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -409,7 +410,7 @@ static int pcpu_bring_cpu_up
     ipi.type = IPI_START_AP;
     
     /* prepare cpu_on flag */
-    __sync_fetch_and_and(&cpu_on, 0);
+    __atomic_store_n(&cpu_on, 0, __ATOMIC_RELEASE);
     
     timer_dev = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
@@ -426,11 +427,11 @@ static int pcpu_bring_cpu_up
         {   
             timer_loop_delay(timer_dev, 1);
            
-            if(__sync_bool_compare_and_swap(&cpu_on, 1, 0))
+            if(__atomic_load_n(&cpu_on, __ATOMIC_ACQUIRE))
                 return(0);
         }
     }
-
+    
     return(-1);
 }
 
@@ -610,7 +611,7 @@ static void pcpu_entry_point(void)
 
     /* signal that the cpu is up and running */
     kprintf("CPU_STARTED\n");
-    __sync_fetch_and_or(&cpu_on, 1);
+    __atomic_store_n(&cpu_on, 1, __ATOMIC_RELEASE);
 
     cpu = devmgr_dev_data_get(cpu_dev);
 
@@ -905,7 +906,8 @@ static cpu_api_t cpu_api =
     .pause          = __pause,
     .ctx_save       = pcpu_ctx_save,
     .ctx_restore    = pcpu_ctx_restore,
-    .ctx_init       = pcpu_ctx_init
+    .ctx_init       = pcpu_ctx_init,
+    .resched        = __resched_interrupt
 };
 
 static driver_t x86_cpu = 

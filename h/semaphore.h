@@ -3,14 +3,15 @@
 #include <linked_list.h>
 #include <spinlock.h>
 
-typedef struct semb_t
+typedef struct semaphore_t
 {
     list_head_t pendq;
     spinlock_t lock;
-    volatile int flag;
-}semb_t;
+    volatile int count;
+   
+}semaphore_t;
 
-semb_t *sem_create(int init_val);
-int semb_wait(semb_t *sem);
-int semb_give(semb_t *sem);
+semaphore_t *sem_create(uint32_t init_val);
+int sem_acquire(semaphore_t *sem);
+int sem_release(semaphore_t *sem);
 #endif

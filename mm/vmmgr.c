@@ -721,7 +721,7 @@ int vmmgr_reserve
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
     
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
 
     fn           = linked_list_first(&ctx->free_mem);
     rsrvd.base   = virt;
@@ -744,7 +744,7 @@ int vmmgr_reserve
                 if(rem.length != 0)
                     vmmgr_put_free_mem(ctx, &rem);
 
-                spinlock_unlock_interrupt(&ctx->lock, int_status);
+                spinlock_unlock_int(&ctx->lock, int_status);
                 return(0);
             }
         }
@@ -760,7 +760,7 @@ int vmmgr_reserve
 
     vmmgr_add_reserved(ctx, &rsrvd);
     
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(0);
 }
@@ -793,7 +793,7 @@ virt_addr_t vmmgr_map
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
 
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
 
     fn = linked_list_first(&ctx->free_mem);
 
@@ -861,7 +861,7 @@ virt_addr_t vmmgr_map
 
     if(from_slot->length < len)
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
     }
 
@@ -879,7 +879,7 @@ virt_addr_t vmmgr_map
 		pagemgr_unmap(&ctx->pagemgr,
                        from_slot->base, 
                        len);
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
 	}
 
@@ -890,7 +890,7 @@ virt_addr_t vmmgr_map
         vmmgr_put_free_mem(ctx, &rem);
     }
 
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(ret_addr);
 }
@@ -923,7 +923,7 @@ virt_addr_t vmmgr_alloc
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
 
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
     
     fn = linked_list_first(&ctx->free_mem);
 
@@ -994,7 +994,7 @@ virt_addr_t vmmgr_alloc
                 from_slot->length, 
                 len);
 
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
     }
 
@@ -1006,7 +1006,7 @@ virt_addr_t vmmgr_alloc
     if(ret_addr == 0)
 	{
         kprintf("PG_ALLOC_FAIL\n");
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
 	}
 
@@ -1017,7 +1017,7 @@ virt_addr_t vmmgr_alloc
         vmmgr_put_free_mem(ctx, &rem);
     }      
 
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(ret_addr);
 }
@@ -1048,17 +1048,17 @@ int vmmgr_free
     if(virt == 0)
         return(-1);
     
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
     
     if(vmmgr_is_free(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
 
     if(vmmgr_is_reserved(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
 
@@ -1070,7 +1070,7 @@ int vmmgr_free
     if(status == 0)
         status = pagemgr_free(&ctx->pagemgr, virt, len);
 
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(status);
 }
@@ -1100,16 +1100,16 @@ int vmmgr_unmap
     if(ctx == NULL)
         ctx = &vmmgr_kernel_ctx;
 
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
 
     if(vmmgr_is_free(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
     if(vmmgr_is_reserved(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
 
@@ -1121,7 +1121,7 @@ int vmmgr_unmap
     if(status == 0)
         status = pagemgr_unmap(&ctx->pagemgr, virt, len);
     
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(status);
 }
@@ -1146,23 +1146,23 @@ int vmmgr_change_attrib
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
 
-    spinlock_lock_interrupt(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock, &int_status);
 
     if(vmmgr_is_reserved(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
     
     if(vmmgr_is_free(ctx, virt, len))
     {
-        spinlock_unlock_interrupt(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
 
     status = pagemgr_attr_change(&ctx->pagemgr, virt, len, attr);
     
-    spinlock_unlock_interrupt(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(status);
 }

@@ -6,13 +6,14 @@
 #include <intc.h>
 #include <isr.h>
 #include <timer.h>
-#include <scheduler.h>
 #include <vmmgr.h>
 #include <intc.h>
 #include <platform.h>
+#include <scheduler.h>
 
 static list_head_t new_threads;
 static spinlock_t  list_lock;
+
 static int sched_idle_loop(void *pv);
 
 int sched_init_thread
@@ -22,7 +23,7 @@ int sched_init_thread
     virt_size_t stack_sz,
     uint32_t    prio,
     void *pv
-    
+
 )
 {
     if(th == NULL)
@@ -51,38 +52,103 @@ int sched_start_thread(sched_thread_t *th)
 {
     int int_status = 0;
 
-    spinlock_lock_interrupt(&list_lock, &int_status);
+    spinlock_lock_int(&list_lock, &int_status);
 
     linked_list_add_tail(&new_threads, &th->node);
 
-    spinlock_unlock_interrupt(&list_lock, int_status);
-    
+    spinlock_unlock_int(&list_lock, int_status);
+
     cpu_issue_ipi(IPI_DEST_ALL, 0, IPI_RESCHED);
 
     return(0);
 }
 
-
-void sched_resched
+static void sched_wake_sleeping_threads
 (
-    virt_addr_t       iframe, 
+    sched_exec_unit_t *unit,
+    uint32_t period
+)
+{
+    list_node_t *node = NULL;
+    list_node_t *next_node = NULL;
+    sched_thread_t *th = NULL;
+
+    node = linked_list_first(&unit->sleep_q);
+
+    while(node)
+    {
+        next_node = linked_list_next(node);
+
+        th = (sched_thread_t*)node;
+
+        if(th->sleeped >= th->to_sleep)
+        {
+            linked_list_remove(&unit->sleep_q, &th->node);
+            linked_list_add_tail(&unit->active_q, &th->node);
+            th->flags&=~THREAD_SLEEPING;
+        }
+
+        th->sleeped += period;
+
+        node = next_node;
+    }
+}
+
+static void sched_unblock_threads
+(
     sched_exec_unit_t *unit
 )
 {
-    int                      int_status = 0;
+    list_node_t *node = NULL;
+    list_node_t *next_node = NULL;
+    sched_thread_t *th = NULL;
+
+    node = linked_list_first(&unit->blocked_q);
+
+    while(node)
+    {
+        next_node = linked_list_next(node);
+
+        th = (sched_thread_t*)node;
+
+        if(!(th->flags & THREAD_BLOCKED))
+        {
+            linked_list_remove(&unit->blocked_q, &th->node);
+            linked_list_add_tail(&unit->active_q, &th->node);
+        }
+
+        node = next_node;
+    }
+}
+
+/* Scheduling routine
+ * While scheduling we will take the following locks
+ * 1) The execution unit lock to protect the queues
+ * 2) The thread lock to protect the thread-specific data
+ * 
+ */ 
+
+static void sched_resched
+(
+    virt_addr_t       iframe,
+    sched_exec_unit_t *unit,
+    uint32_t          period
+)
+{
+    int                     int_status  = 0;
     sched_thread_t          *next       = NULL;
     sched_thread_t          *current    = NULL;
     sched_thread_t          *new_thread = NULL;
     list_node_t             *node       = NULL;
-    
-    spinlock_lock_interrupt(&unit->lock, &int_status);
+
+    spinlock_lock_int(&unit->lock, &int_status);
     current = unit->current;
-    
+
     /* Check if we have new threads that await first
      * execution
-     */ 
-    spinlock_lock_interrupt(&list_lock, &int_status);
-    
+     */
+    spinlock_lock_int(&list_lock, &int_status);
+
     new_thread = (sched_thread_t*)linked_list_first(&new_threads);
 
     if(new_thread != NULL)
@@ -91,122 +157,148 @@ void sched_resched
         linked_list_add_head(&unit->active_q, &new_thread->node);
     }
 
-    spinlock_unlock_interrupt(&list_lock, int_status);
+    spinlock_unlock_int(&list_lock, int_status);
 
-    /* Add the pre-empted task to the end of active queue list */
-    if(current)
+    if((period > 0) && (linked_list_count(&unit->sleep_q) > 0))
+        sched_wake_sleeping_threads(unit, period);
+
+    spinlock_lock_int(&current->lock, &int_status);
+
+
+    cpu_ctx_save(iframe,  current);
+
+    /* do not add the idle task to the active_q */
+    if(unit->current != unit->idle)
     {
-        spinlock_lock_interrupt(&current->lock, &int_status);
-        cpu_ctx_save(iframe,  current);
-
-        /* do not add the idle task to the active_q */
-        if(unit->current != unit->idle)
+        if(current->flags & THREAD_BLOCKED)
         {
-            if(current->flags & THREAD_BLOCKED)
-            {
-                linked_list_add_tail(&unit->blocked_q, &current->node);
-            }
-            else
-            {
-                current->flags &= ~THREAD_RUNNING;
-                current->flags |= THREAD_READY;
-                linked_list_add_tail(&unit->active_q, &current->node);
-            }
+            linked_list_add_tail(&unit->blocked_q, &current->node);
         }
-        spinlock_unlock_interrupt(&current->lock, int_status);
+        else if(current->flags & THREAD_SLEEPING)
+        {
+            linked_list_add_tail(&unit->sleep_q, &current->node);
+        }
+        else
+        {
+            /* Add the pre-empted task to the end of active queue list */
+            __atomic_and_fetch(&current->flags, 
+                                ~(THREAD_RUNNING    |
+                                  THREAD_BLOCKED    |
+                                  THREAD_SLEEPING),
+                                  __ATOMIC_ACQUIRE);
+            
+            /* Set the new status */
+            __atomic_or_fetch(&current->flags, 
+                              THREAD_READY, 
+                              __ATOMIC_ACQUIRE);
+            
+            linked_list_add_tail(&unit->active_q, &current->node);
+        }
+    }
+
+    spinlock_unlock_int(&current->lock, int_status);
+    
+
+    /* check if we have threads to unblock */
+    if((__atomic_load_n(&unit->unblocked_th, __ATOMIC_ACQUIRE)) > 0)
+    {
+        __atomic_sub_fetch(&unit->unblocked_th, 1, __ATOMIC_ACQUIRE);
+        sched_unblock_threads(unit);
     }
 
     next = (sched_thread_t*)linked_list_first(&unit->active_q);
 
-    /* check if we have a task to run
-     * if we don't, we will go into the idle task
+    /* check if we have a thread to run
+     * if we don't, we will go into the idle thread
      */
 
     if(next == NULL)
     {
         next = unit->idle;
-        spinlock_lock_interrupt(&next->lock, &int_status);
+        spinlock_lock_int(&next->lock, &int_status);
     }
     else
     {
-        spinlock_lock_interrupt(&next->lock, &int_status);
+        spinlock_lock_int(&next->lock, &int_status);
         linked_list_remove(&unit->active_q, &next->node);
     }
-    
+
     unit->current = next;
     next->unit = unit;
-    next->flags &= ~THREAD_READY;
-    next->flags |= THREAD_RUNNING;
     
+    __atomic_or_fetch(&current->flags, 
+                       THREAD_RUNNING, 
+                       __ATOMIC_ACQUIRE);
+
+    __atomic_add_fetch(&current->flags, 
+                        ~(THREAD_RUNNING | 
+                          THREAD_BLOCKED | 
+                          THREAD_SLEEPING),
+                          __ATOMIC_ACQUIRE);
+
     cpu_ctx_restore(iframe, next);
 
     /* Unblock the thread structure */
-    spinlock_unlock_interrupt(&next->lock, int_status);   
-    
+    spinlock_unlock_int(&next->lock, int_status);
+
     /* Unblock the execution unit structure */
-    spinlock_unlock_interrupt(&unit->lock, int_status);
+    spinlock_unlock_int(&unit->lock, int_status);
+
 }
 
 
 void sched_unblock_thread(sched_thread_t *th)
 {
     sched_exec_unit_t *unit = NULL;
+    cpu_t *cpu = NULL;
     int int_status = 0;
 
     /* prevent thread from being migrated */
-    spinlock_lock_interrupt(&th->lock, &int_status);
+
+    spinlock_lock_int(&th->lock, &int_status);
     
     unit = th->unit;
+    cpu = unit->cpu;
     
-    spinlock_lock_interrupt(&unit->lock, &int_status);
-
-    linked_list_remove(&unit->blocked_q, &th->node);
-    linked_list_add_head(&unit->active_q, &th->node);
-
-    th->flags &= ~THREAD_BLOCKED;
-
-    spinlock_unlock_interrupt(&unit->lock, int_status);
-    spinlock_unlock_interrupt(&th->lock, int_status);
-
+    __atomic_and_fetch(&th->flags, ~THREAD_BLOCKED, __ATOMIC_ACQUIRE);
+    __atomic_add_fetch(&unit->unblocked_th, 1, __ATOMIC_ACQUIRE);
+    
+    cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, cpu->cpu_id, IPI_RESCHED);
+    spinlock_unlock_int(&th->lock, int_status);
 }
 
-void sched_block_thread(sched_thread_t *th)
+
+static int sched_timer_isr(void *pv, virt_addr_t iframe)
 {
-    sched_exec_unit_t *unit = NULL;
-    int int_status = 0;
-    int th_int_status = 0;
+    sched_exec_unit_t *unit      = NULL;
+    cpu_t             *cpu       = NULL;
 
-    /* prevent thread from being migrated */
-    spinlock_lock_interrupt(&th->lock, &th_int_status);
-    
-    unit = th->unit;
-    
-    spinlock_lock_interrupt(&unit->lock, &int_status);
+    unit = (sched_exec_unit_t*)pv;
+    cpu = unit->cpu;
 
-    linked_list_remove(&unit->blocked_q, &th->node);
-    linked_list_add_head(&unit->active_q, &th->node);
+    if(cpu->cpu_id != cpu_id_get())
+        return(-1);
 
-    spinlock_unlock_interrupt(&unit->lock, int_status);
-    spinlock_unlock_interrupt(&th->lock, th_int_status);
+    sched_resched(iframe, unit, 16);
 
+    return(0);
 }
 
 static int sched_resched_isr(void *pv, virt_addr_t iframe)
 {
     sched_exec_unit_t *unit      = NULL;
     cpu_t             *cpu       = NULL;
-        
+
     unit = (sched_exec_unit_t*)pv;
     cpu = unit->cpu;
 
     if(cpu->cpu_id != cpu_id_get())
-        return(0);
+        return(-1);
 
-    sched_resched(iframe, unit);
-    
+    sched_resched(iframe, unit, 0);
+
     return(0);
 }
-
 
 int sched_init(void)
 {
@@ -226,7 +318,7 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     {
         return(-1);
     }
-    
+
     /* assign scheduler unit to the cpu */
     cpu->sched = unit;
 
@@ -241,27 +333,25 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     spinlock_init(&unit->lock);
 
     unit->idle = kcalloc(sizeof(sched_thread_t), 1);
-    
+
     sched_init_thread(unit->idle, sched_idle_loop, PAGE_SIZE, 0, unit);
 
+    unit->current = unit->idle;
 
     isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0);
-    
+
     timer_periodic_install(timer,
-                           sched_resched_isr,
+                           sched_timer_isr,
                            unit,
-                           0);
+                           10);
 
     return(0);
- 
+
 }
 
-int sched_yield()
+void sched_yield()
 {
-    extern void __resched_interrupt(void);
-
- 
-    cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
+    cpu_resched();
 }
 
 sched_thread_t *sched_thread_self(void)
@@ -272,20 +362,36 @@ sched_thread_t *sched_thread_self(void)
     int                int_status   = 0;
 
     cpu = cpu_current_get();
-    
+
     unit = cpu->sched;
 
     /* No interrupts, no migration */
-    spinlock_lock_interrupt(&unit->lock, &int_status);
-    
+    spinlock_lock_int(&unit->lock, &int_status);
+
     th = unit->current;
 
-    spinlock_unlock_interrupt(&unit->lock, int_status);
+    spinlock_unlock_int(&unit->lock, int_status);
 
     return(th);
 }
 
 
+void sched_sleep(uint32_t delay)
+{
+    sched_thread_t *th = NULL;
+    int            int_status = 0;
+
+    th = sched_thread_self();
+
+    spinlock_lock_int(&th->lock, &int_status);
+    th->to_sleep = delay;
+    th->sleeped = 0;
+    __atomic_fetch_or(&th->flags, THREAD_SLEEPING, __ATOMIC_ACQUIRE);
+    spinlock_unlock_int(&th->lock, int_status);
+
+    cpu_resched();
+
+}
 
 static int sched_idle_loop(void *pv)
 {

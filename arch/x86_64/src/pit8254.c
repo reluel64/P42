@@ -26,11 +26,11 @@ static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
     int int_status = 0;
     pit_dev = devmgr_dev_data_get(dev);
 
-    spinlock_lock_interrupt(&pit_dev->lock, &int_status);
+    spinlock_lock_int(&pit_dev->lock, &int_status);
 
     timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS, iframe);
 
-    spinlock_unlock_interrupt(&pit_dev->lock, int_status);
+    spinlock_unlock_int(&pit_dev->lock, int_status);
 
     return(0);
 }
@@ -98,11 +98,11 @@ static int pit8254_arm_timer(device_t *dev, timer_t *tm)
     int            int_status = 0;
     pit_dev = devmgr_dev_data_get(dev);
 
-    spinlock_lock_interrupt(&pit_dev->lock, &int_status);
+    spinlock_lock_int(&pit_dev->lock, &int_status);
 
     linked_list_add_tail(&pit_dev->queue, &tm->node);
 
-    spinlock_unlock_interrupt(&pit_dev->lock, int_status);
+    spinlock_unlock_int(&pit_dev->lock, int_status);
 
     return(0);
 }
