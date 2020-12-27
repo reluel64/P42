@@ -46,7 +46,7 @@ int entry_pt(void *p)
     while(1)
     {
     mtx_acquire(mtx);
-   // sem_acquire(sem2);
+
     kprintf("p %d\n",counter);
     mtx_release(mtx);
     }
@@ -59,11 +59,11 @@ int entry_pt2(void *p)
     {
         
         mtx_acquire(mtx);
-       // sched_sleep(1000);
+        //sched_sleep(1);
        //kprintf("Hello\n");
-        counter++;
+        //counter++;
         mtx_release(mtx);
-     //  kprintf("Hello World\n");
+       kprintf("Hello World\n");
     }
 }
 
@@ -122,7 +122,7 @@ void kmain()
     cpu_init();
 
     /* Start APs */
-    cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
+    cpu_ap_start(0, PLATFORM_AP_START_TIMEOUT);
 
     sched_init();
 
@@ -151,7 +151,7 @@ void kmain()
     devmgr_show_devices();
 
     sched_init_thread(&th1, entry_pt, 0x1000, 0,&th1);
-    sched_init_thread(&th2, entry_pt2, 0x1000, 0, &th2);
+    sched_init_thread(&th2, entry_pt2, 0x1000, 255, &th2);
     sched_init_thread(&th3, entry_pt3, 0x1000, 0, &th3);
     
 

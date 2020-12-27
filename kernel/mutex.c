@@ -54,6 +54,7 @@ int mtx_acquire(mutex_t *mtx)
         }
 
         expected = thread;
+        
         /* Check if we already own the mutex */
         if(__atomic_compare_exchange_n(&mtx->owner, 
                                        &expected, 
@@ -133,6 +134,7 @@ int mtx_release(mutex_t *mtx)
 
     linked_list_remove(&mtx->pendq, pend_node);
     
+    /* Set the new owner */
     __atomic_store_n(&mtx->owner, thread, __ATOMIC_RELEASE);
     spinlock_unlock_int(&thread->lock, unit_int_state);
 
