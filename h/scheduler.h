@@ -7,6 +7,7 @@
 #define THREAD_RUNNING (0x1)
 #define THREAD_BLOCKED (0x2)
 #define THREAD_SLEEPING (0x4)
+#define THREAD_DEAD     (0x8)
 
 #define SCHED_MAX_PRIORITY 255
 
@@ -66,4 +67,5 @@ int sched_start_thread(sched_thread_t *th);
 sched_thread_t *sched_thread_self(void);
 void sched_unblock_thread(sched_thread_t *th);
 void sched_block_thread(sched_thread_t *th);
+void sched_yield();
 #endif

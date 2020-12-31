@@ -176,9 +176,9 @@ void cpu_ctx_restore(virt_addr_t iframe, void *th)
     api->ctx_restore(iframe, th);
 }
 
-void *cpu_ctx_init(void *th)
+void *cpu_ctx_init(void *th, void *exec_pt, void *exec_pv)
 {
-    return(api->ctx_init(th));
+    return(api->ctx_init(th, exec_pt, exec_pv));
 }
 
 cpu_t *cpu_current_get(void)

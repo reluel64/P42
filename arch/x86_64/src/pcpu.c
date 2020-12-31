@@ -622,7 +622,7 @@ static void pcpu_entry_point(void)
         timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
     sched_cpu_init(timer, cpu);
-
+    
     while(1)
     {
         cpu_halt();
@@ -780,7 +780,9 @@ static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
 
 static void *pcpu_ctx_init
 (
-    void *thread
+    void *thread,
+    void *exec_pt,
+    void *exec_pv
 )
 {
     sched_thread_t *th = NULL;
@@ -799,7 +801,7 @@ static void *pcpu_ctx_init
     
     memset(ctx, 0, PAGE_SIZE);
 
-    ctx->iframe.rip = (virt_addr_t)th->entry_point;
+    ctx->iframe.rip = (virt_addr_t)exec_pt;
     ctx->iframe.rsp = th->stack + th->stack_sz;
     ctx->iframe.ss  = seg;
     /* a new task does not disable interrupts */
@@ -807,7 +809,7 @@ static void *pcpu_ctx_init
     ctx->iframe.cs = cs;
 
 
-    ctx->regs.rdi = (uint64_t)th->pv;
+    ctx->regs.rdi = (uint64_t)exec_pv;
     ctx->addr_spc = __read_cr3();
     ctx->dseg = seg;
 
