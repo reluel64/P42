@@ -8,8 +8,9 @@
 #include <isr.h>
 #include <i8254.h>
 #include <cpu.h>
+#include <platform.h>
 
-#define APIC_TIMER_INTERVAL_MS 10
+#define APIC_TIMER_INTERVAL_MS 1
 
 typedef struct apic_timer_t
 {
@@ -19,6 +20,7 @@ typedef struct apic_timer_t
     uint32_t calib_value;
 }apic_timer_t;
 
+static int counter = 0;
 static int apic_timer_isr(void *dev, virt_addr_t iframe)
 {
     int                 int_status = 0;
@@ -91,16 +93,15 @@ static int apic_timer_init(device_t *dev)
     (*reg->timer_icnt) = UINT32_MAX;
 
     timer_loop_delay(pit, APIC_TIMER_INTERVAL_MS);
-
     apic_timer->calib_value = UINT32_MAX - (*reg->timer_ccnt);
 
     kprintf("APIC_TIMER_CALIB %d\n",apic_timer->calib_value);
 
-    (*reg->lvt_timer) = APIC_LVT_VECTOR_MASK(82) | 0b01 << 17;
+    (*reg->lvt_timer) = APIC_LVT_VECTOR_MASK(PLATFORM_LOCAL_TIMER_VECTOR) | 0b01 << 17;
 
     (*reg->timer_icnt) = apic_timer->calib_value;
 
-    isr_install(apic_timer_isr, dev, 82, 0);
+    isr_install(apic_timer_isr, dev, PLATFORM_LOCAL_TIMER_VECTOR, 0);
     return(0);
 }
 
@@ -116,7 +117,6 @@ static int apic_timer_arm(device_t *dev, timer_t *tm)
 
     timer = devmgr_dev_data_get(dev);
 
-    
     spinlock_lock_int(&timer->lock, &int_status);
     linked_list_add_tail(&timer->queue, &tm->node);
     spinlock_unlock_int(&timer->lock, int_status);

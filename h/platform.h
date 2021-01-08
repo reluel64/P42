@@ -27,7 +27,10 @@ extern virt_addr_t kstack_top;
 
 #define PLATFORM_RESCHED_VECTOR (240)
 #define PLATFORM_PG_INVALIDATE_VECTOR  (239)
+#define PLATFORM_LOCAL_TIMER_VECTOR    (238)
 #define PLATFORM_PG_FAULT_VECTOR       (14)
+
+#define IRQ0                      (0x20)
 
 /* Interrupt Descriptor */
 typedef struct _idt_entry

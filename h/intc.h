@@ -44,6 +44,8 @@ typedef struct intc_api_t
     int  (*enable)          (device_t *);
     int  (*disable)         (device_t *);
     int  (*send_ipi)        (device_t *, ipi_packet_t *);
+    int  (*mask)            (device_t *, int);
+    int  (*unmask)            (device_t *, int);
 }intc_api_t;
 
 int intc_disable(device_t *dev);

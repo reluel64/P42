@@ -15,8 +15,6 @@
 #define IOAPIC_TRIGGER_EDGE       (0x0)
 #define IOAPIC_TRIGGER_LEVEL      (0x1)
 
-#define IRQ0                      (0x20)
-
 typedef struct ioapic_iter_cb_data_t
 {
     uint32_t ioapic_id;
@@ -429,8 +427,68 @@ static int ioapic_device_init
         ioapic_write(dev, 0x10 + i * 2, tbl + i, sizeof(ioredtbl_t));
     }
 
+    ioapic->redir_tbl = tbl;
+
     return(1);
 }
+
+static int ioapic_toggle_mask
+(
+    device_t *dev,
+    int irq,
+    uint8_t mask
+)
+{
+    ioredtbl_t *redir = NULL;
+    ioapic_t *ioapic = NULL;
+
+    ioapic = devmgr_dev_data_get(dev);
+
+    redir = ioapic->redir_tbl;
+
+    if(ioapic->redir_tbl_count < irq)
+        return(-1);
+
+    irq += IRQ0;
+
+
+    for(uint32_t i = 0; i < ioapic->redir_tbl_count; i++)
+    {
+        if(redir[i].intvec == irq)
+        {
+            redir[i].int_mask = (mask & 0x1);
+
+            ioapic_write(dev, 
+                        0x10 + i * 2, 
+                        &redir[i], 
+                        sizeof(ioredtbl_t));
+            break;
+        }
+    }
+
+    return(0);
+}
+
+static int ioapic_mask
+(
+    device_t *dev,
+    int irq
+)
+{
+    return(ioapic_toggle_mask(dev, irq, 1));
+}
+
+
+static int ioapic_unmask
+(
+    device_t *dev,
+    int irq
+)
+{
+    return(ioapic_toggle_mask(dev, irq, 0));
+}
+
+
 
 static int ioapic_probe(device_t *dev)
 {
@@ -498,11 +556,14 @@ static int ioapic_drv_init(driver_t *drv)
 }
 
 
+
 static intc_api_t api = 
 {
     .enable = NULL,
     .disable = NULL,
-    .send_ipi = NULL
+    .send_ipi = NULL,
+    .mask     = ioapic_mask,
+    .unmask   = ioapic_unmask
 };
 
 static driver_t ioapic_drv = 

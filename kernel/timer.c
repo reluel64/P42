@@ -23,8 +23,8 @@ void timer_update
     {
         next = linked_list_next(node);
         tm = (timer_t*)node;
-
-        if(tm->ttime <= tm->ctime)
+        
+        if(tm->ttime <= tm->ctime + interval)
         {
             if(tm->handler)
             {
@@ -32,11 +32,7 @@ void timer_update
                 tm->ctime = 0;
             }
 
-            if(tm->flags & TIMER_PERIODIC)
-            {
-                tm->ctime += interval;
-            }
-            else
+            if(!(tm->flags & TIMER_PERIODIC))
             {
                 linked_list_remove(queue, node);
             }
@@ -46,67 +42,69 @@ void timer_update
             tm->ctime += interval;
         }
 
-        
-        
         node = next;
     }
 }
 
-void *timer_arm
+int timer_arm
 (
     device_t *dev, 
+    timer_t *tm,
     timer_handler_t cb, 
     void *data,
     uint32_t delay
 )
 {
     timer_api_t *api   = NULL;
-    timer_t     *timer = NULL;
-    int     int_status = 0;
     
     api = devmgr_dev_api_get(dev);
 
     if(api == NULL)
-        return(NULL);
+        return(-1);
     
-    timer = kcalloc(1, sizeof(timer_t));
     
-    timer->handler = cb;
-    timer->data = data;
-    timer->ttime = delay;
+    tm->handler = cb;
+    tm->data = data;
+    tm->ttime = delay;
 
-    api->arm_timer(dev, timer);
+    api->arm_timer(dev, tm);
 
-    return(timer);
+    return(0);
     
 }
 
 static int timer_sleep_callback(void *pv)
 {
-    //kprintf("CPU %d\n",cpu_id_get());
     __atomic_store_n((int*)pv, 1, __ATOMIC_RELEASE);
    
     return(1);
 }
 
-void timer_loop_delay(device_t *dev, uint32_t delay)
+int timer_loop_delay(device_t *dev, uint32_t delay)
 {
-    timer_t *timer = NULL;
-    int wait;
-    wait = 0;
-    timer = timer_arm(dev, timer_sleep_callback, (void*)&wait, delay);
+    timer_t timer;
+    int     wait   = 0;
+    int     status = 0;
+    
+    memset(&timer, 0, sizeof(timer_t));
+    
+    status = timer_arm(dev, 
+                      &timer, 
+                      (timer_handler_t)timer_sleep_callback, 
+                      (void*)&wait, 
+                      delay);
 
-    if(timer == NULL)
+    if(status < 0)
     {
-        return;
+        return(-1);
     }
 
-    while(__atomic_load_n(&wait, __ATOMIC_ACQUIRE) <= 0)
+    while(!__atomic_load_n(&wait, __ATOMIC_ACQUIRE))
     {
         cpu_pause();
     }
 
-    kfree(timer);
+    return(0);
 }
 
 
@@ -114,15 +112,13 @@ void timer_loop_delay(device_t *dev, uint32_t delay)
 int timer_periodic_install
 (
     device_t *dev,
+    timer_t *tm,
     timer_handler_t cb, 
     void *pv, 
     uint32_t period
 )
 {
-    timer_t *tm = NULL;
     timer_api_t *api = NULL;
-
-    tm = kcalloc(sizeof(timer_t), 1);
     api = devmgr_dev_api_get(dev);
 
     if(tm == NULL)

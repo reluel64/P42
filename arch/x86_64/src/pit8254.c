@@ -8,6 +8,7 @@
 #include <spinlock.h>
 #include <i8254.h>
 #include <liballoc.h>
+#include <platform.h>
 
 #define COMMAND_PORT 0x43
 #define CH0_PORT    0x40
@@ -18,18 +19,32 @@ typedef struct pit8254_dev_t
 {
     list_head_t queue;
     spinlock_t  lock; 
+    uint16_t divider;
 }pit8254_dev_t;
+
+static int counter = 0;
+
+static inline void pit8254_rearm(pit8254_dev_t *pit)
+{
+    __outb(CH0_PORT, pit->divider & 0xff);
+    __outb(CH0_PORT, (pit->divider >> 8) & 0xff);
+}
+
 
 static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
 {
     pit8254_dev_t *pit_dev = NULL;
+    uint16_t divider = 0;
     int int_status = 0;
     pit_dev = devmgr_dev_data_get(dev);
 
+   
     spinlock_lock_int(&pit_dev->lock, &int_status);
 
     timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS, iframe);
-
+    
+    pit8254_rearm(pit_dev);
+    
     spinlock_unlock_int(&pit_dev->lock, int_status);
 
     return(0);
@@ -46,19 +61,22 @@ static int pit8254_probe(device_t *dev)
 
 static int pit8254_init(device_t *dev)
 {
-    uint8_t command = 0;
-    uint16_t divider = 0;
+    uint8_t        command = 0;
+    pit8254_dev_t *pit_dev = NULL;
+
     command = 0b000110100;
 
-  /*  divider = (INTERRUPT_INTERVAL_US * 3579545ul) / 3000;*/
+    pit_dev = (pit8254_dev_t*)kcalloc(sizeof(pit8254_dev_t), 1);
 
-    divider = 1193;
-
-    kprintf("PIT DIVIDER %d\n",divider);
+    spinlock_init(&pit_dev->lock);
+    linked_list_init(&pit_dev->queue);
+    devmgr_dev_data_set(dev, pit_dev);
+    
+    pit_dev->divider = 1192;
 
     __outb(COMMAND_PORT, command);
-    __outb(CH0_PORT, divider & 0xff);
-    __outb(CH0_PORT, (divider >> 8) & 0xff);
+
+    pit8254_rearm(pit_dev);
 
     return(0);
 }
@@ -76,16 +94,7 @@ static int pit8254_drv_init(driver_t *drv)
         
         if(!devmgr_dev_add(dev, NULL))
         {
-            pit_dev = (pit8254_dev_t*)kcalloc(sizeof(pit8254_dev_t), 1);
-            
-            if(pit_dev)
-            {
-                spinlock_init(&pit_dev->lock);
-                linked_list_init(&pit_dev->queue);
-                devmgr_dev_data_set(dev, pit_dev);
-            }
-    
-            isr_install(pit8254_irq_handler, dev, 0x20, 0);
+            isr_install(pit8254_irq_handler, dev, IRQ0, 0);
         }
     }
 

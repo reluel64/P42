@@ -385,7 +385,6 @@ static int pcpu_bring_cpu_up
 )
 {
     ipi_packet_t ipi;
-    device_t     *timer_dev = NULL;
 
     /* wipe the ipi garbage */
     memset(&ipi, 0, sizeof(ipi_packet_t));
@@ -411,10 +410,8 @@ static int pcpu_bring_cpu_up
     
     /* prepare cpu_on flag */
     __atomic_store_n(&cpu_on, 0, __ATOMIC_RELEASE);
-    
-    timer_dev = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
-    timer_loop_delay(timer_dev, 10);
+    sched_sleep(10);
 
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < timeout / 10; attempt++)
@@ -425,7 +422,7 @@ static int pcpu_bring_cpu_up
         
         for(uint32_t i = 0; i < 10;i++)
         {   
-            timer_loop_delay(timer_dev, 1);
+            sched_sleep(1);
            
             if(__atomic_load_n(&cpu_on, __ATOMIC_ACQUIRE))
                 return(0);
@@ -686,8 +683,6 @@ static int pcpu_setup(cpu_t *cpu)
         }
     }
 
-    
-
     return(0);
 }
 
@@ -754,11 +749,11 @@ static void pcpu_ctx_save(virt_addr_t iframe, void *th)
 static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
 {
     
-    pcpu_context_t *context = NULL;
+    pcpu_context_t    *context = NULL;
     interrupt_frame_t *frame = NULL;
-    cpu_t *cpu = NULL;
-    cpu_platform_t *cpu_pv = NULL;
-    sched_thread_t *thread = NULL;
+    cpu_t             *cpu = NULL;
+    cpu_platform_t    *cpu_pv = NULL;
+    sched_thread_t    *thread = NULL;
 
     thread = th;
     context = thread->context;
@@ -787,8 +782,8 @@ static void *pcpu_ctx_init
 {
     sched_thread_t *th = NULL;
     pcpu_context_t *ctx = NULL;
-    uint8_t cs = 0x8;
-    uint8_t seg = 0x10;
+    uint8_t         cs = 0x8;
+    uint8_t         seg = 0x10;
 
     th = thread;
 
@@ -824,6 +819,32 @@ static void *pcpu_ctx_init
     return(ctx);
 }
 
+static int pcpu_ctx_destroy(void *thread)
+{
+    sched_thread_t *th = NULL;
+    pcpu_context_t *ctx = NULL;
+    
+    th = thread;
+
+    if(th == NULL)
+        return(-1);
+
+    ctx = th->context;
+
+    if(ctx == NULL)
+        return(-1);
+
+    /* Sanitize and free ESP0 */
+    memset(&ctx->esp0, 0, PAGE_SIZE);
+    vmmgr_free(NULL, ctx->esp0, PAGE_SIZE);
+
+    /* Sanitize and free context */
+    memset(ctx, 0, PAGE_SIZE);
+    vmmgr_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
+
+    return(0);
+}
+
 static int pcpu_dev_init(device_t *dev)
 {
     cpu_setup(dev);
@@ -847,9 +868,13 @@ static int pcpu_dev_probe(device_t *dev)
 
 static int pcpu_drv_init(driver_t *drv)
 {
-    device_t *cpu_bsp = NULL;
-    uint32_t cpu_id = 0;
-    cpu_platform_driver_t *cpu_drv = NULL;
+    device_t              *cpu_bsp   = NULL;
+    uint32_t               cpu_id    = 0;
+    cpu_platform_driver_t *cpu_drv   = NULL;
+    device_t              *timer     = NULL;
+    device_t              *pit_timer = NULL;
+    cpu_t                 *cpu       = NULL;
+    sched_thread_t        *init_th   = NULL;
 
     spinlock_init(&lock);
 
@@ -884,6 +909,19 @@ static int pcpu_drv_init(driver_t *drv)
             kprintf("FAILED TO ADD BSP CPU\n");
             return(-1);
         }
+        else
+        {
+            cpu = devmgr_dev_data_get(cpu_bsp);
+            timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
+            
+            if(timer == NULL)
+                timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
+
+            if(sched_cpu_init(timer, cpu))
+            {
+                return(-1);
+            }
+        }
     }
 
     return(0);
@@ -909,6 +947,7 @@ static cpu_api_t cpu_api =
     .ctx_save       = pcpu_ctx_save,
     .ctx_restore    = pcpu_ctx_restore,
     .ctx_init       = pcpu_ctx_init,
+    .ctx_destroy    = pcpu_ctx_destroy,
     .resched        = __resched_interrupt
 };
 

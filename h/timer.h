@@ -8,6 +8,7 @@
 
 #define TIMER_DEVICE_TYPE "timer"
 #define TIMER_PERIODIC    (1 << 0)
+#define TIMER_TICK        (1 << 1)
 
 
 
@@ -30,17 +31,19 @@ typedef struct timer_api_t
 
 }timer_api_t;
 
-void *timer_arm
+int timer_arm
 (
     device_t *dev, 
+    timer_t *tm,
     timer_handler_t cb, 
     void *data,
     uint32_t delay
 );
-void timer_loop_delay(device_t *dev, uint32_t delay);
+int timer_loop_delay(device_t *dev, uint32_t delay);
 int timer_periodic_install
 (
     device_t *dev,
+    timer_t *tm,
     timer_handler_t cb, 
     void *pv, 
     uint32_t period

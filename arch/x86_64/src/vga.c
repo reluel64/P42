@@ -96,6 +96,7 @@ void vga_print(uint8_t *buf, uint8_t color, uint64_t len)
     uint16_t vga_ch = (uint16_t)color << 8; /* set the color now */
     uint8_t ch = 0;
     uint16_t pos;
-
+    if(vga.base == NULL)
+        return;
     vga_print_internal(buf);
 }

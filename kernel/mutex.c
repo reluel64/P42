@@ -119,7 +119,6 @@ int mtx_release(mutex_t *mtx)
         return(0);
     }
 
-
     /* Get the first pending task */
     pend_node = linked_list_first(&mtx->pendq);
 
@@ -136,6 +135,7 @@ int mtx_release(mutex_t *mtx)
     
     /* Set the new owner */
     __atomic_store_n(&mtx->owner, thread, __ATOMIC_RELEASE);
+    
     spinlock_unlock_int(&thread->lock, unit_int_state);
 
     sched_unblock_thread(thread);

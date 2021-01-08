@@ -181,6 +181,11 @@ void *cpu_ctx_init(void *th, void *exec_pt, void *exec_pv)
     return(api->ctx_init(th, exec_pt, exec_pv));
 }
 
+int cpu_ctx_destroy(void *th)
+{
+    return(api->ctx_destroy(th));
+}
+
 cpu_t *cpu_current_get(void)
 {
     device_t *dev = NULL;

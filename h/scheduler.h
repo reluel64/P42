@@ -2,7 +2,7 @@
 #define schedh
 #include <devmgr.h>
 #include <cpu.h>
-
+#include <timer.h>
 #define THREAD_READY   (0x0)
 #define THREAD_RUNNING (0x1)
 #define THREAD_BLOCKED (0x2)
@@ -15,6 +15,7 @@ typedef struct sched_thread_t sched_thread_t;
 
 typedef struct sched_exec_unit_t
 {
+    list_node_t      node;        /* node in units list */
     cpu_t            *cpu;        /* cpu structure that is tied to the scheduler 
                                    * execution unit 
                                    */
@@ -28,6 +29,7 @@ typedef struct sched_exec_unit_t
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     volatile uint32_t unblocked_th; /* unblocked thread count                        */
+    timer_t           tm;
 }sched_exec_unit_t;
 
 typedef struct sched_thread_t
@@ -49,6 +51,7 @@ typedef struct sched_thread_t
     uint32_t          sleeped;
     uint32_t          to_sleep;
     uint32_t          remain;       /* reamining time before task switch             */
+    void              *rval;        /* return value */
 }sched_thread_t;
 
 

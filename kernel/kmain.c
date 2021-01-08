@@ -18,12 +18,13 @@
 #include <isr.h>
 #include <scheduler.h>
 #include <semaphore.h>
-#include <stdatomic.h>
 #include <mutex.h>
 
 semaphore_t *sem  = NULL;
 semaphore_t *sem2 = NULL;
 mutex_t *mtx = NULL;
+
+sched_thread_t init_th;
 int isr_test(void)
 {
     kprintf("%s\n",__FUNCTION__);
@@ -58,7 +59,10 @@ int entry_pt2(void *p)
     while(1)
     {
         
+
         mtx_acquire(mtx);
+        sched_sleep(1000);
+        
          kprintf("Hello World\n");
         //sched_sleep(1);
        //kprintf("Hello\n");
@@ -80,8 +84,33 @@ int entry_pt3(void *p)
     
 }
 
+#include <liballoc.h>
+#include <utils.h>
+
+static void *alloc_align(size_t sz, size_t align)
+{
+    size_t total = 0;
+    uint8_t *buf = NULL;
+    total = sz + align;
+
+    buf = kmalloc(total);
+
+    buf = ALIGN_UP((uint64_t)buf, align);
+
+    return(buf);
+}
+
+static void kmain_sys_init(void)
+{
+    /* Start APs */
+    cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
+
+    kprintf("Hello World\n");
+}
+
 void kmain()
 {
+    
     /*register CPU API */
     cpu_api_register();
 
@@ -105,8 +134,6 @@ void kmain()
     /* initialize Page Frame Manager*/
     if(pfmgr_init())
         return;
-   
-    vga_init();
 
     /* initialize interrupt handler */
     if(isr_init())
@@ -116,64 +143,25 @@ void kmain()
     if(pagemgr_install_handler())
         return;
 
+    /* Initialize basic platform functionality */
     platform_early_init();
 
-    /* initialize the CPU driver and the BSP */
-    cpu_init();
-
-    /* Start APs */
-    cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
-
+    /* Initialize base of the scheduler */
     sched_init();
 
-   #include <platform.h>
+    /* Prepare the initialization thread */
+    sched_init_thread(&init_th, kmain_sys_init, 0x1000, 0, 0);
+
+    /* Enqueue the thread */
+    sched_start_thread(&init_th);
     
-    device_t *dev = devmgr_dev_get_by_name("APIC_TIMER", 0);
-    device_t *cpu = devmgr_dev_get_by_name(PLATFORM_CPU_NAME,0);
-
-    cpu_t *c = devmgr_dev_data_get(cpu);
-       
-#if 1
-    sched_thread_t th1;
-    sched_thread_t th2;
-    sched_thread_t th3;
-
-    sem = sem_create(1);
-    sem2 = sem_create(1);
-    mtx = mtx_create();
-    memset(&th1, 0, sizeof(sched_thread_t));
-    memset(&th2, 0, sizeof(sched_thread_t));
-    memset(&th3, 0, sizeof(sched_thread_t));
-
-
-    kprintf("Hello World\n");
-
-    devmgr_show_devices();
-
-
-
-    sched_init_thread(&th1, entry_pt, 0x1000, 0,&th1);
-    sched_init_thread(&th2, entry_pt2, 0x1000, 255, &th2);
-    sched_init_thread(&th3, entry_pt3, 0x1000, 0, &th3);
-    
-
-    sched_start_thread(&th2);
-    sched_start_thread(&th1);
-    sched_start_thread(&th3);
-    sched_cpu_init(dev, c);
-    while(1)
+    /* initialize the CPU driver and the BSP */
+    if(cpu_init())
     {
-      
-    
-
-       // test_interrupt();
-
-       // kprintf("LOOPING %d\n", ++j);
-       /* timer_loop_delay(dev, 1);*/
-
-   
+        kprintf("FAILED TO PROPERLY SET UP BSP\n");
+        while(1)
+        {
+            cpu_halt();
+        }
     }
-#endif
-
-  
 }
