@@ -31,7 +31,7 @@ static inline void pit8254_rearm(pit8254_dev_t *pit)
 }
 
 
-static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
+static int pit8254_irq_handler(void *dev, isr_info_t *inf)
 {
     pit8254_dev_t *pit_dev = NULL;
     uint16_t divider = 0;
@@ -41,7 +41,7 @@ static int pit8254_irq_handler(void *dev, virt_addr_t iframe)
    
     spinlock_lock_int(&pit_dev->lock, &int_status);
 
-    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS, iframe);
+    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS, inf);
     
     pit8254_rearm(pit_dev);
     

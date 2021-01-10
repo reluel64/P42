@@ -98,9 +98,9 @@ static void sched_wake_sleeping_threads
     uint32_t period
 )
 {
-    list_node_t *node = NULL;
-    list_node_t *next_node = NULL;
-    sched_thread_t *th = NULL;
+    list_node_t    *node      = NULL;
+    list_node_t    *next_node = NULL;
+    sched_thread_t *th        = NULL;
 
     node = linked_list_first(&unit->sleep_q);
 
@@ -184,9 +184,7 @@ static inline void sched_preempt_thread
     {
         /* Add the pre-empted task to the end of active queue list */
         __atomic_and_fetch(&current->flags, 
-                            ~(THREAD_RUNNING    |
-                              THREAD_BLOCKED    |
-                              THREAD_SLEEPING),
+                           ~THREAD_STATE_MASK,
                             __ATOMIC_ACQUIRE);
             
         /* Set the new status */
@@ -208,7 +206,6 @@ static inline void sched_switch_to_thread
     sched_exec_unit_t *unit,
     sched_thread_t    *th,
     virt_addr_t        iframe
-    
 )
 {
     int             int_status = 0;
@@ -234,16 +231,14 @@ static inline void sched_switch_to_thread
     if(!next->remain)
         next->remain = SCHED_MAX_PRIORITY - next->prio;
 
+    __atomic_and_fetch(&next->flags, 
+                        ~THREAD_STATE_MASK,
+                        __ATOMIC_ACQUIRE);
+
     /* make sure that the thread is in RUNNING state */
     __atomic_or_fetch(&next->flags, 
                     THREAD_RUNNING, 
                     __ATOMIC_ACQUIRE);
-
-    __atomic_and_fetch(&next->flags, 
-                        ~(THREAD_RUNNING | 
-                        THREAD_BLOCKED | 
-                        THREAD_SLEEPING),
-                        __ATOMIC_ACQUIRE);
 
     cpu_ctx_restore(iframe, next);
 
@@ -370,7 +365,7 @@ void sched_unblock_thread(sched_thread_t *th)
 }
 
 
-static int sched_timer_isr(void *pv, virt_addr_t iframe)
+static int sched_timer_isr(void *pv, isr_info_t *inf)
 {
     sched_exec_unit_t *unit      = NULL;
     cpu_t             *cpu       = NULL;
@@ -378,15 +373,15 @@ static int sched_timer_isr(void *pv, virt_addr_t iframe)
     unit = (sched_exec_unit_t*)pv;
     cpu = unit->cpu;
 
-    if(cpu->cpu_id != cpu_id_get())
+    if(cpu->cpu_id != inf->cpu_id)
         return(-1);
 
-    sched_resched(iframe, unit, SCHEDULER_TICK_MS);
+    sched_resched(inf->iframe, unit, SCHEDULER_TICK_MS);
 
     return(0);
 }
 
-static int sched_resched_isr(void *pv, virt_addr_t iframe)
+static int sched_resched_isr(void *pv, isr_info_t *inf)
 {
     sched_exec_unit_t *unit      = NULL;
     cpu_t             *cpu       = NULL;
@@ -394,10 +389,10 @@ static int sched_resched_isr(void *pv, virt_addr_t iframe)
     unit = (sched_exec_unit_t*)pv;
     cpu = unit->cpu;
 
-    if(cpu->cpu_id != cpu_id_get())
+    if(cpu->cpu_id != inf->cpu_id)
         return(-1);
 
-    sched_resched(iframe, unit, 0);
+    sched_resched(inf->iframe, unit, 0);
 
     return(0);
 }
@@ -441,12 +436,6 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     linked_list_init(&unit->sleep_q);
     linked_list_init(&unit->dead_q);
 
-
-    /* Add the unit to the list */
-    spinlock_write_lock_int(&units_lock, &int_status);
-    linked_list_add_tail(&units, &unit->node);
-    spinlock_write_unlock_int(&units_lock, int_status);
-
     spinlock_init(&unit->lock);
 
     unit->idle = kcalloc(sizeof(sched_thread_t), 1);
@@ -458,6 +447,12 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
 
     sched_init_thread(unit->idle, sched_idle_loop, PAGE_SIZE, 255, unit);
 
+    /* Add the unit to the list */
+    spinlock_write_lock_int(&units_lock, &int_status);
+    linked_list_add_tail(&units, &unit->node);
+    spinlock_write_unlock_int(&units_lock, int_status);
+
+
     isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0);
 
     timer_periodic_install(timer,
@@ -465,7 +460,13 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
                            sched_timer_isr,
                            unit,
                            SCHEDULER_TICK_MS);
-    while(1);
+
+    while(1)
+    {
+        cpu_halt();
+    }
+
+    /* make the compiler happy */
     return(0);
 
 }
@@ -527,7 +528,9 @@ static inline void sched_clean_thread(sched_thread_t *th)
     memset((void*)th->stack, 0, th->stack_sz);
     vmmgr_free(NULL, th->stack, th->stack_sz);
     cpu_ctx_destroy(th);
-    kfree(th);
+
+    if(th->flags & THREAD_ALLOCATED)
+        kfree(th);
 }
 
 static void sched_idle_loop(void *pv)

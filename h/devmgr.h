@@ -3,6 +3,7 @@
 
 #include <linked_list.h>
 #include <spinlock.h>
+
 #define DEVMGR_DEV_INITIALIZED (1 << 0)
 #define DEVMGR_DEV_PROBED      (1 << 1)
 #define DEVMGR_DEV_ALLOCATED   (1 << 2)

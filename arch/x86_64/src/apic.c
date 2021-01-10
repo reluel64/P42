@@ -15,8 +15,6 @@
 #define LVT_ERROR_VECTOR (254)
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
-
-
 static int apic_nmi_fill
 (
     apic_device_t *apic
@@ -137,12 +135,12 @@ static int apic_nmi_fill
     return(found ? 0 : -1);
 }
 
-static int apic_spurious_handler(void *pv, virt_addr_t iframe)
+static int apic_spurious_handler(void *pv, isr_info_t *inf)
 {
     return(0);
 }
 
-static int apic_lvt_error_handler(void *pv, virt_addr_t iframe)
+static int apic_lvt_error_handler(void *pv, isr_info_t *inf)
 {
     apic_drv_private_t *apic_drv = NULL;
     kprintf("APIC_ERROR_HANDLER\n");
@@ -152,6 +150,17 @@ static int apic_lvt_error_handler(void *pv, virt_addr_t iframe)
 
     kprintf("ERROR %x\n",(*apic_drv->reg->esr));
 
+    return(0);
+}
+
+static int apic_eoi_handler(void *pv, isr_info_t *inf)
+{
+    apic_drv_private_t *apic_drv = NULL;
+   
+    apic_drv = devmgr_drv_data_get(pv);
+
+    (*apic_drv->reg->eoi) = 0;
+    
     return(0);
 }
 
@@ -242,17 +251,6 @@ static int apic_send_ipi
     return(0);
 }
 
-static int apic_eoi_handler(void *pv, virt_addr_t iframe)
-{
-    apic_drv_private_t *apic_drv = NULL;
-   
-    apic_drv = devmgr_drv_data_get(pv);
-
-    (*apic_drv->reg->eoi) = 0;
-    
-    return(0);
-}
-
 static int apic_probe(device_t *dev)
 {
     ACPI_STATUS            status   = AE_OK;
@@ -334,7 +332,7 @@ static int apic_dev_init(device_t *dev)
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
 
     (*reg->eoi) = 0;
- 
+   
     cpu_int_unlock();
    
     return(0);
@@ -364,7 +362,7 @@ static int apic_drv_init(driver_t *drv)
     isr_install(apic_spurious_handler, drv, SPURIOUS_VECTOR,0);
     isr_install(apic_eoi_handler, drv, 0, 1);
     devmgr_drv_data_set(drv, apic_drv);
-
+   
     return(0);
 }
 

@@ -82,7 +82,6 @@ extern uint64_t    __rdmsr(uint64_t msr);
 extern phys_addr_t __read_cr3(void);
 extern void        __write_cr3(phys_addr_t );
 extern virt_addr_t __stack_pointer(void);
-extern void        halt();
 extern phys_addr_t __read_cr3(void);
 extern void        __write_cr3(phys_addr_t phys_addr);
 extern void        __invlpg(virt_addr_t address);
@@ -106,5 +105,5 @@ extern void        __cpuid
     uint32_t *edx
 );
 int platform_early_init(void);
-
+int platform_init(void);
 #endif

@@ -104,9 +104,13 @@ static void kmain_sys_init(void)
 {
     /* Start APs */
     cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
+    platform_init();
+    vga_print("Hello World\n");
 
-    kprintf("Hello World\n");
+
 }
+
+/* Kernel entry point */
 
 void kmain()
 {
@@ -164,4 +168,5 @@ void kmain()
             cpu_halt();
         }
     }
+
 }

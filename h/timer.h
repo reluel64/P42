@@ -5,14 +5,14 @@
 #include <defs.h>
 #include <linked_list.h>
 #include <devmgr.h>
-
+#include <isr.h>
 #define TIMER_DEVICE_TYPE "timer"
 #define TIMER_PERIODIC    (1 << 0)
 #define TIMER_TICK        (1 << 1)
 
 
 
-typedef int (*timer_handler_t)(void *, virt_addr_t);
+typedef int (*timer_handler_t)(void *, isr_info_t *);
 
 typedef struct timer_t
 {
@@ -53,6 +53,6 @@ void timer_update
 (
     list_head_t *queue,
     uint32_t interval,
-    virt_addr_t iframe
+    isr_info_t *inf
 );
 #endif

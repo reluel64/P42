@@ -5,7 +5,7 @@
 
 void init_serial(void) 
 {
-   (PORT + 1, 0x01);    // Disable all interrupts
+   __outb(PORT + 1, 0x01);    // Disable all interrupts
    __outb(PORT + 3, 0x80);    // Enable DLAB (set baud rate divisor)
    __outb(PORT + 0, 0x03);    // Set divisor to 3 (lo byte) 38400 baud
    __outb(PORT + 1, 0x00);    //                  (hi byte)

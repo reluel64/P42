@@ -5,11 +5,13 @@
 #include <utils.h>
 #include <liballoc.h>
 #include <cpu.h>
+
+
 void timer_update
 (
     list_head_t *queue,
     uint32_t interval,
-    virt_addr_t iframe
+    isr_info_t *inf
 )
 {
     timer_t *tm = NULL;
@@ -28,7 +30,7 @@ void timer_update
         {
             if(tm->handler)
             {
-                tm->handler(tm->data, iframe);
+                tm->handler(tm->data, inf);
                 tm->ctime = 0;
             }
 

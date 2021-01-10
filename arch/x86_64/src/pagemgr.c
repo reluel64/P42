@@ -76,11 +76,11 @@ static pfmgr_t       *pfmgr        = NULL;
 
 static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
 static int         pagemgr_temp_unmap(virt_addr_t vaddr);
-static int         pagemgr_page_fault_handler(void *pv, virt_addr_t iframe);
+static int         pagemgr_page_fault_handler(void *pv, isr_info_t *inf);
 static int         pagemgr_per_cpu_invl_handler
 (
     void *pv, 
-    virt_addr_t iframe
+    isr_info_t *inf
 );
 
 /* This piece code is the intermediate layer
@@ -1082,10 +1082,11 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
         /* Any attempt to apply attributes to a non-existent page
          * will cause the function to exit 
          */
-        pagemgr_invalidate(virt);
+
         if(pagemgr_attr_translate(&path->pt[path->pt_ix], path->attr))
             return(0);
-
+            
+        pagemgr_invalidate(virt);
 
         path->virt_off += PAGE_SIZE;
         used_pf++;
@@ -1466,14 +1467,15 @@ int pagemgr_unmap
 }
 
 
-static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
+static int pagemgr_page_fault_handler(void *pv, isr_info_t *inf)
 {
+
     interrupt_frame_t *int_frame = 0;
     virt_addr_t fault_address = 0;
-    virt_addr_t error_code = *(virt_addr_t*)(iframe - sizeof(uint64_t));
+    virt_addr_t error_code = *(virt_addr_t*)(inf->iframe - sizeof(uint64_t));
 
     fault_address = __read_cr2();
-    int_frame = (interrupt_frame_t*)iframe;
+    int_frame = (interrupt_frame_t*)inf->iframe;
 
     kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x RFLAGS 0x%x\n",
             fault_address,  \
@@ -1481,6 +1483,8 @@ static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
             int_frame->rip,
             int_frame->ss,
             int_frame->rflags);
+
+
 
     while(1);
 
@@ -1490,7 +1494,7 @@ static int pagemgr_page_fault_handler(void *pv, virt_addr_t iframe)
 static int pagemgr_per_cpu_invl_handler
 (
     void *pv, 
-    virt_addr_t iframe
+    isr_info_t *inf
 )
 {
     int status = 0;

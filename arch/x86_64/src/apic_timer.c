@@ -21,13 +21,13 @@ typedef struct apic_timer_t
 }apic_timer_t;
 
 static int counter = 0;
-static int apic_timer_isr(void *dev, virt_addr_t iframe)
+static int apic_timer_isr(void *dev, isr_info_t *inf)
 {
     int                 int_status = 0;
     apic_timer_t        *timer     = NULL;
     volatile apic_reg_t *reg       = NULL;
-
-    if(devmgr_dev_index_get(dev) != cpu_id_get())
+    
+    if(devmgr_dev_index_get(dev) != inf->cpu_id)
     {
         return(-1);
     }
@@ -38,7 +38,7 @@ static int apic_timer_isr(void *dev, virt_addr_t iframe)
     spinlock_lock_int(&timer->lock, &int_status);
 
     if(linked_list_count(&timer->queue) > 0)
-        timer_update(&timer->queue, APIC_TIMER_INTERVAL_MS, iframe);
+        timer_update(&timer->queue, APIC_TIMER_INTERVAL_MS, inf);
 
     (*reg->timer_icnt) = timer->calib_value;
 

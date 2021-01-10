@@ -3,7 +3,14 @@
 
 #include <stddef.h>
 #include <defs.h>
-typedef  int(*interrupt_handler_t)(void *pv, virt_addr_t iframe);
+
+typedef struct isr_info_t
+{
+    virt_addr_t iframe;
+    uint32_t    cpu_id;
+}isr_info_t;
+
+typedef  int(*interrupt_handler_t)(void *pv, isr_info_t *inf);
 
 int isr_init(void);
 int isr_install

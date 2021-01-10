@@ -1,4 +1,4 @@
-/* x86 interrupt handling core
+/* Interrupt dispatching code
  * Part of P42 
  */ 
 
@@ -148,32 +148,37 @@ int isr_uninstall
     }
     return(0);
 }
-
+   
 void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 {
     int               status     = 0;
     isr_list_t        *int_lst   = NULL;
     isr_t             *intr      = NULL;
     list_node_t       *node      = NULL;
-    interrupt_frame_t *int_frame = 0;
     int               int_status = 0;
+    isr_info_t        inf;
 
     if(index >= MAX_HANDLERS)
         return;
 
+    memset(&inf, 0, sizeof(isr_info_t));
+    
     int_lst = &handlers[index];
+
+    inf.iframe = iframe;
+    inf.cpu_id    = cpu_id_get();
 
     /* gain exclusive access to the list */
     spinlock_read_lock_int(&int_lst->lock, &int_status);
-
+    
     node = linked_list_first(&int_lst->head);
-
+    
     while(node)
     {
         intr = (isr_t*)node;
 
         if(intr->ih)
-            status = intr->ih(intr->pv, iframe);
+            status = intr->ih(intr->pv, &inf);
 
         if(!status)
         {
@@ -195,7 +200,7 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
         intr = (isr_t*)node;
 
         if(intr->ih)
-            status = intr->ih(intr->pv, iframe);
+            status = intr->ih(intr->pv, &inf);
 
         if(!status)
         {

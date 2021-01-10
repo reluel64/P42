@@ -9,7 +9,6 @@ typedef struct mutex_t
     spinlock_t lock;
     volatile void *owner;
     volatile uint32_t rlevel;
-   
 }mutex_t;
 
 mutex_t *mtx_create();

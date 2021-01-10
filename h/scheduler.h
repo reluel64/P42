@@ -3,11 +3,20 @@
 #include <devmgr.h>
 #include <cpu.h>
 #include <timer.h>
-#define THREAD_READY   (0x0)
-#define THREAD_RUNNING (0x1)
-#define THREAD_BLOCKED (0x2)
-#define THREAD_SLEEPING (0x4)
-#define THREAD_DEAD     (0x8)
+
+
+#define THREAD_READY     (1 << 0)
+#define THREAD_RUNNING   (1 << 1)
+#define THREAD_BLOCKED   (1 << 2)
+#define THREAD_SLEEPING  (1 << 3)
+#define THREAD_DEAD      (1 << 4)
+#define THREAD_ALLOCATED (1 << 5)
+
+
+#define THREAD_STATE_MASK (THREAD_RUNNING | \
+                          THREAD_READY    | \
+                          THREAD_BLOCKED  | \
+                          THREAD_SLEEPING)
 
 #define SCHED_MAX_PRIORITY 255
 
@@ -71,4 +80,5 @@ sched_thread_t *sched_thread_self(void);
 void sched_unblock_thread(sched_thread_t *th);
 void sched_block_thread(sched_thread_t *th);
 void sched_yield();
+void sched_sleep(uint32_t delay);
 #endif

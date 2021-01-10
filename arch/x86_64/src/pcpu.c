@@ -18,6 +18,8 @@
 #include <apic_timer.h>
 #include <scheduler.h>
 #include <pcpu.h>
+#include <ioapic.h>
+
 extern void __cpu_switch_stack
 (
     virt_addr_t *new_top,
@@ -602,7 +604,7 @@ static void pcpu_entry_point(void)
 
         if(devmgr_dev_add(cpu_dev, NULL))
         {
-            kprintf("FAILED TO ADD BSP CPU\n");
+            kprintf("FAILED TO ADD AP CPU\n");
         }
     }   
 
@@ -872,10 +874,9 @@ static int pcpu_drv_init(driver_t *drv)
     uint32_t               cpu_id    = 0;
     cpu_platform_driver_t *cpu_drv   = NULL;
     device_t              *timer     = NULL;
-    device_t              *pit_timer = NULL;
     cpu_t                 *cpu       = NULL;
     sched_thread_t        *init_th   = NULL;
-
+    
     spinlock_init(&lock);
 
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
@@ -909,18 +910,19 @@ static int pcpu_drv_init(driver_t *drv)
             kprintf("FAILED TO ADD BSP CPU\n");
             return(-1);
         }
-        else
-        {
-            cpu = devmgr_dev_data_get(cpu_bsp);
-            timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
-            
-            if(timer == NULL)
-                timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
-            if(sched_cpu_init(timer, cpu))
-            {
-                return(-1);
-            }
+        /* Set up the scheduler for the BSP */
+        cpu = devmgr_dev_data_get(cpu_bsp);
+        timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
+        
+        if(timer == NULL)
+        {
+            timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
+        }
+
+        if(sched_cpu_init(timer, cpu))
+        {
+            return(-1);
         }
     }
 
