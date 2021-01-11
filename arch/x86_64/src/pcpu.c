@@ -1,6 +1,6 @@
 /*
  * Platform-specific CPU routines
- */ 
+ */
 
 #include <cpu.h>
 #include <utils.h>
@@ -180,7 +180,7 @@ static int pcpu_idt_entry_encode
     idt64_entry_t *idt_entry
 )
 {
-    
+
     if(idt_entry == NULL)
         return(-1);
 
@@ -203,51 +203,51 @@ static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
     uint16_t            no_ec_ix = 0;
     uint16_t            ec_ix    = 0;
     virt_addr_t         ih = 0;
-    
+
     idt = cpu_drv->idt;
 
     memset(idt, 0, IDT_TABLE_SIZE);
-    
+
     /* Set up interrupt handlers */
     for(uint16_t i = 0; i < IDT_TABLE_COUNT; i++)
     {
 
         if((i >= RESERVED_ISR_BEGIN && i <=RESERVED_ISR_END) || i == 15)
             continue;
-            
+
         else if(i < RESERVED_ISR_BEGIN)
         {
             if((1 << i) & ISR_EC_MASK)
             {
-                isr_size = (virt_addr_t)&isr_ec_sz_end - 
+                isr_size = (virt_addr_t)&isr_ec_sz_end -
                            (virt_addr_t)&isr_ec_sz_start;
 
-                ih = (virt_addr_t)&isr_ec_begin + 
+                ih = (virt_addr_t)&isr_ec_begin +
                                 (ec_ix * isr_size);
                 ec_ix++;
             }
             else
             {
-                isr_size = (virt_addr_t)&isr_no_ec_sz_end - 
+                isr_size = (virt_addr_t)&isr_no_ec_sz_end -
                            (virt_addr_t)&isr_no_ec_sz_start;
 
-                ih = (virt_addr_t)&isr_no_ec_begin + 
+                ih = (virt_addr_t)&isr_no_ec_begin +
                                 (no_ec_ix * isr_size);
                 no_ec_ix++;
             }
         }
         else
         {
-            isr_size = (virt_addr_t)&isr_no_ec_sz_end - 
+            isr_size = (virt_addr_t)&isr_no_ec_sz_end -
                        (virt_addr_t)&isr_no_ec_sz_start;
 
-            ih = (virt_addr_t)&isr_no_ec_begin + 
+            ih = (virt_addr_t)&isr_no_ec_begin +
                             (no_ec_ix * isr_size);
             no_ec_ix++;
         }
 
         pcpu_idt_entry_encode(ih,                              /* interrupt handler              */
-                      GDT_PRESENT_SET(1) | 
+                      GDT_PRESENT_SET(1) |
                       GDT_TYPE_SET(GDT_SYSTEM_INTERUPT_GATE),  /* this is an interrupt           */
                       0,                                       /* no IST                         */
                       KERNEL_CODE_SEGMENT,                     /* isr must run in Kernel Context */
@@ -257,13 +257,13 @@ static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
 
     cpu_drv->idt_ptr.addr = (virt_addr_t)idt;
     cpu_drv->idt_ptr.limit = IDT_TABLE_SIZE - 1;
- 
+
     return(0);
 }
 
 static void pcpu_stack_relocate
 (
-    virt_addr_t *new_stack_base, 
+    virt_addr_t *new_stack_base,
     virt_addr_t *old_stack_base
 )
 {
@@ -287,44 +287,45 @@ static void pcpu_stack_relocate
     old_stack_top = old_stack_base - stack_entries;
 
 
-    kprintf("old_stack_base 0x%x old_stack_top 0x%x new_stack_base %x\n",old_stack_base, old_stack_top, new_stack_base);
+    kprintf("old_stack_base 0x%x old_stack_top 0x%x new_stack_base %x\n", \
+             old_stack_base, old_stack_top, new_stack_base);
     /* Adjust stack content */
 
-    /* Copy the content from the old stack to the new stack 
+    /* Copy the content from the old stack to the new stack
      * and do any necessary adjustments
      */
 
     for(virt_size_t i = 0; i < stack_entries; i++)
     {
-        if((old_stack_top[i] >= (virt_addr_t)old_stack_top  ) && 
+        if((old_stack_top[i] >= (virt_addr_t)old_stack_top  ) &&
            (old_stack_top[i] <= (virt_addr_t)old_stack_base ))
            {
                /* Adjust addresses */
-                new_stack_top[i] = (virt_addr_t)(new_stack_base - 
+                new_stack_top[i] = (virt_addr_t)(new_stack_base -
                                     (old_stack_base - (virt_addr_t*)old_stack_top[i]));
 
                 ov = (virt_addr_t*)old_stack_top[i];
                 nv = (virt_addr_t*)new_stack_top[i];
 
                 /* adjust stack frames */
-                if((ov[0] >= (virt_addr_t)old_stack_top  ) && 
+                if((ov[0] >= (virt_addr_t)old_stack_top  ) &&
                    (ov[0] <= (virt_addr_t)old_stack_base ))
                 {
-                    nv[0] = (virt_addr_t)(new_stack_base - 
+                    nv[0] = (virt_addr_t)(new_stack_base -
                             (old_stack_base - (virt_addr_t*)ov[0]));
                 }
            }
            else
            {
-               /* Copy plain values 
+               /* Copy plain values
                 * These values contain only the values of the variables
                 * of the routines
-                */ 
+                */
                new_stack_top[i] = old_stack_top[i];
            }
     }
 
-    __cpu_switch_stack(new_stack_base, 
+    __cpu_switch_stack(new_stack_base,
                        new_stack_top,
                        old_stack_base
                       );
@@ -343,17 +344,17 @@ static virt_addr_t pcpu_prepare_trampoline(void)
 
     tr_size = _TRAMPOLINE_END - _TRAMPOLINE_BEGIN;
 
-    tr_code = (uint8_t*)vmmgr_map(NULL, 
+    tr_code = (uint8_t*)vmmgr_map(NULL,
                                  CPU_TRAMPOLINE_LOCATION_START,
                                  0x0,
                                  tr_size,
                                  VMM_ATTR_EXECUTABLE |
                                  VMM_ATTR_WRITABLE);
-    
+
     if(tr_code == 0)
         return(0);
-    
-    /* Save some common stuff so we will place it into the 
+
+    /* Save some common stuff so we will place it into the
      * relocated trampoline code
      */
     memset(tr_code, 0, tr_size);
@@ -380,10 +381,10 @@ static virt_addr_t pcpu_prepare_trampoline(void)
 
 static int pcpu_bring_cpu_up
 (
-    device_t *issuer, 
+    device_t *issuer,
     uint32_t cpu,
     uint32_t timeout
-    
+
 )
 {
     ipi_packet_t ipi;
@@ -400,7 +401,7 @@ static int pcpu_bring_cpu_up
     ipi.dest_mode = IPI_DEST_MODE_PHYS;
     ipi.trigger   = IPI_TRIGGER_EDGE;
     ipi.vector    = 0x8;
-    
+
     /* INIT IPI */
     ipi.type      = IPI_INIT;
     ipi.dest_cpu  = cpu;
@@ -409,7 +410,7 @@ static int pcpu_bring_cpu_up
 
     /* Start-up SIPI */
     ipi.type = IPI_START_AP;
-    
+
     /* prepare cpu_on flag */
     __atomic_store_n(&cpu_on, 0, __ATOMIC_RELEASE);
 
@@ -420,23 +421,23 @@ static int pcpu_bring_cpu_up
     {
         intc_send_ipi(issuer, &ipi);
 
-        /* wait for about 1ms */
-        
+        /* wait for about 10ms */
+
         for(uint32_t i = 0; i < 10;i++)
-        {   
+        {
             sched_sleep(1);
-           
+
             if(__atomic_load_n(&cpu_on, __ATOMIC_ACQUIRE))
                 return(0);
         }
     }
-    
+
     return(-1);
 }
 
 static int pcpu_issue_ipi
 (
-    uint8_t dest, 
+    uint8_t dest,
     uint32_t cpu,
     uint32_t vector
 )
@@ -480,7 +481,7 @@ static int pcpu_ap_start
     uint32_t               started_cpu = 1;
 
     cpu_id = pcpu_id_get();
-    dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id); 
+    dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
 
     /* Get the MADT table */
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
@@ -500,14 +501,14 @@ static int pcpu_ap_start
     }
 
     /* create identity mapping for the trampoline code */
-    vmmgr_temp_identity_map(NULL, CPU_TRAMPOLINE_LOCATION_START, 
+    vmmgr_temp_identity_map(NULL, CPU_TRAMPOLINE_LOCATION_START,
                                   CPU_TRAMPOLINE_LOCATION_START,
-                                  PAGE_SIZE, 
+                                  PAGE_SIZE,
                                   VMM_ATTR_EXECUTABLE |
                                   VMM_ATTR_WRITABLE);
 
     /* check if are going to use x2APIC */
-    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
+    for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
         i < madt->Header.Length;
         i += subhdr->Length)
     {
@@ -520,7 +521,7 @@ static int pcpu_ap_start
         }
     }
 
-    for(phys_size_t i = sizeof(ACPI_TABLE_MADT); 
+    for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
         (i < madt->Header.Length) && (started_cpu < num);
         i += subhdr->Length)
     {
@@ -536,7 +537,7 @@ static int pcpu_ap_start
                 {
                     continue;
                 }
-                else if(((x2lapic->LapicFlags & 0x1) == 0) && 
+                else if(((x2lapic->LapicFlags & 0x1) == 0) &&
                         ((x2lapic->LapicFlags & 0x2) == 0))
                 {
                     continue;
@@ -558,7 +559,7 @@ static int pcpu_ap_start
                 {
                     continue;
                 }
-                else if(((lapic->LapicFlags & 0x1) == 0) && 
+                else if(((lapic->LapicFlags & 0x1) == 0) &&
                         ((lapic->LapicFlags & 0x2) == 0))
                 {
                     continue;
@@ -593,11 +594,11 @@ static void pcpu_entry_point(void)
     device_t *cpu_dev = NULL;
     cpu_t *cpu = NULL;
     cpu_id = cpu_id_get();
-    
+
     /* Add cpu to the deivce manager */
     if(!devmgr_dev_create(&cpu_dev))
     {
-            
+
         devmgr_dev_name_set(cpu_dev,PLATFORM_CPU_NAME);
         devmgr_dev_type_set(cpu_dev, CPU_DEVICE_TYPE);
         devmgr_dev_index_set(cpu_dev, cpu_id);
@@ -606,7 +607,7 @@ static void pcpu_entry_point(void)
         {
             kprintf("FAILED TO ADD AP CPU\n");
         }
-    }   
+    }
 
     /* signal that the cpu is up and running */
     kprintf("CPU_STARTED\n");
@@ -621,16 +622,16 @@ static void pcpu_entry_point(void)
         timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
     sched_cpu_init(timer, cpu);
-    
+
     while(1)
     {
         cpu_halt();
     }
-   
+
 }
-/* Setup platform specific cpu stuff 
+/* Setup platform specific cpu stuff
  * this should be called in the context of the cpu
- */ 
+ */
 static int pcpu_setup(cpu_t *cpu)
 {
     device_t *apic_dev          = NULL;
@@ -650,13 +651,13 @@ static int pcpu_setup(cpu_t *cpu)
     pcpu = cpu->cpu_pv;
 
     cpu->context = kcalloc(sizeof(pcpu_context_t), 1);
-    
+
     /* Prepare the GDT */
     gdt_per_cpu_init(cpu->cpu_pv);
 
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
-    
+
     if(!devmgr_dev_create(&apic_dev))
     {
         devmgr_dev_name_set(apic_dev, APIC_DRIVER_NAME);
@@ -707,7 +708,7 @@ static uint32_t pcpu_get_domain
         return(0);
     }
 
-    for(phys_size_t i = sizeof(ACPI_TABLE_SRAT); 
+    for(phys_size_t i = sizeof(ACPI_TABLE_SRAT);
         i < srat->Header.Length;
         i += subhdr->Length)
     {
@@ -716,14 +717,14 @@ static uint32_t pcpu_get_domain
 
         if(subhdr->Type != ACPI_SRAT_TYPE_CPU_AFFINITY)
             continue;
-        
+
         cpu_aff = (ACPI_SRAT_CPU_AFFINITY*)subhdr;
 
         if(cpu_id == cpu_aff->ApicId)
         {
-            domain = 
-                    (uint32_t)cpu_aff->ProximityDomainLo          | 
-                    (uint32_t)cpu_aff->ProximityDomainHi[0] << 8  | 
+            domain =
+                    (uint32_t)cpu_aff->ProximityDomainLo          |
+                    (uint32_t)cpu_aff->ProximityDomainHi[0] << 8  |
                     (uint32_t)cpu_aff->ProximityDomainHi[1] << 16 |
                     (uint32_t)cpu_aff->ProximityDomainHi[2] << 24;
         }
@@ -743,14 +744,14 @@ static void pcpu_ctx_save(virt_addr_t iframe, void *th)
     thread = th;
     context = thread->context;
     reg_loc = iframe - sizeof(pcpu_regs_t);
-       
+
     memcpy(&context->iframe, (uint8_t*)iframe, sizeof(interrupt_frame_t));
     memcpy(&context->regs, (uint8_t*)reg_loc, sizeof(pcpu_regs_t));
 }
 
 static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
 {
-    
+
     pcpu_context_t    *context = NULL;
     interrupt_frame_t *frame = NULL;
     cpu_t             *cpu = NULL;
@@ -761,7 +762,7 @@ static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
     context = thread->context;
     cpu     = thread->unit->cpu;
     cpu_pv  = cpu->cpu_pv;
-    
+
     frame = (interrupt_frame_t*)iframe;
 
     frame->cs = 0x8;
@@ -771,7 +772,7 @@ static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
 
     /* Clear NT and IF */
     frame->rflags &= ~((1 << 14) | (1 << 9));
-    
+
     gdt_update_tss(cpu_pv, context->esp0);
 }
 
@@ -789,13 +790,13 @@ static void *pcpu_ctx_init
 
     th = thread;
 
-    ctx = (pcpu_context_t*)vmmgr_alloc(NULL, 0x0, 
-                                       PAGE_SIZE, 
+    ctx = (pcpu_context_t*)vmmgr_alloc(NULL, 0x0,
+                                       PAGE_SIZE,
                                        VMM_ATTR_WRITABLE);
 
     if(ctx == NULL)
         return(NULL);
-    
+
     memset(ctx, 0, PAGE_SIZE);
 
     ctx->iframe.rip = (virt_addr_t)exec_pt;
@@ -825,7 +826,7 @@ static int pcpu_ctx_destroy(void *thread)
 {
     sched_thread_t *th = NULL;
     pcpu_context_t *ctx = NULL;
-    
+
     th = thread;
 
     if(th == NULL)
@@ -862,9 +863,9 @@ static int pcpu_dev_probe(device_t *dev)
     return(-1);
 }
 
-/* There's not much that 
- * can be initialized in the 
- * driver, except setting up the BSP 
+/* There's not much that
+ * can be initialized in the
+ * driver, except setting up the BSP
  */
 
 
@@ -876,26 +877,26 @@ static int pcpu_drv_init(driver_t *drv)
     device_t              *timer     = NULL;
     cpu_t                 *cpu       = NULL;
     sched_thread_t        *init_th   = NULL;
-    
+
     spinlock_init(&lock);
 
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
 
-    cpu_drv->idt = (idt64_entry_t*)vmmgr_alloc(NULL, 0x0, 
-                                               IDT_TABLE_SIZE, 
+    cpu_drv->idt = (idt64_entry_t*)vmmgr_alloc(NULL, 0x0,
+                                               IDT_TABLE_SIZE,
                                                VMM_ATTR_WRITABLE);
 
     /* Setup the IDT */
     pcpu_idt_setup(cpu_drv);
-    
+
     /* make IDT read-only */
-    vmmgr_change_attrib(NULL, (virt_addr_t)cpu_drv->idt, 
-                        IDT_TABLE_SIZE, 
+    vmmgr_change_attrib(NULL, (virt_addr_t)cpu_drv->idt,
+                        IDT_TABLE_SIZE,
                         ~VMM_ATTR_WRITABLE);
 
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);
-    
+
     if(!devmgr_dev_create(&cpu_bsp))
     {
         devmgr_dev_name_set(cpu_bsp,PLATFORM_CPU_NAME);
@@ -914,7 +915,7 @@ static int pcpu_drv_init(driver_t *drv)
         /* Set up the scheduler for the BSP */
         cpu = devmgr_dev_data_get(cpu_bsp);
         timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
-        
+
         if(timer == NULL)
         {
             timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
@@ -930,7 +931,7 @@ static int pcpu_drv_init(driver_t *drv)
 }
 
 
-static cpu_api_t cpu_api = 
+static cpu_api_t cpu_api =
 {
     .cpu_setup      = pcpu_setup,
     .cpu_id_get     = pcpu_id_get,
@@ -953,7 +954,7 @@ static cpu_api_t cpu_api =
     .resched        = __resched_interrupt
 };
 
-static driver_t x86_cpu = 
+static driver_t x86_cpu =
 {
     .drv_name   = PLATFORM_CPU_NAME,
     .drv_type   = CPU_DEVICE_TYPE,

@@ -15,6 +15,9 @@
 #define LVT_ERROR_VECTOR (254)
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
+
+
+
 static int apic_nmi_fill
 (
     apic_device_t *apic
@@ -311,7 +314,7 @@ static int apic_dev_init(device_t *dev)
     (*reg->lvt_err) &= ~APIC_LVT_INT_MASK;
     (*reg->lvt_err) = APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
 
-#if 1
+
     /* Set up LINT */
     if(apic->lint == 0)
     {
@@ -324,9 +327,8 @@ static int apic_dev_init(device_t *dev)
         (*reg->lvt_lint1) = LVT_LINT_VECTOR                    | 
                             (((uint32_t)apic->polarity) << 13) | 
                             (((uint32_t)apic->trigger)  << 15);
-
     }           
-    #endif
+
     /* Enable APIC */
     (*reg->svr)     = APIC_SVR_ENABLE_BIT | 
                        APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
@@ -363,6 +365,106 @@ static int apic_drv_init(driver_t *drv)
     isr_install(apic_eoi_handler, drv, 0, 1);
     devmgr_drv_data_set(drv, apic_drv);
    
+    return(0);
+}
+
+
+static int apic_write
+(
+    apic_device_t *dev,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+)
+{
+    uint32_t reg_offset = 0;
+    volatile uint32_t *offset = NULL;
+    volatile uint8_t *apic_base = (volatile uint8_t*)dev->reg;
+
+    if(cnt == 0)
+        return(0);
+
+    reg_offset = (~APIC_REGISTER_START & reg) * 0x10; 
+
+    offset = (volatile uint32_t*) (reg_offset + (uint8_t*)dev->reg);
+
+    switch(reg)
+    {
+        case IN_SERVICE_REGISTER:
+        case TRIGGER_MODE_REGISTER:
+        case INTERRUPT_REQUEST_REGISTER:
+        case CURRENT_COUNT_REGISTER:
+        case LOCAL_APIC_ID_REGISTER:
+        case LOCAL_APIC_VERSION_REGISTER:
+        case PROCESSOR_PRIORITY_REGISTER:
+            return(-1);
+        
+        case INTERRUPT_COMMAND_REGISTER:
+            if(cnt > 1)
+                offset[1] = data[1];
+
+        default:
+            offset[0] = data[0];
+    }
+    return(0);
+}
+
+static int apic_read
+(
+    apic_device_t *dev,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+)
+{
+    uint32_t reg_offset = 0;
+    volatile uint32_t *offset = NULL;
+    volatile uint8_t *apic_base = (volatile uint8_t*)dev->reg;
+
+    if(cnt == 0)
+        return(0);
+
+    reg_offset = (~APIC_REGISTER_START & reg) * 0x10; 
+
+    offset = (volatile uint32_t*) (reg_offset + (uint8_t*)dev->reg);
+    kprintf("reg_offset %x\n",reg_offset);
+    switch(reg)
+    {
+        case IN_SERVICE_REGISTER:
+        case TRIGGER_MODE_REGISTER:
+        case INTERRUPT_REQUEST_REGISTER:
+        
+        if(cnt > 7)
+            data[7] = offset[7];
+            
+        if(cnt > 6)
+            data[6] = offset[6];
+
+        if(cnt > 5)
+            data[5] = offset[5];
+
+        if(cnt > 4)
+            data[4] = offset[4];
+
+        if(cnt > 3)
+            data[3] = offset[3];
+
+        if(cnt > 2)
+            data[2] = offset[2];
+
+        /* Fall through */
+        case INTERRUPT_COMMAND_REGISTER:
+            if(cnt > 1)
+                data[1] = offset[1];
+
+        default:
+            data[0] = offset[0];
+
+        case EOI_REGISTER:
+        case SELF_IPI_REGISTER:
+            return(-1);
+
+    }
     return(0);
 }
 

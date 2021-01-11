@@ -46,12 +46,11 @@ static void sched_thread_main(sched_thread_t *th)
 
 int sched_init_thread
 (
-    sched_thread_t    *th,
-    void        *entry_pt,
-    virt_size_t stack_sz,
-    uint32_t    prio,
-    void *pv
-
+    sched_thread_t *th,
+    void           *entry_pt,
+    virt_size_t     stack_sz,
+    uint32_t        prio,
+    void           *pv
 )
 {
     if(th == NULL)
@@ -95,7 +94,7 @@ int sched_start_thread(sched_thread_t *th)
 static void sched_wake_sleeping_threads
 (
     sched_exec_unit_t *unit,
-    uint32_t period
+    uint32_t           period
 )
 {
     list_node_t    *node      = NULL;
@@ -255,9 +254,9 @@ static inline void sched_switch_to_thread
 
 static void sched_resched
 (
-    virt_addr_t       iframe,
+    virt_addr_t        iframe,
     sched_exec_unit_t *unit,
-    uint32_t          period
+    uint32_t           period
 )
 {
     int                     preempt = 0;

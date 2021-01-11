@@ -50,8 +50,32 @@
 #define APIC_ID_PACKAGE(x) (((x) >> 24) & 0xF)
 #define APIC_ID_CLUSTER(x) (((x) >> 28) & 0xF)
 
-
-
+/* APIC REGISTERS */
+#define APIC_REGISTER_START                 (0x800)
+#define LOCAL_APIC_ID_REGISTER              (0x802)
+#define LOCAL_APIC_VERSION_REGISTER         (0x803)
+#define TASK_PRIORITY_REGISTER              (0x808)
+#define PROCESSOR_PRIORITY_REGISTER         (0x80a)
+#define EOI_REGISTER                        (0x80B)
+#define LOGICAL_DESTINATION_REGISTER        (0x80D)
+#define SPURIOUS_INTERRUPT_VECTOR_REGISTER  (0x80F)
+#define IN_SERVICE_REGISTER                 (0x810) /* 8 bytes */
+#define TRIGGER_MODE_REGISTER               (0x818) /* 8 bytes */
+#define INTERRUPT_REQUEST_REGISTER          (0x820) /* 8 bytes */
+#define ERROR_STATUS_REGISTER               (0x828)
+#define LVT_CMCI_REGISTER                   (0x82F)
+#define INTERRUPT_COMMAND_REGISTER          (0x830)
+#define LVT_TIMER_REGISTER                  (0x832)
+#define LVT_THERMAL_SENSOR_REGISTER         (0x833)
+#define LVT_PERFORMANCE_MONITORING_REGISTER (0x834)
+#define LVT_INT0_REGISTER                   (0x835)
+#define LVT_INT1_REGISTER                   (0x836)
+#define LVT_ERROR_REGISTER                  (0x837)
+#define INITIAL_COUNT_REGISTER              (0x838)
+#define CURRENT_COUNT_REGISTER              (0x839)
+#define DIVIDE_CONFIGURATION_REGISTER       (0x83E)
+#define SELF_IPI_REGISTER                   (0x83F)
+#define APIC_REGISTER_END                   (0x8FF)
 
 typedef struct apic_reg_t
 {

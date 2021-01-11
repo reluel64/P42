@@ -168,5 +168,4 @@ void kmain()
             cpu_halt();
         }
     }
-
 }

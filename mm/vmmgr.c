@@ -772,7 +772,7 @@ virt_addr_t vmmgr_map
     phys_addr_t phys, 
     virt_addr_t virt, 
     virt_size_t len, 
-    uint32_t attr
+    uint32_t    attr
 )
 {
     list_node_t          *fn         = NULL;
@@ -781,7 +781,7 @@ virt_addr_t vmmgr_map
     vmmgr_free_mem_t      rem;
     vmmgr_free_mem_t     *from_slot  = NULL;
     vmmgr_free_mem_hdr_t *fh         = NULL;
-    virt_addr_t           ret_addr   = virt;
+    virt_addr_t           ret_addr   = 0;
     virt_addr_t           map_addr   = 0;
     int                   int_status = 0;
 
@@ -790,6 +790,8 @@ virt_addr_t vmmgr_map
 
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
+
+    ret_addr = virt;
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
 
@@ -901,7 +903,7 @@ virt_addr_t vmmgr_alloc
     vmmgr_ctx_t *ctx,
     virt_addr_t virt, 
     virt_size_t len,
-    uint32_t attr
+    uint32_t    attr
 )
 {
     list_node_t          *fn         = NULL;
@@ -1031,7 +1033,7 @@ int vmmgr_free
     virt_size_t len
 )
 {
-    virt_addr_t      virt = vaddr;
+    virt_addr_t      virt = 0;
     vmmgr_free_mem_t mm;
     int              status     = 0;
     int              int_status = 0;
@@ -1042,6 +1044,8 @@ int vmmgr_free
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
 
+
+    virt    = vaddr;
     mm.base = virt;
     mm.length = len;
 
@@ -1132,7 +1136,7 @@ int vmmgr_change_attrib
     vmmgr_ctx_t *ctx,
     virt_addr_t virt, 
     virt_size_t len, 
-    uint32_t attr
+    uint32_t    attr
 )
 {
     int status = 0;
@@ -1173,7 +1177,7 @@ virt_addr_t vmmgr_temp_identity_map
     phys_addr_t phys, 
     virt_addr_t virt, 
     virt_size_t len, 
-    uint32_t attr
+    uint32_t    attr
 )
 {
     if(ctx == NULL)
