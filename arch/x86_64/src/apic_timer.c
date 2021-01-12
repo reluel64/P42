@@ -16,7 +16,6 @@ typedef struct apic_timer_t
 {
     list_head_t queue;
     spinlock_t lock;
-    volatile apic_reg_t *reg;
     uint32_t calib_value;
 }apic_timer_t;
 
@@ -25,22 +24,34 @@ static int apic_timer_isr(void *dev, isr_info_t *inf)
 {
     int                 int_status = 0;
     apic_timer_t        *timer     = NULL;
-    volatile apic_reg_t *reg       = NULL;
-    
+    uint32_t            data       = 0;
+    device_t           *apic_dev    = NULL;
+    driver_t           *apic_drv    = NULL;
+    apic_device_t      *apic        = NULL;
+    apic_drv_private_t *apic_drv_pv = NULL;
+
     if(devmgr_dev_index_get(dev) != inf->cpu_id)
     {
         return(-1);
     }
-    
+
+    apic_dev    = devmgr_dev_parent_get(dev);
+    apic_drv    = devmgr_dev_drv_get(apic_dev);
+    apic_drv_pv = devmgr_drv_data_get(apic_drv);
+
     timer = devmgr_dev_data_get(dev);
-    reg = timer->reg;
 
     spinlock_lock_int(&timer->lock, &int_status);
 
     if(linked_list_count(&timer->queue) > 0)
         timer_update(&timer->queue, APIC_TIMER_INTERVAL_MS, inf);
 
-    (*reg->timer_icnt) = timer->calib_value;
+    data = timer->calib_value;
+
+    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
+                            INITIAL_COUNT_REGISTER, 
+                            &data, 
+                            1);
 
     spinlock_unlock_int(&timer->lock, int_status);
 
@@ -66,8 +77,8 @@ static int apic_timer_init(device_t *dev)
     apic_drv_private_t *apic_drv_pv = NULL;
     apic_timer_t       *apic_timer  = NULL;
     device_t           *pit         = NULL;
-    volatile apic_reg_t *reg = NULL;
- 
+    uint32_t            data        = 0;
+
     apic_dev    = devmgr_dev_parent_get(dev);
     apic_drv    = devmgr_dev_drv_get(apic_dev);
     apic_drv_pv = devmgr_drv_data_get(apic_drv);
@@ -77,8 +88,6 @@ static int apic_timer_init(device_t *dev)
     if(apic_timer == NULL)
         return(-1);
 
-    apic_timer->reg = apic_drv_pv->reg;
-    reg = apic_timer->reg;
 
     spinlock_init(&apic_timer->lock);
     linked_list_init(&apic_timer->queue);
@@ -87,19 +96,44 @@ static int apic_timer_init(device_t *dev)
 
     pit = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
-    (*reg->timer_div) = 0b1011;
+    data = 0b1011;
+    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
+                            DIVIDE_CONFIGURATION_REGISTER, 
+                            &data, 
+                            1);
 
     /* Let's calibrate this */
-    (*reg->timer_icnt) = UINT32_MAX;
+    data = UINT32_MAX;
+    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
+                            INITIAL_COUNT_REGISTER, 
+                            &data, 
+                            1);
 
     timer_loop_delay(pit, APIC_TIMER_INTERVAL_MS);
-    apic_timer->calib_value = UINT32_MAX - (*reg->timer_ccnt);
+
+    apic_drv_pv->apic_read(apic_drv_pv->vaddr, 
+                           CURRENT_COUNT_REGISTER, 
+                           &data, 
+                           1);
+
+    apic_timer->calib_value = UINT32_MAX - data;
 
     kprintf("APIC_TIMER_CALIB %d\n",apic_timer->calib_value);
 
-    (*reg->lvt_timer) = APIC_LVT_VECTOR_MASK(PLATFORM_LOCAL_TIMER_VECTOR) | 0b01 << 17;
+    data = APIC_LVT_VECTOR_MASK(PLATFORM_LOCAL_TIMER_VECTOR) | 
+           0b01 << 17;
 
-    (*reg->timer_icnt) = apic_timer->calib_value;
+    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
+                            LVT_TIMER_REGISTER, 
+                            &data, 
+                            1);
+
+    data = apic_timer->calib_value;
+
+    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
+                            INITIAL_COUNT_REGISTER, 
+                            &data, 
+                            1);
 
     isr_install(apic_timer_isr, dev, PLATFORM_LOCAL_TIMER_VECTOR, 0);
     return(0);

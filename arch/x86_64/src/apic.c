@@ -16,6 +16,37 @@
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
+static int xapic_write
+(
+    virt_addr_t    reg_base,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+);
+
+static int xapic_read
+(
+    virt_addr_t   reg_base,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+);
+
+static int x2apic_write
+(
+    virt_addr_t    reg_base,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+);
+
+static int x2apic_read
+(
+    virt_addr_t   reg_base,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+);
 
 
 static int apic_nmi_fill
@@ -146,23 +177,28 @@ static int apic_spurious_handler(void *pv, isr_info_t *inf)
 static int apic_lvt_error_handler(void *pv, isr_info_t *inf)
 {
     apic_drv_private_t *apic_drv = NULL;
+    uint32_t            data = 0;
+
     kprintf("APIC_ERROR_HANDLER\n");
     apic_drv = devmgr_drv_data_get(pv);
 
-    (*apic_drv->reg->esr) = 0;
-
-    kprintf("ERROR %x\n",(*apic_drv->reg->esr));
-
+    apic_drv->apic_write(apic_drv->vaddr, 
+                        ERROR_STATUS_REGISTER, 
+                        &data, 
+                        1);
     return(0);
 }
 
 static int apic_eoi_handler(void *pv, isr_info_t *inf)
 {
     apic_drv_private_t *apic_drv = NULL;
-   
+    uint32_t            data     = 0;
     apic_drv = devmgr_drv_data_get(pv);
 
-    (*apic_drv->reg->eoi) = 0;
+    apic_drv->apic_write(apic_drv->vaddr, 
+                        EOI_REGISTER, 
+                        &data, 
+                        1);
     
     return(0);
 }
@@ -182,6 +218,17 @@ static phys_addr_t apic_phys_addr(void)
     return(apic_base);
 }
 
+static uint8_t apic_has_x2(void)
+{
+    phys_addr_t apic_base = 0;
+
+    apic_base = __rdmsr(APIC_BASE_MSR);
+
+    apic_base >>= 10;
+
+    return(apic_base & 0x1);
+}
+
 static int apic_send_ipi
 (
     device_t *dev,
@@ -193,7 +240,12 @@ static int apic_send_ipi
 
     uint32_t reg_low = 0;
     uint32_t reg_hi  = 0;
+    uint32_t data[2] = {0,0};
 
+    if(apic_has_x2())
+    {
+        vga_print("HAS_X2\n");
+    }
     drv = devmgr_dev_drv_get(dev);
 
     apic_drv = devmgr_drv_data_get(drv);
@@ -245,11 +297,23 @@ static int apic_send_ipi
             break;
     }
 
-    apic_drv->reg->icr[4] = reg_hi;
-    apic_drv->reg->icr[0] = reg_low;
+    data[0] = reg_low;
+    data[1] = reg_hi;
 
-    /* wait for it to be 0 */
-    while(apic_drv->reg->icr[0] & APIC_ICR_DELIVERY_STATUS_MASK);
+    apic_drv->apic_write(apic_drv->vaddr, 
+                         INTERRUPT_COMMAND_REGISTER, 
+                         data, 
+                         2);
+
+    do
+    {
+        apic_drv->apic_read(apic_drv->vaddr, 
+                            INTERRUPT_COMMAND_REGISTER, 
+                            data, 
+                            2);
+
+    }while(data[0] & APIC_ICR_DELIVERY_STATUS_MASK);
+    
 
     return(0);
 }
@@ -276,7 +340,6 @@ static int apic_probe(device_t *dev)
 
 static int apic_dev_init(device_t *dev)
 {
-    volatile apic_reg_t *reg      = NULL;
     apic_device_t       *apic     = NULL;
     driver_t            *drv      = NULL;
     apic_drv_private_t  *apic_drv = NULL;
@@ -284,7 +347,9 @@ static int apic_dev_init(device_t *dev)
     uint32_t            flags     = 0;
     uint8_t             polarity  = 0;
     uint8_t             trigger   = 0;
-    
+    uint32_t            data      = 0;
+    uint64_t            apic_base = 0;
+
     cpu_int_lock();
     
     drv = devmgr_dev_drv_get(dev);
@@ -305,36 +370,74 @@ static int apic_dev_init(device_t *dev)
     
     apic_nmi_fill(apic);
 
-    reg = apic_drv->reg;
-
     /* Stop APIC */
-    (*reg->svr)     &= ~APIC_SVR_ENABLE_BIT;
+    apic_drv->apic_read(apic_drv->vaddr, 
+                        SPURIOUS_INTERRUPT_VECTOR_REGISTER, 
+                        &data, 
+                        1);
+    
+
+    data  &= ~APIC_SVR_ENABLE_BIT;
+
+    apic_drv->apic_write(apic_drv->vaddr, 
+                        SPURIOUS_INTERRUPT_VECTOR_REGISTER, 
+                        &data, 
+                        1);
 
     /* Set up LVT error handling */
-    (*reg->lvt_err) &= ~APIC_LVT_INT_MASK;
-    (*reg->lvt_err) = APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
+    
+    data = APIC_LVT_VECTOR_MASK(LVT_ERROR_VECTOR);
 
+    apic_drv->apic_write(apic_drv->vaddr, 
+                        LVT_ERROR_REGISTER, 
+                        &data, 
+                        1);
 
     /* Set up LINT */
     if(apic->lint == 0)
     {
-        (*reg->lvt_lint0) = LVT_LINT_VECTOR                    | 
-                            (((uint32_t)apic->polarity) << 13) | 
-                            (((uint32_t)apic->trigger)  << 15);
+        data = LVT_LINT_VECTOR                    | 
+               (((uint32_t)apic->polarity) << 13) | 
+               (((uint32_t)apic->trigger)  << 15);
+
+        apic_drv->apic_write(apic_drv->vaddr, 
+                            LVT_INT0_REGISTER,
+                            &data, 
+                            1);
     }
     else
     {
-        (*reg->lvt_lint1) = LVT_LINT_VECTOR                    | 
-                            (((uint32_t)apic->polarity) << 13) | 
-                            (((uint32_t)apic->trigger)  << 15);
+        data = LVT_LINT_VECTOR                    | 
+               (((uint32_t)apic->polarity) << 13) | 
+               (((uint32_t)apic->trigger)  << 15);
+
+        apic_drv->apic_write(apic_drv->vaddr, 
+                            LVT_INT1_REGISTER,
+                            &data, 
+                            1);
     }           
 
-    /* Enable APIC */
-    (*reg->svr)     = APIC_SVR_ENABLE_BIT | 
-                       APIC_SVR_VEC_MASK(SPURIOUS_VECTOR);
+    apic_drv->apic_read(apic_drv->vaddr, 
+                        SPURIOUS_INTERRUPT_VECTOR_REGISTER, 
+                        &data, 
+                        1);
+    
 
-    (*reg->eoi) = 0;
-   
+    data |= APIC_SVR_VEC_MASK(SPURIOUS_VECTOR) | 
+           APIC_SVR_ENABLE_BIT;
+
+    apic_drv->apic_write(apic_drv->vaddr, 
+                         SPURIOUS_INTERRUPT_VECTOR_REGISTER,
+                         &data, 
+                         1);
+
+
+    data = 0;
+    apic_drv->apic_write(apic_drv->vaddr, 
+                        EOI_REGISTER, 
+                        &data, 
+                        1);
+
     cpu_int_unlock();
    
     return(0);
@@ -343,7 +446,6 @@ static int apic_dev_init(device_t *dev)
 static int apic_drv_init(driver_t *drv)
 {
     apic_drv_private_t  *apic_drv = NULL;
-    volatile apic_reg_t *reg = NULL;
 
     __write_cr8(0);
     
@@ -353,12 +455,24 @@ static int apic_drv_init(driver_t *drv)
         return(-1);
 
     apic_drv->paddr   = apic_phys_addr();
-
-    apic_drv->reg     = (apic_reg_t*)vmmgr_map(NULL, apic_drv->paddr, 
+    
+    apic_drv->vaddr  = vmmgr_map(NULL, apic_drv->paddr, 
                                 0x0, 
-                                sizeof(apic_reg_t), 
+                                PAGE_SIZE, 
                                 VMM_ATTR_WRITABLE |
                                 VMM_ATTR_STRONG_UNCACHED);
+
+    if(apic_has_x2())
+    {
+        apic_drv->x2 = 1;
+        apic_drv->apic_read = x2apic_read;
+        apic_drv->apic_write = x2apic_write;
+    }
+    else
+    {
+        apic_drv->apic_read = xapic_read;
+        apic_drv->apic_write = xapic_write;
+    }
 
     isr_install(apic_lvt_error_handler, drv, LVT_ERROR_VECTOR,0);
     isr_install(apic_spurious_handler, drv, SPURIOUS_VECTOR,0);
@@ -369,9 +483,9 @@ static int apic_drv_init(driver_t *drv)
 }
 
 
-static int apic_write
+static int xapic_write
 (
-    apic_device_t *dev,
+    virt_addr_t    reg_base,
     uint32_t       reg,
     uint32_t      *data,
     uint32_t       cnt
@@ -379,14 +493,13 @@ static int apic_write
 {
     uint32_t reg_offset = 0;
     volatile uint32_t *offset = NULL;
-    volatile uint8_t *apic_base = (volatile uint8_t*)dev->reg;
 
     if(cnt == 0)
         return(0);
 
     reg_offset = (~APIC_REGISTER_START & reg) * 0x10; 
 
-    offset = (volatile uint32_t*) (reg_offset + (uint8_t*)dev->reg);
+    offset = (volatile uint32_t*) (reg_offset + reg_base);
 
     switch(reg)
     {
@@ -401,7 +514,7 @@ static int apic_write
         
         case INTERRUPT_COMMAND_REGISTER:
             if(cnt > 1)
-                offset[1] = data[1];
+                offset[4] = data[1];
 
         default:
             offset[0] = data[0];
@@ -409,9 +522,9 @@ static int apic_write
     return(0);
 }
 
-static int apic_read
+static int xapic_read
 (
-    apic_device_t *dev,
+    virt_addr_t    reg_base,
     uint32_t       reg,
     uint32_t      *data,
     uint32_t       cnt
@@ -419,15 +532,14 @@ static int apic_read
 {
     uint32_t reg_offset = 0;
     volatile uint32_t *offset = NULL;
-    volatile uint8_t *apic_base = (volatile uint8_t*)dev->reg;
 
     if(cnt == 0)
         return(0);
 
     reg_offset = (~APIC_REGISTER_START & reg) * 0x10; 
 
-    offset = (volatile uint32_t*) (reg_offset + (uint8_t*)dev->reg);
-    kprintf("reg_offset %x\n",reg_offset);
+    offset = (volatile uint32_t*) (reg_offset + reg_base);
+
     switch(reg)
     {
         case IN_SERVICE_REGISTER:
@@ -435,30 +547,123 @@ static int apic_read
         case INTERRUPT_REQUEST_REGISTER:
         
         if(cnt > 7)
-            data[7] = offset[7];
+            data[7] = offset[28];
             
         if(cnt > 6)
-            data[6] = offset[6];
+            data[6] = offset[24];
 
         if(cnt > 5)
-            data[5] = offset[5];
+            data[5] = offset[20];
 
         if(cnt > 4)
-            data[4] = offset[4];
+            data[4] = offset[16];
 
         if(cnt > 3)
-            data[3] = offset[3];
+            data[3] = offset[12];
 
         if(cnt > 2)
-            data[2] = offset[2];
+            data[2] = offset[8];
 
         /* Fall through */
         case INTERRUPT_COMMAND_REGISTER:
             if(cnt > 1)
-                data[1] = offset[1];
+                data[1] = offset[4];
 
         default:
             data[0] = offset[0];
+            break;
+
+        case EOI_REGISTER:
+        case SELF_IPI_REGISTER:
+            return(-1);
+
+    }
+    return(0);
+}
+
+static int x2apic_write
+(
+    virt_addr_t    reg_base,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+)
+{
+    uint32_t reg_offset = 0;
+    volatile uint32_t *offset = NULL;
+
+
+    if(cnt == 0)
+        return(0);
+
+    reg_offset = (~APIC_REGISTER_START & reg) * 0x10; 
+
+    offset = (volatile uint32_t*) (reg_offset + reg_base);
+  
+    switch(reg)
+    {
+        case IN_SERVICE_REGISTER:
+        case TRIGGER_MODE_REGISTER:
+        case INTERRUPT_REQUEST_REGISTER:
+        case CURRENT_COUNT_REGISTER:
+        case LOCAL_APIC_ID_REGISTER:
+        case LOCAL_APIC_VERSION_REGISTER:
+        case PROCESSOR_PRIORITY_REGISTER:
+            return(-1);
+        
+        case INTERRUPT_COMMAND_REGISTER:
+            if(cnt > 1)
+                __wrmsr(reg + 0x10, data[1]);
+
+        default:
+            __wrmsr(reg, data[0]);
+    }
+    return(0);
+}
+
+static int x2apic_read
+(
+    virt_addr_t    reg_base,
+    uint32_t       reg,
+    uint32_t      *data,
+    uint32_t       cnt
+)
+{
+    if(cnt == 0)
+        return(0);
+
+    switch(reg)
+    {
+        case IN_SERVICE_REGISTER:
+        case TRIGGER_MODE_REGISTER:
+        case INTERRUPT_REQUEST_REGISTER:
+        
+        if(cnt > 7)
+            data[7] = __rdmsr(reg + 0x70);
+            
+        if(cnt > 6)
+            data[6] = __rdmsr(reg + 0x60);
+
+        if(cnt > 5)
+            data[5] = __rdmsr(reg + 0x50);
+
+        if(cnt > 4)
+            data[4] = __rdmsr(reg + 0x40);
+
+        if(cnt > 3)
+            data[3] = __rdmsr(reg + 0x30);
+
+        if(cnt > 2)
+            data[2] = __rdmsr(reg + 0x20);
+
+        /* Fall through */
+        case INTERRUPT_COMMAND_REGISTER:
+            if(cnt > 1)
+                data[1] = __rdmsr(reg + 0x10);
+
+        default:
+            data[0] = __rdmsr(reg);
+            break;
 
         case EOI_REGISTER:
         case SELF_IPI_REGISTER:

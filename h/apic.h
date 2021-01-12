@@ -76,7 +76,7 @@
 #define DIVIDE_CONFIGURATION_REGISTER       (0x83E)
 #define SELF_IPI_REGISTER                   (0x83F)
 #define APIC_REGISTER_END                   (0x8FF)
-
+#if 0
 typedef struct apic_reg_t
 {
     uint32_t rsrvd_0    [4];
@@ -115,20 +115,11 @@ typedef struct apic_reg_t
     uint32_t rsrvd_8    [4];
 
 }__attribute__((packed)) apic_reg_t;
-
-typedef struct apic_instance_t
-{
-    list_node_t node;
-    uint32_t apic_id;
-    phys_addr_t paddr;
-    volatile apic_reg_t *reg;
-    
-    uint8_t timer_fired;
-}apic_instance_t;
+#endif
 
 typedef struct apic_device_t
 {
-    volatile apic_reg_t *reg;
+   // volatile apic_reg_t *reg;
     phys_addr_t paddr;
     virt_addr_t vaddr;
     uint32_t apic_id;
@@ -139,9 +130,26 @@ typedef struct apic_device_t
 
 typedef struct apic_drv_private_t
 {
+    uint8_t     x2;
     phys_addr_t paddr;
     virt_addr_t vaddr;
-    volatile apic_reg_t *reg;
+   // volatile apic_reg_t *reg;
+    
+    int (*apic_write)
+    (
+        virt_addr_t reg_base,
+        uint32_t    reg,
+        uint32_t    *data,
+        uint32_t    cnt
+    );
+
+    int (*apic_read)
+    (
+        virt_addr_t reg_base,
+        uint32_t    reg,
+        uint32_t    *data,
+        uint32_t    cnt
+    );
 }apic_drv_private_t;
 
 
