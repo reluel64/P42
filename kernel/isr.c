@@ -57,7 +57,7 @@ int isr_install
     if(index >= MAX_HANDLERS  && eoi == 0)
         return(-1);
 
-    intr = kmalloc(sizeof(isr_t));
+    intr = kcalloc(sizeof(isr_t), 1);
    
     if(intr == NULL)
         return(-1);

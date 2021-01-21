@@ -44,6 +44,7 @@ int platform_early_init(void)
     apic_timer_register();
      
     vga_init();
+
     return(0);
 }
 

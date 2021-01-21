@@ -59,8 +59,9 @@ static void kmain_sys_init(void)
     cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
     kprintf("Platform init\n");
     platform_init();
-    
-    vga_print("Hello World\n");
+
+   vga_print("Hello World\n");
+
     for(int bus = 0; bus < 256; bus++)
     {
         for(int slot = 0; slot < 32; slot++)
@@ -110,7 +111,7 @@ void kmain()
 
     /* Initialize basic platform functionality */
     platform_early_init();
-
+    
     /* Initialize base of the scheduler */
     sched_init();
 

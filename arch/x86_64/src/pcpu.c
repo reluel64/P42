@@ -404,9 +404,9 @@ static int pcpu_bring_cpu_up
     /* INIT IPI */
     ipi.type      = IPI_INIT;
     ipi.dest_cpu  = cpu;
-    kprintf("Issue INIT IPI\n");
+    
     intc_send_ipi(issuer, &ipi);
-    kprintf("Issued INIT IPI\n");
+    
     /* Start-up SIPI */
     ipi.type = IPI_START_AP;
 
@@ -418,9 +418,9 @@ static int pcpu_bring_cpu_up
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < timeout / 10; attempt++)
     {
-        kprintf("Issue Start-up IPI\n");
+        
         intc_send_ipi(issuer, &ipi);
-    kprintf("Issued Start-up IPI\n");
+    
         /* wait for about 10ms */
 
         for(uint32_t i = 0; i < 10;i++)

@@ -238,7 +238,7 @@ static uint8_t apic_has_x2(void)
     uint32_t edx = 0;
 
     __cpuid(&eax, &ebx, &ecx, &edx);
-    
+
     ecx >>= 21;
 
     return(ecx & 0x1);
@@ -259,8 +259,14 @@ static int apic_send_ipi
 
     drv = devmgr_dev_drv_get(dev);
 
+    if(drv == NULL)
+        return(-1);
+
     apic_drv = devmgr_drv_data_get(drv);
     
+    if(apic_drv == NULL)
+        return(-1);
+
     reg_hi = ((uint32_t)ipi->dest_cpu);
    
     reg_low = ipi->vector;
@@ -365,15 +371,17 @@ static int apic_dev_init(device_t *dev)
     drv = devmgr_dev_drv_get(dev);
     apic_drv = devmgr_drv_data_get(drv);
 
-    apic = kmalloc(sizeof(apic_device_t));
+    apic = kcalloc(sizeof(apic_device_t), 1);
 
     if(apic == NULL)
         return(-1);
     
     /* If x2APIC is supported, then enable it */
     if(apic_drv->x2)
+    {
+        vga_print("ENABLING x2APIC\n");
         apic_enable_x2();
-        
+    }   
     kprintf("INIT_APIC 0x%x\n", dev);
 
     apic->apic_id = devmgr_dev_index_get(dev);
@@ -381,7 +389,7 @@ static int apic_dev_init(device_t *dev)
     kprintf("APIC_BASE 0x%x APIC ID %d\n",apic_drv->paddr, apic->apic_id);
 
     devmgr_dev_data_set(dev, apic);
-    
+
     apic_nmi_fill(apic);
 
     /* Stop APIC */
@@ -451,7 +459,7 @@ static int apic_dev_init(device_t *dev)
                         EOI_REGISTER, 
                         &data, 
                         1);
-
+ 
     cpu_int_unlock();
    
     return(0);
@@ -463,14 +471,17 @@ static int apic_drv_init(driver_t *drv)
 
     __write_cr8(0);
     
-    apic_drv = kmalloc(sizeof(apic_drv_private_t));
+    apic_drv = kcalloc(sizeof(apic_drv_private_t), 1);
     
     if(apic_drv == NULL)
         return(-1);
 
-    if(apic_has_x2())
-    {
-        apic_drv->x2 = 1;
+    /* Set the flag for x2APIC */
+
+    apic_drv->x2 = apic_has_x2();
+
+    if(apic_drv->x2)
+    {      
         apic_drv->apic_read = x2apic_read;
         apic_drv->apic_write = x2apic_write;
     }
