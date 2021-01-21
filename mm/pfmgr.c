@@ -774,7 +774,7 @@ static int pfmgr_free(free_cb cb, void *pv)
        
         if(pfmgr_clear_bmp(freer, addr, to_free_pf) !=0)
         {
-             kprintf("TO_FREE_PF 0x%x\n",addr);
+            kprintf("TO_FREE_PF 0x%x\n",addr);
             err = -1;
         }
 

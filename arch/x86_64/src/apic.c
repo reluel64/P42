@@ -80,11 +80,12 @@ static int apic_nmi_fill
             x2nmi = (ACPI_MADT_LOCAL_X2APIC_NMI*)subhdr;
 
             if ((apic->apic_id == x2nmi->Uid) || 
-                (x2nmi->Uid == UINT32_MAX))
+                (x2nmi->Uid    == UINT32_MAX))
             {
                 apic->polarity = x2nmi->IntiFlags & ACPI_MADT_POLARITY_MASK;
-                apic->trigger = x2nmi->IntiFlags & ACPI_MADT_TRIGGER_MASK;
-                apic->lint    = x2nmi->Lint;
+                apic->trigger  = x2nmi->IntiFlags & ACPI_MADT_TRIGGER_MASK;
+                apic->lint     = x2nmi->Lint;
+
                 switch(apic->polarity)
                 {
                     case ACPI_MADT_POLARITY_CONFORMS:
@@ -218,15 +219,29 @@ static phys_addr_t apic_phys_addr(void)
     return(apic_base);
 }
 
-static uint8_t apic_has_x2(void)
+static void apic_enable_x2(void)
 {
     phys_addr_t apic_base = 0;
 
     apic_base = __rdmsr(APIC_BASE_MSR);
 
-    apic_base >>= 10;
+    apic_base |= (1 << 10);
 
-    return(apic_base & 0x1);
+    __wrmsr(APIC_BASE_MSR, apic_base);
+}
+
+static uint8_t apic_has_x2(void)
+{
+    uint32_t eax = 1;
+    uint32_t ebx = 0;
+    uint32_t ecx = 0;
+    uint32_t edx = 0;
+
+    __cpuid(&eax, &ebx, &ecx, &edx);
+    
+    ecx >>= 21;
+
+    return(ecx & 0x1);
 }
 
 static int apic_send_ipi
@@ -242,15 +257,11 @@ static int apic_send_ipi
     uint32_t reg_hi  = 0;
     uint32_t data[2] = {0,0};
 
-    if(apic_has_x2())
-    {
-        vga_print("HAS_X2\n");
-    }
     drv = devmgr_dev_drv_get(dev);
 
     apic_drv = devmgr_drv_data_get(drv);
     
-    reg_hi = ((uint32_t)ipi->dest_cpu) << 24;
+    reg_hi = ((uint32_t)ipi->dest_cpu);
    
     reg_low = ipi->vector;
 
@@ -311,9 +322,8 @@ static int apic_send_ipi
                             INTERRUPT_COMMAND_REGISTER, 
                             data, 
                             2);
-
     }while(data[0] & APIC_ICR_DELIVERY_STATUS_MASK);
-    
+
 
     return(0);
 }
@@ -359,7 +369,11 @@ static int apic_dev_init(device_t *dev)
 
     if(apic == NULL)
         return(-1);
-
+    
+    /* If x2APIC is supported, then enable it */
+    if(apic_drv->x2)
+        apic_enable_x2();
+        
     kprintf("INIT_APIC 0x%x\n", dev);
 
     apic->apic_id = devmgr_dev_index_get(dev);
@@ -454,14 +468,6 @@ static int apic_drv_init(driver_t *drv)
     if(apic_drv == NULL)
         return(-1);
 
-    apic_drv->paddr   = apic_phys_addr();
-    
-    apic_drv->vaddr  = vmmgr_map(NULL, apic_drv->paddr, 
-                                0x0, 
-                                PAGE_SIZE, 
-                                VMM_ATTR_WRITABLE |
-                                VMM_ATTR_STRONG_UNCACHED);
-
     if(apic_has_x2())
     {
         apic_drv->x2 = 1;
@@ -470,13 +476,29 @@ static int apic_drv_init(driver_t *drv)
     }
     else
     {
+        apic_drv->paddr  = apic_phys_addr();
+
+        apic_drv->vaddr  = vmmgr_map(NULL, apic_drv->paddr, 
+                                0x0, 
+                                PAGE_SIZE, 
+                                VMM_ATTR_WRITABLE |
+                                VMM_ATTR_STRONG_UNCACHED);
+        
+        if(apic_drv->vaddr == 0)
+        {
+            kfree(apic_drv);
+            return(-1);
+        }
+
         apic_drv->apic_read = xapic_read;
         apic_drv->apic_write = xapic_write;
     }
 
-    isr_install(apic_lvt_error_handler, drv, LVT_ERROR_VECTOR,0);
-    isr_install(apic_spurious_handler, drv, SPURIOUS_VECTOR,0);
-    isr_install(apic_eoi_handler, drv, 0, 1);
+    /* Install the ISRs for the APIC */
+    isr_install(apic_lvt_error_handler, drv, LVT_ERROR_VECTOR, 0);
+    isr_install(apic_spurious_handler,  drv, SPURIOUS_VECTOR,  0);
+    isr_install(apic_eoi_handler,       drv, 0,                1);
+
     devmgr_drv_data_set(drv, apic_drv);
    
     return(0);
@@ -491,8 +513,9 @@ static int xapic_write
     uint32_t       cnt
 )
 {
-    uint32_t reg_offset = 0;
-    volatile uint32_t *offset = NULL;
+    uint32_t           reg_offset = 0;
+    volatile uint32_t *offset     = NULL;
+    uint32_t           reg_val    = 0;
 
     if(cnt == 0)
         return(0);
@@ -514,11 +537,16 @@ static int xapic_write
         
         case INTERRUPT_COMMAND_REGISTER:
             if(cnt > 1)
-                offset[4] = data[1];
+            {
+                reg_val = data[1];
+                reg_val <<= 24;
+                offset[4] = reg_val;
+            }
 
         default:
             offset[0] = data[0];
     }
+
     return(0);
 }
 
@@ -567,7 +595,7 @@ static int xapic_read
         /* Fall through */
         case INTERRUPT_COMMAND_REGISTER:
             if(cnt > 1)
-                data[1] = offset[4];
+                data[1] = offset[4] >> 24;
 
         default:
             data[0] = offset[0];
@@ -589,16 +617,10 @@ static int x2apic_write
     uint32_t       cnt
 )
 {
-    uint32_t reg_offset = 0;
-    volatile uint32_t *offset = NULL;
-
+    uint64_t reg_val = 0;
 
     if(cnt == 0)
         return(0);
-
-    reg_offset = (~APIC_REGISTER_START & reg) * 0x10; 
-
-    offset = (volatile uint32_t*) (reg_offset + reg_base);
   
     switch(reg)
     {
@@ -610,14 +632,22 @@ static int x2apic_write
         case LOCAL_APIC_VERSION_REGISTER:
         case PROCESSOR_PRIORITY_REGISTER:
             return(-1);
-        
+
         case INTERRUPT_COMMAND_REGISTER:
+          
             if(cnt > 1)
-                __wrmsr(reg + 0x10, data[1]);
+            {
+                reg_val = data[1];
+                reg_val <<= 32;
+            }
 
         default:
-            __wrmsr(reg, data[0]);
+            reg_val |= data[0];
+
     }
+
+    __wrmsr(reg, reg_val);
+
     return(0);
 }
 
@@ -629,6 +659,8 @@ static int x2apic_read
     uint32_t       cnt
 )
 {
+    uint64_t reg_val = 0;
+
     if(cnt == 0)
         return(0);
 
@@ -659,10 +691,17 @@ static int x2apic_read
         /* Fall through */
         case INTERRUPT_COMMAND_REGISTER:
             if(cnt > 1)
-                data[1] = __rdmsr(reg + 0x10);
+            {
+                reg_val  = __rdmsr(reg);
+                data[1] =  reg_val >> 32;
+            }
 
         default:
-            data[0] = __rdmsr(reg);
+            if(cnt > 1)
+                data[0] = (uint32_t)reg_val;
+            else
+                data[0] = (uint32_t)__rdmsr(reg);
+
             break;
 
         case EOI_REGISTER:
@@ -677,7 +716,9 @@ static intc_api_t apic_api =
 {
     .enable   = NULL,
     .disable  = NULL,
-    .send_ipi = apic_send_ipi
+    .send_ipi = apic_send_ipi,
+    .mask     = NULL,
+    .unmask   = NULL
 };
 
 static driver_t apic_drv = 

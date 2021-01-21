@@ -55,7 +55,6 @@ int sem_acquire(semaphore_t *sem)
         __atomic_or_fetch(&thread->flags, THREAD_BLOCKED, __ATOMIC_ACQUIRE);
 
         /* Add it to the semaphore pend queue */
-       // if(linked_list_find_node(&sem->pendq, &thread->pend_node) < 0)
         linked_list_add_tail(&sem->pendq, &thread->pend_node); 
 
         /* Release the spinlock of the thread */
@@ -98,6 +97,7 @@ int sem_release(semaphore_t *sem)
         spinlock_unlock_int(&sem->lock, int_state);
         return(0);
     }
+
     thread = PEND_NODE_TO_THREAD(pend_node);
    
     spinlock_lock_int(&thread->lock, &unit_int_state);

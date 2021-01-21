@@ -109,14 +109,14 @@ static void sched_wake_sleeping_threads
 
         th = (sched_thread_t*)node;
 
-        if(th->sleeped >= th->to_sleep)
+        if(th->slept >= th->to_sleep)
         {
             linked_list_remove(&unit->sleep_q, &th->node);
             linked_list_add_tail(&unit->active_q, &th->node);
             __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_ACQUIRE);
         }
 
-        th->sleeped += period;
+        th->slept += period;
 
         node = next_node;
     }
@@ -514,8 +514,10 @@ void sched_sleep(uint32_t delay)
     th = sched_thread_self();
 
     spinlock_lock_int(&th->lock, &int_status);
+
     th->to_sleep = delay;
-    th->sleeped = 0;
+    th->slept = 0;
+    
     __atomic_fetch_or(&th->flags, THREAD_SLEEPING, __ATOMIC_ACQUIRE);
     spinlock_unlock_int(&th->lock, int_status);
 

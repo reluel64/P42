@@ -55,6 +55,7 @@ int platform_init(void)
     /* Mask the PIT8254 */
     apic_timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, 0);
 
+    /* if we have the APIC timer, we should disable the PIT8254 */
     if(apic_timer != NULL)
     {
         ioapic = devmgr_dev_get_by_name(IOAPIC_DRV_NAME, 0);

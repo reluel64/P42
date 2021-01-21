@@ -119,7 +119,6 @@ typedef struct apic_reg_t
 
 typedef struct apic_device_t
 {
-   // volatile apic_reg_t *reg;
     phys_addr_t paddr;
     virt_addr_t vaddr;
     uint32_t apic_id;
@@ -133,7 +132,6 @@ typedef struct apic_drv_private_t
     uint8_t     x2;
     phys_addr_t paddr;
     virt_addr_t vaddr;
-   // volatile apic_reg_t *reg;
     
     int (*apic_write)
     (

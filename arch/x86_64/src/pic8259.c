@@ -101,9 +101,11 @@ static int pic8259_enable(device_t *dev)
 
 static intc_api_t pic_8259_api = 
 {
-    .enable = pic8259_enable,
-    .disable = pic8259_disable,
-    .send_ipi = NULL
+    .enable   = pic8259_enable,
+    .disable  = pic8259_disable,
+    .send_ipi = NULL,
+    .unmask   = NULL,
+    .mask     = NULL
 };
 
 static driver_t pic8259 = 

@@ -57,7 +57,7 @@ typedef struct sched_thread_t
     sched_exec_unit_t *unit;        /* execution unit on which the thread is running */
 
     spinlock_t        lock;         /* lock to protect the structure members         */
-    uint32_t          sleeped;
+    uint32_t          slept;
     uint32_t          to_sleep;
     uint32_t          remain;       /* reamining time before task switch             */
     void              *rval;        /* return value */

@@ -251,9 +251,3 @@ __flush_gdt:
     flush_done:
         leave
         ret
-
-
-global test_interrupt
-test_interrupt:
-int 140
-ret

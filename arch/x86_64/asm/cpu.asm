@@ -19,6 +19,8 @@ global __write_cr0
 global __read_cr8
 global __write_cr8
 global __hlt
+global __cpu_context_restore
+global __resched_interrupt
 ;----------------------------------------
 __wbinvd:
     wbinvd
@@ -165,10 +167,6 @@ __invlpg:
 __hlt:
     hlt
     ret
-global __cpu_context_restore
-global __test_call
-extern entry_pt
-
 
 __cpu_context_restore:
     cli
@@ -208,7 +206,7 @@ __cpu_context_restore:
 
     iretq
 
-global __resched_interrupt
+
 
 __resched_interrupt:
     int 240

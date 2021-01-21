@@ -19,7 +19,7 @@ typedef struct apic_timer_t
     uint32_t calib_value;
 }apic_timer_t;
 
-static int counter = 0;
+
 static int apic_timer_isr(void *dev, isr_info_t *inf)
 {
     int                 int_status = 0;

@@ -58,12 +58,12 @@ static int gdt_entry_encode
 
 int gdt_per_cpu_init(void *cpu_pv)
 {
-    cpu_platform_t *cpu = NULL;
-    uint32_t flags = 0;
-    gdt_entry_t *gdt = NULL;
-    tss64_entry_t *tss = NULL;
-    gdt_ptr_t gdt_ptr = {.limit = 0, .addr = 0};
-    uint8_t *desc_mem = NULL;
+    cpu_platform_t *cpu      = NULL;
+    uint32_t        flags    = 0;
+    gdt_entry_t    *gdt      = NULL;
+    tss64_entry_t  *tss      = NULL;
+    gdt_ptr_t       gdt_ptr  = {.limit = 0, .addr = 0};
+    uint8_t        *desc_mem = NULL;
 
     desc_mem = (uint8_t*)vmmgr_alloc(NULL, 0, GDT_TABLE_SIZE, VMM_ATTR_WRITABLE);
 
@@ -78,47 +78,46 @@ int gdt_per_cpu_init(void *cpu_pv)
     memset(desc_mem, 0, DESC_MEM_ALLOC);
 
     /* Kernel Code (0x8)*/
-    flags = (GDT_TYPE_SET(GDT_CODE_XR) |
+    flags = (GDT_TYPE_SET(GDT_CODE_XR)                  |
              GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
-             GDT_PRESENT_SET(0x1) |
-             GDT_LONG_SET(0x1) |
+             GDT_PRESENT_SET(0x1)                       |
+             GDT_LONG_SET(0x1)                          |
              GDT_GRANULARITY_SET(0x1));
 
     gdt_entry_encode(0, UINT32_MAX, flags, &gdt[1]);
 
     /* Kernel Data (0x10)*/
-    flags = (GDT_TYPE_SET(GDT_DATA_RW) |
+    flags = (GDT_TYPE_SET(GDT_DATA_RW)                  |
              GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
-             GDT_PRESENT_SET(0x1) |
+             GDT_PRESENT_SET(0x1)                       |
              GDT_GRANULARITY_SET(0x1));
 
     gdt_entry_encode(0, UINT32_MAX, flags, &gdt[2]);
 
     /* User Code (0x18)*/
-    flags = GDT_TYPE_SET(GDT_CODE_XR) |
-            GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
-            GDT_PRESENT_SET(0x1) |
-            GDT_DPL_SET(0x3) |
-            GDT_LONG_SET(0x1) |
+    flags = GDT_TYPE_SET(GDT_CODE_XR)                   |
+            GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA)  |
+            GDT_PRESENT_SET(0x1)                        |
+            GDT_DPL_SET(0x3)                            |
+            GDT_LONG_SET(0x1)                           |
             GDT_GRANULARITY_SET(0x1);
 
     gdt_entry_encode(0, UINT32_MAX, flags, &gdt[3]);
 
     /* User Data (0x20)*/
-    flags = GDT_TYPE_SET(GDT_DATA_RW) |
-            GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA) |
-            GDT_DPL_SET(0x3) |
-            GDT_PRESENT_SET(0x1) |
+    flags = GDT_TYPE_SET(GDT_DATA_RW)                   |
+            GDT_DESC_TYPE_SET(GDT_DESC_TYPE_CODE_DATA)  |
+            GDT_DPL_SET(0x3)                            |
+            GDT_PRESENT_SET(0x1)                        |
             GDT_GRANULARITY_SET(0x1);
 
     gdt_entry_encode(0, UINT32_MAX, flags, &gdt[4]);
 
     /* TSS descriptor (0x28) */
-    flags = (GDT_TYPE_SET(GDT_SYSTEM_TSS) |
-             GDT_GRANULARITY_SET(0x1) |
-             GDT_DPL_SET(0x0) |
+    flags = (GDT_TYPE_SET(GDT_SYSTEM_TSS)               |
+             GDT_GRANULARITY_SET(0x1)                   |
+             GDT_DPL_SET(0x0)                           |
              GDT_DESC_TYPE_SET(GDT_DESC_TYPE_SYSTEM) |
-
              GDT_PRESENT_SET(0x1));
 
     tss->io_map = sizeof(tss);
@@ -155,5 +154,4 @@ void gdt_update_tss
 
     cpu->tss->rsp0_low = esp0 & UINT32_MAX;
     cpu->tss->rsp0_high = (esp0 >> 32) & UINT32_MAX;
-
 }

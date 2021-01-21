@@ -347,7 +347,7 @@ int devmgr_dev_probe(device_t *dev)
 
         if(drv->dev_probe)
             status = drv->dev_probe(dev);
-
+        
         kprintf("%s %d STS %d DEV %s DRV %s\n",__FUNCTION__,__LINE__,status,dev->dev_name, drv->drv_name);
 
         if(!status)
@@ -530,16 +530,7 @@ device_t *devmgr_dev_get_by_name
                     continue;
                 }
             }
-
-#if 0
-            if(linked_list_count(&dev->children) > 0)
-            {
-                if(stack_index < DEVMGR_SRCH_STACK)
-                    dev_stack[stack_index++] = dev;
-            }
-#endif
-           // kprintf("DEVICE %s\n",dev->dev_name);
-
+            
             node = linked_list_next(node);
         }
 
@@ -558,6 +549,27 @@ device_t *devmgr_dev_get_by_name
     return(NULL);
 }
 
+void *devmgr_drv_api_get(driver_t *drv)
+{
+    if(drv == NULL)
+        return(NULL);
+
+    return(drv->drv_api);
+}
+
+driver_t *devmgr_dev_drv_get(device_t *dev)
+{
+    if(dev == NULL)
+        return(NULL);
+
+    return(dev->drv);
+}
+
+/* The dev_first/dev_next/dev_end should be implemented
+ * more nicely but since there is not need for such
+ * API for now, we will leave them as primitive implementations
+ */ 
+#if 0
 dev_srch_t *devmgr_dev_first(char *name, device_t **dev_out)
 {
     device_t       *dev      = NULL;
@@ -665,19 +677,4 @@ int devmgr_dev_end(dev_srch_t *sh)
 
     return(-1);
 }
-
-void *devmgr_drv_api_get(driver_t *drv)
-{
-    if(drv == NULL)
-        return(NULL);
-
-    return(drv->drv_api);
-}
-
-driver_t *devmgr_dev_drv_get(device_t *dev)
-{
-    if(dev == NULL)
-        return(NULL);
-
-    return(dev->drv);
-}
+#endif

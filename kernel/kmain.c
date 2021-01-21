@@ -20,95 +20,56 @@
 #include <semaphore.h>
 #include <mutex.h>
 
-semaphore_t *sem  = NULL;
-semaphore_t *sem2 = NULL;
-mutex_t *mtx = NULL;
+static sched_thread_t init_th;
 
-sched_thread_t init_th;
-int isr_test(void)
-{
-    kprintf("%s\n",__FUNCTION__);
-    while(1);
-    return(0);
+uint16_t pciConfigReadWord (uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
+    uint32_t address;
+    uint32_t lbus  = (uint32_t)bus;
+    uint32_t lslot = (uint32_t)slot;
+    uint32_t lfunc = (uint32_t)func;
+    uint16_t tmp = 0;
+ 
+    /* create configuration address as per Figure 1 */
+    address = (uint32_t)((lbus << 16) | (lslot << 11) |
+              (lfunc << 8) | (offset & 0xfc) | ((uint32_t)0x80000000));
+ 
+    /* write out the address */
+    __outd(0xCF8, address);
+    /* read in the data */
+    /* (offset & 2) * 8) = 0 will choose the first word of the 32 bits register */
+    tmp = (uint16_t)((__ind(0xCFC) >> ((offset & 2) * 8)) & 0xffff);
+    return (tmp);
 }
 
-long int multiplyNumbers(int n) {
-    if (n>=1)
-        return n*multiplyNumbers(n-1);
-    else
-        return 1;
+uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
+    uint16_t vendor, device;
+    /* try and read the first configuration register. Since there are no */
+    /* vendors that == 0xFFFF, it must be a non-existent device. */
+    if ((vendor = pciConfigReadWord(bus,slot,0,0)) != 0xFFFF) {
+       device = pciConfigReadWord(bus,slot,0,2);
+       kprintf("HELLO WORLD %x %x\n",vendor, device);
+    } return (vendor);
 }
 
-int counter = 0;
-
-int entry_pt(void *p)
-{
-    int x = 0;
-    while(1)
-    {
-    mtx_acquire(mtx);
-
-    kprintf("p %d\n",counter);
-    mtx_release(mtx);
-    }
-}
-
-int entry_pt2(void *p)
-{
-  
-    while(1)
-    {
-        
-
-        mtx_acquire(mtx);
-        sched_sleep(1000);
-        
-         kprintf("Hello World\n");
-        //sched_sleep(1);
-       //kprintf("Hello\n");
-        counter++;
-        mtx_release(mtx);
-      
-    }
-}
-
-int entry_pt3(void *p)
-{//
-    
-   
-      //sem_acquire(sem);
-
-     // kprintf("GOODBYE World\n");
-    //if(th != p)
-        //kprintf("p %x %x\n",th,p);
-    
-}
-
-#include <liballoc.h>
-#include <utils.h>
-
-static void *alloc_align(size_t sz, size_t align)
-{
-    size_t total = 0;
-    uint8_t *buf = NULL;
-    total = sz + align;
-
-    buf = kmalloc(total);
-
-    buf = ALIGN_UP((uint64_t)buf, align);
-
-    return(buf);
-}
 
 static void kmain_sys_init(void)
 {
     /* Start APs */
+    kprintf("starting APs\n");
     cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
+    kprintf("Platform init\n");
     platform_init();
+    
     vga_print("Hello World\n");
-
-
+    for(int bus = 0; bus < 256; bus++)
+    {
+        for(int slot = 0; slot < 32; slot++)
+        {
+            pciCheckVendor(bus, slot);
+        }
+    }
 }
+
 
 /* Kernel entry point */
 
@@ -158,7 +119,7 @@ void kmain()
 
     /* Enqueue the thread */
     sched_start_thread(&init_th);
-    
+
     /* initialize the CPU driver and the BSP */
     if(cpu_init())
     {

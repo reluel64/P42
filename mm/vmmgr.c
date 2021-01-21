@@ -153,7 +153,7 @@ int vmmgr_init(void)
     /* Get the start of the array */
 
     fh->fmem[0].base = vmmgr_kernel_ctx.vmmgr_base;
-    fh->fmem[0].length = (UINT64_MAX - fh->fmem->base)+1;
+    fh->fmem[0].length = (((uintptr_t)-1) - fh->fmem->base)+1;
 
     fh->avail = vmmgr_kernel_ctx.free_ent_per_page ;
     rh->avail = vmmgr_kernel_ctx.rsrvd_ent_per_page;
@@ -199,7 +199,7 @@ int vmmgr_init(void)
  * to allocate tracking memory when it runs out of it
  */ 
 
-static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
+static virt_addr_t vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
 {
     vmmgr_free_mem_hdr_t *fh    = NULL;
     vmmgr_free_mem_t *fdesc     = NULL;
@@ -240,13 +240,13 @@ static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
     }
 
     if(from_slot == NULL)
-        return(NULL);
+        return(0);
 
     /* Check if the free descriptor allows us to allocate memory */
     if(from_slot->base == 0 || 
        from_slot->length == 0)
     {
-       return(NULL);
+       return(0);
     }
 
     addr = pagemgr_alloc(&ctx->pagemgr,
@@ -255,14 +255,14 @@ static void *vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
                           PAGE_WRITABLE);
 
     if(addr == 0)
-        return(NULL);
+        return(0);
 
     from_slot->base   += PAGE_SIZE;
     from_slot->length -= PAGE_SIZE;
 
     memset((void*)addr, 0, PAGE_SIZE);
 
-    return((void*)addr);
+    return(addr);
 }
 
 /*
@@ -425,7 +425,7 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
             }
 
             
-            next_rn = vmmgr_alloc_tracking(ctx);
+            next_rn = (list_node_t*)vmmgr_alloc_tracking(ctx);
 
             if(next_rn != NULL)
             {
@@ -481,7 +481,7 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
 
         if(next_rn == NULL)
         {
-            next_rn = vmmgr_alloc_tracking(ctx);
+            next_rn = (list_node_t*)vmmgr_alloc_tracking(ctx);
 
             if(next_rn != NULL)
             {
@@ -639,7 +639,7 @@ static int vmmgr_put_free_mem(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
         {
             if(next_fn == NULL)
             {
-                next_fn = vmmgr_alloc_tracking(ctx);
+                next_fn = (list_node_t*)vmmgr_alloc_tracking(ctx);
 
                 if(next_fn != NULL)
                 {
@@ -676,7 +676,7 @@ static int vmmgr_put_free_mem(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
 
         if(next_fn == NULL)
         {
-            next_fn = vmmgr_alloc_tracking(ctx);
+            next_fn = (list_node_t*)vmmgr_alloc_tracking(ctx);
 
             if(next_fn != NULL)
             {
