@@ -370,11 +370,11 @@ static virt_addr_t pcpu_prepare_trampoline(void)
     stack    = (virt_addr_t*)(((virt_addr_t)&__start_ap_stack    - _TRAMPOLINE_BEGIN) + tr_code);
     entry_pt = (virt_addr_t*)(((virt_addr_t)&__start_ap_entry_pt - _TRAMPOLINE_BEGIN) + tr_code);
 
-    pml5_on[0] = pagemgr_pml5_support();
-    nx_on  [0] = pagemgr_nx_support();
-    pt_base[0] = __read_cr3();
-    stack  [0] = (virt_addr_t)_BSP_STACK_BASE;
-    entry_pt[0] =(virt_addr_t) pcpu_entry_point;
+    pml5_on [0] = pagemgr_pml5_support();
+    nx_on   [0] = pagemgr_nx_support();
+    pt_base [0] = __read_cr3();
+    stack   [0] = (virt_addr_t)_BSP_STACK_BASE;
+    entry_pt[0] = (virt_addr_t) pcpu_entry_point;
 
     return((virt_addr_t)tr_code);
 }
@@ -738,7 +738,7 @@ static uint32_t pcpu_get_domain
 static void pcpu_ctx_save(virt_addr_t iframe, void *th)
 {
     pcpu_context_t *context = NULL;
-    virt_addr_t    reg_loc = 0;
+    virt_addr_t     reg_loc = 0;
     sched_thread_t *thread = NULL;
 
     thread = th;
@@ -802,6 +802,7 @@ static void *pcpu_ctx_init
     ctx->iframe.rip = (virt_addr_t)exec_pt;
     ctx->iframe.rsp = th->stack + th->stack_sz;
     ctx->iframe.ss  = seg;
+    
     /* a new task does not disable interrupts */
     ctx->iframe.rflags = 0x1 | 0x200;
     ctx->iframe.cs = cs;

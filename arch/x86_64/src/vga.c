@@ -16,7 +16,7 @@ typedef struct _vga
     uint16_t *base;
     uint8_t row;
     uint8_t col;
- 
+    spinlock_t lock;
 }vga_t;
 
 static vga_t vga;
@@ -33,7 +33,7 @@ void vga_init()
 
     vga.col = 0;
     vga.row = 0;
-
+    spinlock_init(&vga.lock);
     /* clear the buffer */
     memset(vga.base, 0, FB_LEN);
 }
@@ -93,10 +93,14 @@ int vga_print_internal(uint8_t *buf)
 
 void vga_print(uint8_t *buf, uint8_t color, uint64_t len)
 {
-    uint16_t vga_ch = (uint16_t)color << 8; /* set the color now */
-    uint8_t ch = 0;
-    uint16_t pos;
+    int int_status = 0;
+
     if(vga.base == NULL)
         return;
+
+    spinlock_lock_int(&vga.lock, &int_status);
+
     vga_print_internal(buf);
+    
+    spinlock_unlock_int(&vga.lock, int_status);
 }

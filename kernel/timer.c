@@ -28,16 +28,26 @@ void timer_update
         
         if(tm->ttime <= tm->ctime + interval)
         {
+            /* we MUST remove the entry from the 
+             * list before calling the handler
+             * Otherwise, we might be greeted by
+             * a page fault becuase the structure
+             * might get invalidated while still being
+             * part of the list
+             */ 
+            
+            if(!(tm->flags & TIMER_PERIODIC))
+            {
+                linked_list_remove(queue, node);
+            }
+
             if(tm->handler)
             {
                 tm->handler(tm->data, inf);
                 tm->ctime = 0;
             }
 
-            if(!(tm->flags & TIMER_PERIODIC))
-            {
-                linked_list_remove(queue, node);
-            }
+
         }
         else
         {

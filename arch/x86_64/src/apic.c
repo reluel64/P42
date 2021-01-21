@@ -267,7 +267,7 @@ static int apic_send_ipi
     if(apic_drv == NULL)
         return(-1);
 
-    reg_hi = ((uint32_t)ipi->dest_cpu);
+    reg_hi = ipi->dest_cpu;
    
     reg_low = ipi->vector;
 
