@@ -10,49 +10,49 @@
 #define TIMER_PERIODIC    (1 << 0)
 #define TIMER_TICK        (1 << 1)
 
-
-
 typedef int (*timer_handler_t)(void *, isr_info_t *);
-
-typedef struct timer_t
-{
-    list_node_t node;
-    uint32_t ctime;
-    uint32_t ttime;
-    timer_handler_t handler;
-    void *data;
-    uint32_t flags;
-}timer_t;
+typedef int (*timer_dev_cb)(void *, uint32_t, isr_info_t *);
 
 typedef struct timer_api_t
 {
-    int (*arm_timer)(device_t *, timer_t *);
-    int (*disarm_timer)(device_t *, timer_t *);
-
+    int (*install_cb)(device_t *dev, timer_dev_cb, void *);    
+    int (*uninstall_cb)(device_t *dev, timer_dev_cb, void *);
+    int (*get_cb)(device_t *dev, timer_dev_cb *, void **);
+    int (*tm_res)(device_t *dev, uint32_t *val, int *tp);
+    int (*enable)(device_t *dev);
+    int (*disable)(device_t *dev);
+    int (*reset)  (device_t *dev);
 }timer_api_t;
 
-int timer_arm
+
+int timer_dev_loop_delay
 (
     device_t *dev, 
-    timer_t *tm,
-    timer_handler_t cb, 
-    void *data,
     uint32_t delay
 );
-int timer_loop_delay(device_t *dev, uint32_t delay);
-int timer_periodic_install
+
+int timer_dev_get_cb
 (
     device_t *dev,
-    timer_t *tm,
-    timer_handler_t cb, 
-    void *pv, 
-    uint32_t period
+    timer_dev_cb *cb,
+    void **cb_pv
 );
 
-void timer_update
+int timer_dev_connect_cb
 (
-    list_head_t *queue,
-    uint32_t interval,
-    isr_info_t *inf
+    device_t *dev,
+    timer_dev_cb cb,
+    void *cb_pv
 );
+
+int timer_dev_disconnect_cb
+(
+    device_t *dev,
+    timer_dev_cb cb,
+    void *cb_pv
+);
+
+int timer_dev_disable(device_t *dev);
+int timer_dev_enable(device_t *dev);
+int timer_dev_reset(device_t *dev);
 #endif

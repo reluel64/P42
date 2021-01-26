@@ -38,7 +38,8 @@ typedef struct sched_exec_unit_t
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     volatile uint32_t unblocked_th; /* unblocked thread count                        */
-    timer_t           tm;
+    device_t          *timer_dev;   /* timer device which is connected to this unit  */
+    uint8_t           timer_on;
 }sched_exec_unit_t;
 
 typedef struct sched_thread_t

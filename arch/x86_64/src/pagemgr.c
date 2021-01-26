@@ -323,7 +323,12 @@ int pagemgr_boot_temp_unmap_big(virt_addr_t vaddr, virt_size_t len)
     return(0);
 }
 
-static phys_size_t pagemgr_boot_alloc_cb(phys_addr_t phys, phys_size_t count, void *pv)
+static phys_size_t pagemgr_boot_alloc_cb
+(
+    phys_addr_t phys, 
+    phys_size_t count, 
+    void *pv
+)
 {
     phys_addr_t *pf = (phys_addr_t*)pv;
   
@@ -1009,7 +1014,12 @@ static int pagemgr_check_page_path(pagemgr_path_t *path)
     return(0);
 }
 
-static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, void *pv)
+static phys_size_t pagemgr_alloc_or_map_cb
+(
+    phys_addr_t phys, 
+    phys_size_t count, 
+    void *pv
+)
 {
     pagemgr_path_t *path = (pagemgr_path_t*)pv;
     phys_size_t used_pf     = 0;
@@ -1095,7 +1105,12 @@ static phys_size_t pagemgr_alloc_or_map_cb(phys_addr_t phys, phys_size_t count, 
     return(used_pf);
 }
 
-static int pagemgr_free_or_unmap_cb(phys_addr_t *phys, phys_size_t *count, void *pv)
+static int pagemgr_free_or_unmap_cb
+(
+    phys_addr_t *phys, 
+    phys_size_t *count, 
+    void *pv
+)
 {
     pagemgr_path_t *path       = (pagemgr_path_t*)pv;
     phys_addr_t     start_phys = 0;

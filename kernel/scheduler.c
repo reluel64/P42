@@ -193,7 +193,6 @@ static inline void sched_preempt_thread
             
         linked_list_add_tail(&unit->active_q, &current->node);
     }
-   
 }
 
 /*
@@ -288,8 +287,11 @@ static void sched_resched
      * we can update the sleeping threads
      */ 
 
-    if((period > 0) && (linked_list_count(&unit->sleep_q) > 0))
-        sched_wake_sleeping_threads(unit, period);
+    if(linked_list_count(&unit->sleep_q) > 0)
+    {
+        if(period > 0)
+            sched_wake_sleeping_threads(unit, period);
+    }
 
     if(unit->current)
     {
@@ -307,7 +309,6 @@ static void sched_resched
 
         if(preempt)
         {
-
             sched_preempt_thread(unit, current, iframe);
         }
 
@@ -337,6 +338,23 @@ static void sched_resched
         sched_switch_to_thread(unit, next, iframe);
     }
 
+    if(linked_list_count(&unit->sleep_q) == 0)
+    {
+        if(unit->timer_on)
+        {
+            timer_dev_disable(unit->timer_dev);
+            unit->timer_on = 0;
+        }
+    }
+    else
+    {
+        if(!unit->timer_on)
+        {
+            timer_dev_enable(unit->timer_dev);
+            unit->timer_on = 1;
+        }
+    }
+
     /* Unblock the execution unit structure */
     spinlock_unlock_int(&unit->lock, int_status);
 
@@ -364,7 +382,7 @@ void sched_unblock_thread(sched_thread_t *th)
 }
 
 
-static int sched_timer_isr(void *pv, isr_info_t *inf)
+static int sched_timer_isr(void *pv, uint32_t interval, isr_info_t *inf)
 {
     sched_exec_unit_t *unit      = NULL;
     cpu_t             *cpu       = NULL;
@@ -438,7 +456,8 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     spinlock_init(&unit->lock);
 
     unit->idle = kcalloc(sizeof(sched_thread_t), 1);
-    
+    unit->timer_dev = timer;
+    unit->timer_on  = 1;
     /* Initialize the idle task
      * The scheduler will automatically start executing 
      * it in case there are no other tasks in the active_q
@@ -451,14 +470,11 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     linked_list_add_tail(&units, &unit->node);
     spinlock_write_unlock_int(&units_lock, int_status);
 
-
     isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0);
 
-    timer_periodic_install(timer,
-                           &unit->tm,
-                           sched_timer_isr,
-                           unit,
-                           SCHEDULER_TICK_MS);
+    timer_dev_connect_cb(timer,
+                        sched_timer_isr,
+                        unit);
 
     while(1)
     {
@@ -472,7 +488,9 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
 
 void sched_yield()
 {
-    cpu_resched();
+    cpu_int_lock();
+    cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, cpu_id_get(), IPI_RESCHED);
+    cpu_int_unlock();
 }
 
 sched_thread_t *sched_thread_self(void)
@@ -519,9 +537,8 @@ void sched_sleep(uint32_t delay)
     th->slept = 0;
     
     __atomic_fetch_or(&th->flags, THREAD_SLEEPING, __ATOMIC_ACQUIRE);
+    cpu_issue_ipi(IPI_DEST_ALL, 0, IPI_RESCHED);
     spinlock_unlock_int(&th->lock, int_status);
-
-    cpu_resched();
 }
 
 static inline void sched_clean_thread(sched_thread_t *th)

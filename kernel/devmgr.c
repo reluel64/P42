@@ -53,9 +53,13 @@ int devmgr_show_devices(void)
 #endif
 
 
-            kprintf("DEVICE %s TYPE %s Index %d PARENT %s\n",dev->dev_name,dev->dev_type, dev->index,dev->parent->dev_name);
+            kprintf("DEVICE %s TYPE %s Index %d PARENT %s\n",
+                    dev->dev_name,
+                    dev->dev_type, 
+                    dev->index,
+                    dev->parent->dev_name);
 
-                        /* start going down if we have children*/
+            /* start going down if we have children*/
             if(linked_list_count(&dev->children) > 0)
             {
                 /*save the  parent node */
@@ -348,7 +352,12 @@ int devmgr_dev_probe(device_t *dev)
         if(drv->dev_probe)
             status = drv->dev_probe(dev);
         
-        kprintf("%s %d STS %d DEV %s DRV %s\n",__FUNCTION__,__LINE__,status,dev->dev_name, drv->drv_name);
+        kprintf("%s %d STS %d DEV %s DRV %s\n",
+                __FUNCTION__,
+                __LINE__,
+                status,
+                dev->dev_name, 
+                drv->drv_name);
 
         if(!status)
         {   

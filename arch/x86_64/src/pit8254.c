@@ -20,12 +20,18 @@ typedef struct pit8254_dev_t
     list_head_t queue;
     spinlock_t  lock; 
     uint16_t divider;
+    timer_dev_cb func;
+    void *func_data;
 }pit8254_dev_t;
 
 static int counter = 0;
 
-static inline void pit8254_rearm(pit8254_dev_t *pit)
+static inline void pit8254_rearm(device_t *dev)
 {
+    pit8254_dev_t *pit = NULL;
+
+    pit = devmgr_dev_data_get(dev);
+
     __outb(CH0_PORT, pit->divider & 0xff);
     __outb(CH0_PORT, (pit->divider >> 8) & 0xff);
 }
@@ -41,9 +47,8 @@ static int pit8254_irq_handler(void *dev, isr_info_t *inf)
    
     spinlock_lock_int(&pit_dev->lock, &int_status);
 
-    timer_update(&pit_dev->queue, INTERRUPT_INTERVAL_MS, inf);
-    
-    pit8254_rearm(pit_dev);
+    if(pit_dev->func != NULL)
+        pit_dev->func(pit_dev->func_data, INTERRUPT_INTERVAL_MS, inf);
     
     spinlock_unlock_int(&pit_dev->lock, int_status);
 
@@ -69,14 +74,13 @@ static int pit8254_init(device_t *dev)
     pit_dev = (pit8254_dev_t*)kcalloc(sizeof(pit8254_dev_t), 1);
 
     spinlock_init(&pit_dev->lock);
-    linked_list_init(&pit_dev->queue);
     devmgr_dev_data_set(dev, pit_dev);
     
     pit_dev->divider = 1192;
 
     __outb(COMMAND_PORT, command);
 
-    pit8254_rearm(pit_dev);
+    pit8254_rearm(dev);
 
     return(0);
 }
@@ -101,25 +105,86 @@ static int pit8254_drv_init(driver_t *drv)
     return(0);
 }
 
-static int pit8254_arm_timer(device_t *dev, timer_t *tm)
+static int pit8254_install_cb
+(
+    device_t          *dev,
+    timer_dev_cb      func, 
+    void              *data
+)
 {
-    pit8254_dev_t *pit_dev    = NULL;
-    int            int_status = 0;
-    pit_dev = devmgr_dev_data_get(dev);
+    pit8254_dev_t *timer = NULL;
+    int           int_status = 0;
+    int           ret = -1;
 
-    spinlock_lock_int(&pit_dev->lock, &int_status);
+    timer = devmgr_dev_data_get(dev);
 
-    linked_list_add_tail(&pit_dev->queue, &tm->node);
+    spinlock_lock_int(&timer->lock, &int_status);
 
-    spinlock_unlock_int(&pit_dev->lock, int_status);
+    timer->func      = func;
+    timer->func_data = data;
+    ret = 0;
 
-    return(0);
+    spinlock_unlock_int(&timer->lock, int_status);
+
+    return(ret);
+}
+
+static int pit8254_uninstall_cb
+(
+    device_t          *dev,
+    timer_dev_cb func,
+    void *data
+)
+{
+    pit8254_dev_t *timer = NULL;
+    int           int_status = 0;
+    int           ret = -1;
+    
+    timer = devmgr_dev_data_get(dev);
+
+    spinlock_lock_int(&timer->lock, &int_status);
+
+    timer->func      = NULL;
+    timer->func_data = NULL;
+    ret              = 0;
+
+    spinlock_unlock_int(&timer->lock, int_status);
+
+    return(ret);
+}
+
+static int pit8254_get_cb
+(
+    device_t          *dev,
+    timer_dev_cb      *func,
+    void              **data
+)
+{
+    pit8254_dev_t *timer = NULL;
+    int           int_status = 0;
+    int           ret = -1;
+    
+    timer = devmgr_dev_data_get(dev);
+
+    spinlock_lock_int(&timer->lock, &int_status);
+
+    *func = timer->func;
+    *data = timer->func_data;
+    ret = 0;
+
+    spinlock_unlock_int(&timer->lock, int_status);
+
+    return(ret);
 }
 
 static timer_api_t pit8254_api = 
 {
-    .arm_timer    = pit8254_arm_timer,
-    .disarm_timer = NULL
+    .install_cb    = pit8254_install_cb,
+    .uninstall_cb  = pit8254_uninstall_cb,
+    .get_cb        = pit8254_get_cb,
+    .enable        = NULL,
+    .disable       = NULL,
+    .reset         = pit8254_rearm
 };
 
 static driver_t pit8254 = 

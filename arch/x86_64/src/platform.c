@@ -62,4 +62,5 @@ int platform_init(void)
         ioapic = devmgr_dev_get_by_name(IOAPIC_DRV_NAME, 0);
         intc_mask_irq(ioapic, 0);
     }
+
 }

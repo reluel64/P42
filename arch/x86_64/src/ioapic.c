@@ -374,6 +374,7 @@ static int ioapic_device_init
         tbl[i].intvec = vector;
     }
 
+    /* do adjustments to the vectors */
     for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
     {
         vector = i + ioapic->irq_base;

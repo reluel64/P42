@@ -170,7 +170,7 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 
     /* gain exclusive access to the list */
     spinlock_read_lock_int(&int_lst->lock, &int_status);
-    
+
     node = linked_list_first(&int_lst->head);
     
     while(node)

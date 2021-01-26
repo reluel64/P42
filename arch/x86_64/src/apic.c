@@ -194,6 +194,7 @@ static int apic_eoi_handler(void *pv, isr_info_t *inf)
 {
     apic_drv_private_t *apic_drv = NULL;
     uint32_t            data     = 0;
+    
     apic_drv = devmgr_drv_data_get(pv);
 
     apic_drv->apic_write(apic_drv->vaddr, 
