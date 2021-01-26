@@ -380,9 +380,9 @@ static int apic_dev_init(device_t *dev)
     /* If x2APIC is supported, then enable it */
     if(apic_drv->x2)
     {
-        vga_print("ENABLING x2APIC\n");
         apic_enable_x2();
     }   
+    
     kprintf("INIT_APIC 0x%x\n", dev);
 
     apic->apic_id = devmgr_dev_index_get(dev);

@@ -6,9 +6,8 @@
 #include <linked_list.h>
 #include <devmgr.h>
 #include <isr.h>
+
 #define TIMER_DEVICE_TYPE "timer"
-#define TIMER_PERIODIC    (1 << 0)
-#define TIMER_TICK        (1 << 1)
 
 typedef int (*timer_handler_t)(void *, isr_info_t *);
 typedef int (*timer_dev_cb)(void *, uint32_t, isr_info_t *);
@@ -28,7 +27,7 @@ typedef struct timer_api_t
 int timer_dev_loop_delay
 (
     device_t *dev, 
-    uint32_t delay
+    uint32_t delay_ms
 );
 
 int timer_dev_get_cb

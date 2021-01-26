@@ -20,7 +20,6 @@ static spinlock_t  list_lock;
 
 static void sched_idle_loop(void *pv);
 
-
 static void sched_thread_main(sched_thread_t *th)
 {
     sched_thread_t *self = NULL;
@@ -392,7 +391,7 @@ static int sched_timer_isr(void *pv, uint32_t interval, isr_info_t *inf)
 
     if(cpu->cpu_id != inf->cpu_id)
         return(-1);
-
+        
     sched_resched(inf->iframe, unit, SCHEDULER_TICK_MS);
 
     return(0);
@@ -457,7 +456,8 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
 
     unit->idle = kcalloc(sizeof(sched_thread_t), 1);
     unit->timer_dev = timer;
-    unit->timer_on  = 1;
+    unit->timer_on  = 0;
+
     /* Initialize the idle task
      * The scheduler will automatically start executing 
      * it in case there are no other tasks in the active_q
@@ -476,6 +476,9 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
                         sched_timer_isr,
                         unit);
 
+    /* begin execution of the scheduler code */
+    cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
+
     while(1)
     {
         cpu_halt();
@@ -489,7 +492,7 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
 void sched_yield()
 {
     cpu_int_lock();
-    cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, cpu_id_get(), IPI_RESCHED);
+    cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
     cpu_int_unlock();
 }
 

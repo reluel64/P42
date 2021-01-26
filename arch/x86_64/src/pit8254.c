@@ -15,6 +15,11 @@
 
 #define INTERRUPT_INTERVAL_MS 1ull
 
+#define PIT8254_FREQ 1193182 /* HZ */
+#define INT_INTERVAL_MS 1
+#define PIT8254_MS_DIV 1000
+
+
 typedef struct pit8254_dev_t
 {
     list_head_t queue;
@@ -24,31 +29,31 @@ typedef struct pit8254_dev_t
     void *func_data;
 }pit8254_dev_t;
 
-static int counter = 0;
-
-static inline void pit8254_rearm(device_t *dev)
+static int pit8254_rearm(device_t *dev)
 {
     pit8254_dev_t *pit = NULL;
-
+    
     pit = devmgr_dev_data_get(dev);
 
     __outb(CH0_PORT, pit->divider & 0xff);
     __outb(CH0_PORT, (pit->divider >> 8) & 0xff);
-}
 
+    return(0);
+}
 
 static int pit8254_irq_handler(void *dev, isr_info_t *inf)
 {
     pit8254_dev_t *pit_dev = NULL;
     uint16_t divider = 0;
     int int_status = 0;
+
     pit_dev = devmgr_dev_data_get(dev);
 
-   
+
     spinlock_lock_int(&pit_dev->lock, &int_status);
 
     if(pit_dev->func != NULL)
-        pit_dev->func(pit_dev->func_data, INTERRUPT_INTERVAL_MS, inf);
+        pit_dev->func(pit_dev->func_data, INT_INTERVAL_MS, inf);
     
     spinlock_unlock_int(&pit_dev->lock, int_status);
 
@@ -69,14 +74,14 @@ static int pit8254_init(device_t *dev)
     uint8_t        command = 0;
     pit8254_dev_t *pit_dev = NULL;
 
-    command = 0b000110100;
+    command = 0b000111000;
 
     pit_dev = (pit8254_dev_t*)kcalloc(sizeof(pit8254_dev_t), 1);
 
     spinlock_init(&pit_dev->lock);
     devmgr_dev_data_set(dev, pit_dev);
     
-    pit_dev->divider = 1192;
+    pit_dev->divider = PIT8254_FREQ / PIT8254_MS_DIV;
 
     __outb(COMMAND_PORT, command);
 
@@ -104,6 +109,8 @@ static int pit8254_drv_init(driver_t *drv)
 
     return(0);
 }
+
+
 
 static int pit8254_install_cb
 (
@@ -199,9 +206,8 @@ static driver_t pit8254 =
 
 int pit8254_register(void)
 {
-
     devmgr_drv_add(&pit8254);
     devmgr_drv_init(&pit8254);
-
+    
     return(0);
 }

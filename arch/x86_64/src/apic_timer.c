@@ -10,7 +10,7 @@
 #include <cpu.h>
 #include <platform.h>
 
-#define APIC_TIMER_INTERVAL_MS 1
+#define APIC_TIMER_INTERVAL_MS 1 /* 1ms */
 
 typedef struct apic_timer_t
 {
@@ -19,7 +19,7 @@ typedef struct apic_timer_t
     uint32_t calib_value;
     timer_dev_cb func;
     void *func_data;
-    int enabled;
+    uint32_t counter;
 }apic_timer_t;
 
 
@@ -33,6 +33,7 @@ static int apic_timer_isr(void *dev, isr_info_t *inf)
         return(-1);
     }
 
+    
     timer = devmgr_dev_data_get(dev);
 
     spinlock_lock_int(&timer->lock, &int_status);
@@ -106,6 +107,14 @@ static int apic_timer_init(device_t *dev)
 
     apic_timer->calib_value = UINT32_MAX - data;
 
+        /* disable the timer */
+    data = 0;
+
+    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
+                            INITIAL_COUNT_REGISTER, 
+                            &data, 
+                            1);
+
     kprintf("APIC_TIMER_CALIB %d\n",apic_timer->calib_value);
 
     data = APIC_LVT_VECTOR_MASK(PLATFORM_LOCAL_TIMER_VECTOR) | 
@@ -116,13 +125,6 @@ static int apic_timer_init(device_t *dev)
                             &data, 
                             1);
 
-    data = apic_timer->calib_value;
-
-    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
-                            INITIAL_COUNT_REGISTER, 
-                            &data, 
-                            1);
-    apic_timer->enabled = 1;
     isr_install(apic_timer_isr, dev, PLATFORM_LOCAL_TIMER_VECTOR, 0);
     return(0);
 }
@@ -151,6 +153,7 @@ static int apic_timer_install_cb
     timer->func = func;
     timer->func_data = data;
     ret = 0;
+    
     spinlock_unlock_int(&timer->lock, int_status);
 
     return(ret);

@@ -52,8 +52,14 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
 }
 
 
+
+
 static void kmain_sys_init(void)
 {
+    int hr = 0;
+    int min = 0;
+    int sec = 0;
+
     /* Start APs */
     kprintf("starting APs\n");
     cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
@@ -69,6 +75,30 @@ static void kmain_sys_init(void)
             pciCheckVendor(bus, slot);
         }
     }
+    while(1)
+    {
+
+        sched_sleep(1000);
+        sec++;
+
+        if(sec == 60)
+        {
+            min++;
+            sec = 0;
+        }
+
+        if(min == 60)
+        {
+            min = 0;
+            sec = 0;
+            hr++;
+        }
+        vga_print("HELLO\n");
+       // kprintf("HELLO WORLD %d:%d:%d\n",hr,min,sec);
+    }
+
+
+
 }
 
 

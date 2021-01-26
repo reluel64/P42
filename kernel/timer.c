@@ -15,7 +15,7 @@ static int timer_dev_loop_callback
 {
     uint32_t *delay = (uint32_t*)pv;
 
-    __atomic_add_fetch((int*)pv, 1, __ATOMIC_RELEASE);
+    __atomic_add_fetch((int*)pv, interval, __ATOMIC_RELEASE);
 
     return(1);
 }
@@ -23,22 +23,28 @@ static int timer_dev_loop_callback
 int timer_dev_loop_delay
 (
     device_t *dev, 
-    uint32_t delay
+    uint32_t delay_ms
 )
 {
     uint32_t      cursor   = 0;
     timer_dev_cb  cb       = NULL;
     void         *data     = NULL;
 
+    /* save the old cb */
     timer_dev_get_cb(dev, &cb, &data);
-    timer_dev_connect_cb(dev, timer_dev_loop_callback, &cursor);
-    kprintf("PREPPING\n");
 
-    while(__atomic_load_n(&cursor, __ATOMIC_ACQUIRE) < delay)
+    /* set the new callback */
+    timer_dev_connect_cb(dev, timer_dev_loop_callback, &cursor);
+    
+    /* reset the timer */
+    timer_dev_reset(dev);
+
+    while(__atomic_load_n(&cursor, __ATOMIC_ACQUIRE) < delay_ms)
     {
         cpu_pause();
     }
 
+    /* restore the callback */
     timer_dev_connect_cb(dev, cb, data);
 
     return(0);
@@ -46,9 +52,9 @@ int timer_dev_loop_delay
 
 int timer_dev_get_cb
 (
-    device_t *dev,
-    timer_dev_cb *cb,
-    void **cb_pv
+    device_t      *dev,
+    timer_dev_cb  *cb,
+    void         **cb_pv
 )
 {
     timer_api_t *api = NULL;
