@@ -23,11 +23,13 @@ semaphore_t *sem_create(uint32_t init_val)
     return(sem);
 }
 
-int sem_acquire(semaphore_t *sem)
+int sem_acquire(semaphore_t *sem, uint32_t wait_ms)
 {
     int int_state = 0;
     int th_int_state = 0;
     sched_thread_t *thread = NULL;
+    uint32_t        block_flags = THREAD_BLOCKED;
+
 
     spinlock_lock_int(&sem->lock, &int_state);
 
@@ -48,11 +50,32 @@ int sem_acquire(semaphore_t *sem)
     while(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) < 1)
     {
         
+        if(block_flags & THREAD_SLEEPING)
+        {
+            /* remove the thread from the pendq */
+            linked_list_remove(&sem->pendq, &thread->pend_node);
+            spinlock_unlock_int(&sem->lock, int_state);
+            return(-1);
+        }
+
+        if(wait_ms == NO_WAIT)
+        {
+            spinlock_unlock_int(&sem->lock, int_state);
+            return(-1);
+        }
+
         /* Acquire spinlock for the thread */
-         spinlock_lock_int(&thread->lock, &th_int_state);
+        spinlock_lock_int(&thread->lock, &th_int_state);
+
+        if(wait_ms != WAIT_FOREVER)
+        {
+            block_flags |= THREAD_SLEEPING;
+            thread->to_sleep = wait_ms;
+            thread->slept = 0;
+        }
 
          /* Mark the thread as blocked */
-        __atomic_or_fetch(&thread->flags, THREAD_BLOCKED, __ATOMIC_ACQUIRE);
+        __atomic_or_fetch(&thread->flags, block_flags, __ATOMIC_ACQUIRE);
 
         /* Add it to the semaphore pend queue */
         linked_list_add_tail(&sem->pendq, &thread->pend_node); 

@@ -456,8 +456,8 @@ int sched_init(void)
 
 int sched_cpu_init(device_t *timer, cpu_t *cpu)
 {
-    sched_exec_unit_t *unit = NULL;
-    int int_status = 0;
+    sched_exec_unit_t *unit       = NULL;
+    int                int_status = 0;
 
     if(timer == NULL || cpu == NULL)
     {
@@ -530,11 +530,11 @@ void sched_yield()
 
 sched_thread_t *sched_thread_self(void)
 {
-    cpu_t             *cpu = NULL;
-    sched_exec_unit_t *unit = NULL;
-    sched_thread_t    *th = NULL;
-    int                int_status   = 0;
-    int                istatus      = 0;
+    cpu_t             *cpu        = NULL;
+    sched_exec_unit_t *unit       = NULL;
+    sched_thread_t    *th         = NULL;
+    int                int_status = 0;
+    int                istatus    = 0;
 
     istatus = cpu_int_check();
     
@@ -572,7 +572,9 @@ void sched_sleep(uint32_t delay)
     th->slept = 0;
     
     __atomic_fetch_or(&th->flags, THREAD_SLEEPING, __ATOMIC_ACQUIRE);
+
     cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
+    
     spinlock_unlock_int(&th->lock, int_status);
 }
 

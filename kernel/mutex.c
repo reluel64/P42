@@ -40,7 +40,6 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
     while(1)
     {
 
-
         expected = NULL;
 
         /* Try to become the owner of the mutex*/

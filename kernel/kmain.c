@@ -145,7 +145,7 @@ sched_init_thread(&th[1], kmain_th_2, 0x1000, 0, 0);
             hr++;
         }
         vga_print("HELLO\n");
-        kprintf("HELLO WORLD %d:%d:%d\n",hr,min,sec);
+       // kprintf("HELLO WORLD %d:%d:%d\n",hr,min,sec);
 
     }
 #endif

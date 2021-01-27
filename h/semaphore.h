@@ -12,6 +12,6 @@ typedef struct semaphore_t
 }semaphore_t;
 
 semaphore_t *sem_create(uint32_t init_val);
-int sem_acquire(semaphore_t *sem);
+int sem_acquire(semaphore_t *sem, uint32_t wait_ms);
 int sem_release(semaphore_t *sem);
 #endif
