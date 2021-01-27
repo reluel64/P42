@@ -5,12 +5,13 @@
 #include <timer.h>
 
 
-#define THREAD_READY     (1 << 0)
-#define THREAD_RUNNING   (1 << 1)
-#define THREAD_BLOCKED   (1 << 2)
-#define THREAD_SLEEPING  (1 << 3)
-#define THREAD_DEAD      (1 << 4)
-#define THREAD_ALLOCATED (1 << 5)
+#define THREAD_READY            (1 << 0)
+#define THREAD_RUNNING          (1 << 1)
+#define THREAD_BLOCKED          (1 << 2)
+#define THREAD_SLEEPING         (1 << 3)
+#define THREAD_DEAD             (1 << 4)
+#define THREAD_ALLOCATED        (1 << 5)
+#define THREAD_BLOCKED_SLEEP    (1 << 6)
 
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
@@ -37,7 +38,6 @@ typedef struct sched_exec_unit_t
     sched_thread_t   *idle;         /* our dearest idle task                         */
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
-    volatile uint32_t unblocked_th; /* unblocked thread count                        */
     device_t          *timer_dev;   /* timer device which is connected to this unit  */
     uint8_t           timer_on;
 }sched_exec_unit_t;

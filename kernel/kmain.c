@@ -51,7 +51,44 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
     } return (vendor);
 }
 
+mutex_t *mtx = NULL;
+static sched_thread_t th[2];
 
+ void kmain_th_1(void)
+{
+    while(1)
+    {
+       mtx_acquire(mtx, WAIT_FOREVER);
+{
+        kprintf("SLEEPING on CPU %d\n",cpu_id_get());
+        sched_sleep(2000);
+       // for(uint32_t i = 0; i< UINT32_MAX/4;i++);
+        
+        kprintf("DONE\n");
+
+        mtx_release(mtx);
+    }
+    }
+}
+
+static void kmain_th_2(void)
+{
+    while(1)
+    {
+        if(mtx_acquire(mtx, 1000)==0)
+        {
+            kprintf("Hello World on cPU %d\n", cpu_id_get());
+            
+        }   
+        else
+        {
+            kprintf("FAIL\n");
+           
+        }
+        mtx_release(mtx);
+     
+    }
+}
 
 
 static void kmain_sys_init(void)
@@ -75,8 +112,22 @@ static void kmain_sys_init(void)
             pciCheckVendor(bus, slot);
         }
     }
+    mtx = mtx_create();
+    sched_init_thread(&th[0], kmain_th_1, 0x1000, 0, 0);
+
+    /* Enqueue the thread */
+    sched_start_thread(&th[0]);
+
+
+sched_init_thread(&th[1], kmain_th_2, 0x1000, 0, 0);
+
+    /* Enqueue the thread */
+    sched_start_thread(&th[1]);
+
+#if 1
     while(1)
     {
+        
 
         sched_sleep(1000);
         sec++;
@@ -94,9 +145,10 @@ static void kmain_sys_init(void)
             hr++;
         }
         vga_print("HELLO\n");
-       // kprintf("HELLO WORLD %d:%d:%d\n",hr,min,sec);
-    }
+        kprintf("HELLO WORLD %d:%d:%d\n",hr,min,sec);
 
+    }
+#endif
 
 
 }

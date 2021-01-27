@@ -12,6 +12,6 @@ typedef struct mutex_t
 }mutex_t;
 
 mutex_t *mtx_create();
-int mtx_acquire(mutex_t *sem);
-int mtx_release(mutex_t *sem);
+int mtx_acquire(mutex_t *mtx, uint32_t wait_ms);
+int mtx_release(mutex_t *mtx);
 #endif

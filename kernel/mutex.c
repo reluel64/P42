@@ -25,12 +25,13 @@ mutex_t *mtx_create()
     return(mtx);
 }
 
-int mtx_acquire(mutex_t *mtx)
+int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 {
     int int_state = 0;
     int th_int_state = 0;
     void           *expected = NULL;
     sched_thread_t *thread = NULL;
+    uint32_t block_flags = THREAD_BLOCKED;
 
     spinlock_lock_int(&mtx->lock, &int_state);
     thread = sched_thread_self();
@@ -38,6 +39,8 @@ int mtx_acquire(mutex_t *mtx)
 
     while(1)
     {
+
+
         expected = NULL;
 
         /* Try to become the owner of the mutex*/
@@ -68,10 +71,37 @@ int mtx_acquire(mutex_t *mtx)
             return(0);
         }
 
+        /* if we the thread has the sleeping flag set,
+         * then we already timed out so we will just exit 
+         */
+
+        if(block_flags & THREAD_SLEEPING)
+        {
+            /* remove the thread from the pendq */
+            linked_list_remove(&mtx->pendq, &thread->pend_node);
+            spinlock_unlock_int(&mtx->lock, int_state);
+            return(-1);
+        }
+
+        if(wait_ms == NO_WAIT)
+        {
+            spinlock_unlock_int(&mtx->lock, int_state);
+            return(-1);
+        }
+
         spinlock_lock_int(&thread->lock, &th_int_state);
 
+        /* we are going to sleep */
+
+        if(wait_ms != WAIT_FOREVER)
+        {
+            block_flags |= THREAD_SLEEPING;
+            thread->to_sleep = wait_ms;
+            thread->slept = 0;
+        }
          /* Mark the thread as blocked */
-        __atomic_or_fetch(&thread->flags, THREAD_BLOCKED, __ATOMIC_ACQUIRE);
+        
+        __atomic_or_fetch(&thread->flags, block_flags, __ATOMIC_ACQUIRE);
 
         /* Add it to the mutex pend queue */
 
@@ -116,7 +146,7 @@ int mtx_release(mutex_t *mtx)
                                        ))
     {
         spinlock_unlock_int(&mtx->lock, int_state);
-        return(0);
+        return(-1);
     }
 
     /* Get the first pending task */
@@ -141,6 +171,6 @@ int mtx_release(mutex_t *mtx)
     sched_unblock_thread(thread);
 
     spinlock_unlock_int(&mtx->lock, int_state);
-
+    
     return(0);
 }
