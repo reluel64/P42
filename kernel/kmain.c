@@ -58,7 +58,8 @@ static sched_thread_t th[2];
 {
     while(1)
     {
-       mtx_acquire(mtx, WAIT_FOREVER);
+       if(mtx_acquire(mtx, WAIT_FOREVER))
+       kprintf("ERROR\n");
 {
        kprintf("SLEEPING on CPU %d\n",cpu_id_get());
        sched_sleep(2000);
@@ -73,12 +74,13 @@ static sched_thread_t th[2];
 
 static void kmain_th_2(void)
 {
+    int i = 0;
     while(1)
     {
+        #if 1
         if(mtx_acquire(mtx, 100)==0)
         {
             kprintf("Hello World on cPU %d\n", cpu_id_get());
-            
         }   
         else
         {
@@ -86,7 +88,7 @@ static void kmain_th_2(void)
            
         }
         mtx_release(mtx);
-     
+    #endif
     }
 }
 

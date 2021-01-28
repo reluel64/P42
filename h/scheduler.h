@@ -26,21 +26,40 @@ typedef struct sched_thread_t sched_thread_t;
 
 typedef struct sched_exec_unit_t
 {
-    list_node_t      node;        /* node in units list */
-    cpu_t            *cpu;        /* cpu structure that is tied to the scheduler 
-                                   * execution unit 
-                                   */
+    list_node_t      node;         /* node in units list */
+    cpu_t            *cpu;         /* cpu structure that is tied to the scheduler 
+                                    * execution unit 
+                                    */
     
-    list_head_t       ready_q;     /* queue of ready threads on the current CPU    */
+    list_head_t       ready_q;      /* queue of ready threads on the current CPU     */
     list_head_t       blocked_q;    /* queue of blocked threads                      */
     list_head_t       sleep_q;      /* queue of sleeping threads                     */
     list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
+    list_head_t       blk_tm_q;    /* queue of blocked with timeout queue           */
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t   *idle;         /* our dearest idle task                         */
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
-    device_t          *timer_dev;   /* timer device which is connected to this unit  */
-    uint8_t           timer_on;     /* timer device status                           */ 
+    device_t         *timer_dev;    /* timer device which is connected to this unit  */
+    uint8_t           timer_on;     /* timer device status                           */
+    volatile uint32_t unb_th;
+    uint32_t          blk_tm;      /* time to sleep until the the list of blocked 
+                                     * with timeout threads is checked again                      
+                                     * - it is used for comparison against c_blk_slp       
+                                     */
+
+    uint32_t          sleep;        /* time to sleep until the the list of sleeping 
+                                     * threads is checked again                     
+                                     * - it is used for comparison against c_slp      
+                                     */ 
+
+    uint32_t          c_blk_tm;    /* least timeout for threads that are having the
+                                     * blocking operation with timeout
+                                     */ 
+
+    uint32_t          c_sleep;      /* currsor for least timeout for threads that
+                                     * are sleeping                                  
+                                     */
 }sched_exec_unit_t;
 
 typedef struct sched_thread_t
@@ -59,8 +78,8 @@ typedef struct sched_thread_t
     sched_exec_unit_t *unit;        /* execution unit on which the thread is running */
 
     spinlock_t        lock;         /* lock to protect the structure members         */
-    uint32_t          slept;
-    uint32_t          to_sleep;
+    uint32_t          slept;        /* sleeping cursor                               */
+    uint32_t          to_sleep;     /* amount in ms to sleep                         */
     uint32_t          remain;       /* reamining time before task switch             */
     void              *rval;        /* return value */
 }sched_thread_t;

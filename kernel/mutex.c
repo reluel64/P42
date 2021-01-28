@@ -91,7 +91,6 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         spinlock_lock_int(&thread->lock, &th_int_state);
 
         /* we are going to sleep */
-
         if(wait_ms != WAIT_FOREVER)
         {
             block_flags |= THREAD_SLEEPING;
