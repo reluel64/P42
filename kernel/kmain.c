@@ -60,8 +60,8 @@ static sched_thread_t th[2];
     {
        mtx_acquire(mtx, WAIT_FOREVER);
 {
-        kprintf("SLEEPING on CPU %d\n",cpu_id_get());
-        sched_sleep(2000);
+       kprintf("SLEEPING on CPU %d\n",cpu_id_get());
+       sched_sleep(2000);
        // for(uint32_t i = 0; i< UINT32_MAX/4;i++);
         
         kprintf("DONE\n");
@@ -75,7 +75,7 @@ static void kmain_th_2(void)
 {
     while(1)
     {
-        if(mtx_acquire(mtx, 1000)==0)
+        if(mtx_acquire(mtx, 100)==0)
         {
             kprintf("Hello World on cPU %d\n", cpu_id_get());
             
@@ -119,7 +119,7 @@ static void kmain_sys_init(void)
     sched_start_thread(&th[0]);
 
 
-sched_init_thread(&th[1], kmain_th_2, 0x1000, 0, 0);
+    sched_init_thread(&th[1], kmain_th_2, 0x1000, 0, 0);
 
     /* Enqueue the thread */
     sched_start_thread(&th[1]);

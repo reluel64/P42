@@ -51,7 +51,7 @@ static int pit8254_irq_handler(void *dev, isr_info_t *inf)
 
 
     spinlock_lock_int(&pit_dev->lock, &int_status);
-
+    vga_print("PIT8254\n");
     if(pit_dev->func != NULL)
         pit_dev->func(pit_dev->func_data, INT_INTERVAL_MS, inf);
     

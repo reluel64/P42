@@ -11,7 +11,8 @@
 #define THREAD_SLEEPING         (1 << 3)
 #define THREAD_DEAD             (1 << 4)
 #define THREAD_ALLOCATED        (1 << 5)
-#define THREAD_BLOCKED_SLEEP    (1 << 6)
+
+
 
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
@@ -30,7 +31,7 @@ typedef struct sched_exec_unit_t
                                    * execution unit 
                                    */
     
-    list_head_t       active_q;     /* queue of active threads on the current CPU    */
+    list_head_t       ready_q;     /* queue of ready threads on the current CPU    */
     list_head_t       blocked_q;    /* queue of blocked threads                      */
     list_head_t       sleep_q;      /* queue of sleeping threads                     */
     list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
@@ -39,7 +40,7 @@ typedef struct sched_exec_unit_t
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     device_t          *timer_dev;   /* timer device which is connected to this unit  */
-    uint8_t           timer_on;
+    uint8_t           timer_on;     /* timer device status                           */ 
 }sched_exec_unit_t;
 
 typedef struct sched_thread_t

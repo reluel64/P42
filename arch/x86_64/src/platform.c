@@ -52,7 +52,7 @@ int platform_init(void)
 {
     device_t *ioapic = NULL;
     device_t *apic_timer = NULL;
-
+#if 0
     /* Mask the PIT8254 */
     apic_timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, 0);
 
@@ -62,5 +62,5 @@ int platform_init(void)
         ioapic = devmgr_dev_get_by_name(IOAPIC_DRV_NAME, 0);
         intc_mask_irq(ioapic, 0);
     }
-
+#endif
 }

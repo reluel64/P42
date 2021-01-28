@@ -94,7 +94,7 @@ int sched_start_thread(sched_thread_t *th)
     return(0);
 }
 
-static void sched_wake_sleeping_threads
+static int sched_update_sleeping_threads
 (
     sched_exec_unit_t *unit,
     uint32_t           period
@@ -103,7 +103,7 @@ static void sched_wake_sleeping_threads
     list_node_t    *node      = NULL;
     list_node_t    *next_node = NULL;
     sched_thread_t *th        = NULL;
-    
+    uint32_t       sleeping   = 0;
 
     node = linked_list_first(&unit->sleep_q);
 
@@ -113,21 +113,26 @@ static void sched_wake_sleeping_threads
 
         th = (sched_thread_t*)node;
 
-        if(th->slept >= th->to_sleep)
+        if(th->slept > th->to_sleep)
         {
-
             linked_list_remove(&unit->sleep_q, &th->node);
-            linked_list_add_tail(&unit->active_q, &th->node);
+            linked_list_add_tail(&unit->ready_q, &th->node);
             __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_ACQUIRE);
+        }
+        else
+        {
+            sleeping++;
         }
 
         th->slept += period;
 
         node = next_node;
     }
+
+    return(sleeping != 0);
 }
 
-static inline int sched_unblock_threads
+static int sched_update_blocked_threads
 (
     sched_exec_unit_t *unit,
     uint32_t           period
@@ -136,7 +141,8 @@ static inline int sched_unblock_threads
     list_node_t    *node      = NULL;
     list_node_t    *next_node = NULL;
     sched_thread_t *th        = NULL;
-    int             need_tick = 0;
+    uint32_t        b_sleep   = 0;
+
     node = linked_list_first(&unit->blocked_q);
 
     while(node)
@@ -147,9 +153,9 @@ static inline int sched_unblock_threads
 
         if(!(th->flags & THREAD_BLOCKED))
         {
-            need_tick = 1;
             linked_list_remove(&unit->blocked_q, &th->node);
-            linked_list_add_tail(&unit->active_q, &th->node);
+            linked_list_add_tail(&unit->ready_q, &th->node);
+
             __atomic_and_fetch(&th->flags, 
                            ~THREAD_STATE_MASK,
                             __ATOMIC_ACQUIRE);
@@ -157,24 +163,29 @@ static inline int sched_unblock_threads
         
         else if(th->flags & THREAD_SLEEPING)
         {
-            need_tick = 1;
             th->slept += period;
+            
 
             if(th->slept > th->to_sleep)
             {
                 linked_list_remove(&unit->blocked_q, &th->node);
-                linked_list_add_tail(&unit->active_q, &th->node);
+                linked_list_add_tail(&unit->ready_q, &th->node);
                 __atomic_and_fetch(&th->flags, 
                                     ~THREAD_STATE_MASK,
                                     __ATOMIC_ACQUIRE);
-                
+                                   
             } 
+            else
+            {
+                b_sleep++;
+            }
         }
 
         node = next_node;
     }
 
-    return(need_tick);
+
+    return(b_sleep != 0);
 }
 
 static inline void sched_preempt_thread
@@ -192,7 +203,7 @@ static inline void sched_preempt_thread
     if(unit->current == NULL)
         return;
 
-    /* do not add the idle task to the active_q */
+    /* do not add the idle task to the ready_q */
     if(current->flags & THREAD_BLOCKED)
     {
         linked_list_add_tail(&unit->blocked_q, &current->node);
@@ -207,7 +218,7 @@ static inline void sched_preempt_thread
     }
     else
     {
-        /* Add the pre-empted task to the end of active queue list */
+        /* Add the pre-empted task to the end of ready queue */
         __atomic_and_fetch(&current->flags, 
                            ~THREAD_STATE_MASK,
                             __ATOMIC_ACQUIRE);
@@ -217,7 +228,7 @@ static inline void sched_preempt_thread
                             THREAD_READY, 
                             __ATOMIC_ACQUIRE);
             
-        linked_list_add_tail(&unit->active_q, &current->node);
+        linked_list_add_tail(&unit->ready_q, &current->node);
     }
 }
 
@@ -243,7 +254,7 @@ static inline void sched_switch_to_thread
     spinlock_lock_int(&next->lock, &int_status);
   
     if(next != unit->idle)
-        linked_list_remove(&unit->active_q, &next->node);
+        linked_list_remove(&unit->ready_q, &next->node);
 
     /* Make it current */
     unit->current = next;
@@ -290,13 +301,13 @@ static void sched_resched
     sched_thread_t          *current    = NULL;
     sched_thread_t          *new_thread = NULL;
     list_node_t             *node       = NULL;
-    int                     need_tick  = 1;
+    int                     need_tick  = 0;
 
     spinlock_lock_int(&unit->lock, &int_status);
     current = unit->current;
 
     /* Check if we have new threads that await first
-     * execution
+     * execution and if we do, take one
      */
     spinlock_lock_int(&list_lock, &int_status);
 
@@ -305,7 +316,7 @@ static void sched_resched
     if(new_thread != NULL)
     {
         linked_list_remove(&new_threads, &new_thread->node);
-        linked_list_add_head(&unit->active_q, &new_thread->node);
+        linked_list_add_head(&unit->ready_q, &new_thread->node);
     }
 
     spinlock_unlock_int(&list_lock, int_status);
@@ -314,17 +325,22 @@ static void sched_resched
      * we can update the sleeping threads
      */ 
 
-    if(linked_list_count(&unit->sleep_q) > 0)
-    {
-        if(period > 0)
-            sched_wake_sleeping_threads(unit, period);
-        
-        need_tick = 1;
-    }
+    
+    if(period > 0)
+        need_tick = sched_update_sleeping_threads(unit, period);
 
-    if(unit->current)
+    /* In case current is NULL, we will set the preempt
+     * flag to 1 so that we can force at least the idle
+     * task to begin execution
+     */  
+
+    if(current == NULL)
     {
-        /* See if we need th pre-empt the thread */
+        preempt = 1;
+    }
+    else
+    {
+        /* See if we need to pre-empt the thread */
         spinlock_lock_int(&current->lock, &int_status);
 
         if(current->remain > 0)
@@ -343,32 +359,39 @@ static void sched_resched
 
         spinlock_unlock_int(&current->lock, int_status);
     }
-    /* In case current is NULL, we will set the preempt
-     * flag to 1 so that we can force at least the idle
-     * task to begin execution
-     */  
-    else
-    {
-        preempt = 1;
-    }
 
     /* check if we have threads to unblock */
-    if(sched_unblock_threads(unit, period))
-        need_tick = 1;
 
+    if(sched_update_blocked_threads(unit, period))
+            need_tick = 1;
 
     /* We are pre-empting  */
     if(preempt)
     {
-        next = (sched_thread_t*)linked_list_first(&unit->active_q);
+        next = (sched_thread_t*)linked_list_first(&unit->ready_q);
         
         sched_switch_to_thread(unit, next, iframe);
     }
 
+    /* In case we have more than one thread in the 
+     * ready_q, we will arm the timer to do the
+     * switch 
+     */ 
+    
     if(!need_tick)
-    {
-        need_tick = (linked_list_count(&unit->active_q) > 1);
-    }
+        need_tick = (linked_list_count(&unit->ready_q) > 1);
+
+    /* Check if we have something in the sleep_q 
+     * because sleep_q requires ticks to get emptied
+     */
+
+    if(!need_tick)
+        need_tick = (linked_list_count(&unit->sleep_q) > 0);
+
+    /* In case we need to use timer from pre-emption or
+     * time tracking, enable the timer.
+     * Otherwise, just disable it 
+     */
 
     if(need_tick)
     {
@@ -407,7 +430,7 @@ void sched_unblock_thread(sched_thread_t *th)
     cpu = unit->cpu;
     
     __atomic_and_fetch(&th->flags, ~THREAD_BLOCKED, __ATOMIC_ACQUIRE);
-    
+
     cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, cpu->cpu_id, IPI_RESCHED);
     spinlock_unlock_int(&th->lock, int_status);
 }
@@ -479,7 +502,7 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     /* tell the scheduler unit on which cpu it belongs */
     unit->cpu = cpu;
 
-    linked_list_init(&unit->active_q);
+    linked_list_init(&unit->ready_q);
     linked_list_init(&unit->blocked_q);
     linked_list_init(&unit->sleep_q);
     linked_list_init(&unit->dead_q);
@@ -490,9 +513,9 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     unit->timer_dev = timer;
     unit->timer_on  = 0;
 
-    /* Initialize the idle task
+    /* Initialize the idle thread
      * The scheduler will automatically start executing 
-     * it in case there are no other tasks in the active_q
+     * it in case there are no other threads in the ready_q
      */
 
     sched_init_thread(unit->idle, sched_idle_loop, PAGE_SIZE, 255, unit);
