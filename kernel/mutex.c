@@ -8,7 +8,7 @@
                                 ((uint8_t*)(x) -  \
                                 offsetof(sched_thread_t, pend_node)))
 
-mutex_t *mtx_create()
+mutex_t *mtx_create(int options)
 {
     mutex_t *mtx = NULL;
 
@@ -17,6 +17,8 @@ mutex_t *mtx_create()
     if(mtx == NULL)
         return(NULL);
     
+    mtx->opts = options;
+
     __atomic_store_n(&mtx->rlevel, 0, __ATOMIC_RELEASE);
     __atomic_store_n(&mtx->owner, 0, __ATOMIC_RELEASE);
     linked_list_init(&mtx->pendq);
@@ -51,6 +53,8 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
                                        __ATOMIC_RELAXED
                                        ))
         {
+            /* set recursion level to 1 */
+            __atomic_store_n(&mtx->rlevel, 1, __ATOMIC_RELEASE);
             spinlock_unlock_int(&mtx->lock, int_state);
             return(0);
         }
@@ -66,9 +70,13 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
                                        __ATOMIC_RELAXED
                                        ))
         {
+            /* if we are already the owner, increase the recursion level */
+            if(mtx->opts & MUTEX_RECUSRIVE)
+                __atomic_add_fetch(&mtx->rlevel, 1, __ATOMIC_ACQUIRE);
             spinlock_unlock_int(&mtx->lock, int_state);
             return(0);
         }
+
 
         /* if we the thread has the sleeping flag set,
          * then we already timed out so we will just exit 
@@ -147,6 +155,16 @@ int mtx_release(mutex_t *mtx)
         return(-1);
     }
 
+    if(mtx->opts & MUTEX_RECUSRIVE)
+    {
+        /* reduce the recursion level */
+        if(__atomic_sub_fetch(&mtx->rlevel, 1, __ATOMIC_RELEASE) > 0)
+        {
+            spinlock_unlock_int(&mtx->lock, int_state);
+            return(0);
+        }
+    }
+    
     /* Get the first pending task */
     pend_node = linked_list_first(&mtx->pendq);
 
