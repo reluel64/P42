@@ -14,6 +14,7 @@
 #include <vmmgr.h>
 #include <platform.h>
 #include <intc.h>
+#include <pfmgr.h>
 
 typedef struct pagemgr_root_t
 {

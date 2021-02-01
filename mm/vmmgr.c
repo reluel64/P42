@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <utils.h>
 #include <cpu.h>
+#include <platform.h>
+#include <pfmgr.h>
 
 extern virt_size_t __max_linear_address(void);
 

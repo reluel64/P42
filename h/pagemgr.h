@@ -2,9 +2,9 @@
 #define pagemgr_h
 
 #include <stdint.h>
-#include <pfmgr.h>
 #include <defs.h>
 #include <spinlock.h>
+#include <platform.h>
 #define REMAP_TABLE_VADDR (0xFFFFFFFFFFE00000)
 #define REMAP_TABLE_SIZE  (0x200000)
 
@@ -20,14 +20,6 @@
 #define PAGE_WRITE_BACK      (1 << 10)
 #define PAGE_WRITE_PROTECT   (1 << 11)
 
-#define PAT_UNCACHEABLE       (0x0)
-#define PAT_WRITE_COMBINING   (0x1)
-#define PAT_WRITE_THROUGH     (0x4)
-#define PAT_WRITE_PROTECTED   (0x5)
-#define PAT_WRITE_BACK        (0x6)
-#define PAT_UNCACHED          (0x7)
-
-#define PAT_MSR               (0x277)
 
 typedef struct pagemgr_ctx_t
 {
@@ -38,32 +30,7 @@ typedef struct pagemgr_ctx_t
 }pagemgr_ctx_t;
 
 
-typedef struct pat_bits_t
-{
-    uint32_t pa0:3;
-    uint32_t rsrvd0:5;
-    uint32_t pa1:3;
-    uint32_t rsrvd1:5;
-    uint32_t pa2:3;
-    uint32_t rsrvd2:5;
-    uint32_t pa3:3;
-    uint32_t rsrvd3:5;
-    uint32_t pa4:3;
-    uint32_t rsrvd4:5;
-    uint32_t pa5:3;
-    uint32_t rsrvd5:5;
-    uint32_t pa6:3;
-    uint32_t rsrvd6:5;
-    uint32_t pa7:3;
-    uint32_t rsrvd7:5;
-    
-}__attribute__ ((packed)) pat_bits_t;
 
-typedef union pat_t
-{
-    uint64_t pat;
-    pat_bits_t fields;
-}__attribute__ ((packed)) pat_t;
 
 int         pagemgr_init(pagemgr_ctx_t *ctx);
 virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr);

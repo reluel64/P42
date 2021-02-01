@@ -22,7 +22,30 @@
 
 #define SCHED_MAX_PRIORITY 255
 
-typedef struct sched_thread_t sched_thread_t;
+typedef struct sched_exec_unit_t sched_exec_unit_t;
+
+typedef struct sched_thread_t
+{
+    list_node_t        node;        /* node in the queue                             */
+    list_node_t        pend_node;   /* node for synchronization                      */
+    uint32_t           flags;       /* thread flags                                  */
+    void              *owner;       /* owner of the thread - if kernel, owner = null */
+    void              *context;     /* platform dependent context                    */
+    uint32_t           id;          /* thread id                                     */
+    uint16_t           prio;        /* priority                                      */
+    virt_addr_t        stack;       /* start of memory allocated for the stack       */
+    virt_size_t        stack_sz;    /* stack size                                    */
+    void              *entry_point; /* entry point of the thread                     */
+    void              *pv;          /* parameter for the entry point of the thread   */
+    sched_exec_unit_t *unit;        /* execution unit on which the thread is running */
+
+    spinlock_t        lock;         /* lock to protect the structure members         */
+    uint32_t          slept;        /* sleeping cursor                               */
+    uint32_t          to_sleep;     /* amount in ms to sleep                         */
+    uint32_t          remain;       /* reamining time before task switch             */
+    void              *rval;        /* return value */
+}sched_thread_t;
+
 
 typedef struct sched_exec_unit_t
 {
@@ -37,7 +60,7 @@ typedef struct sched_exec_unit_t
     list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
     list_head_t       blk_tm_q;    /* queue of blocked with timeout queue           */
     sched_thread_t   *current;      /* current thread                                */
-    sched_thread_t   *idle;         /* our dearest idle task                         */
+    sched_thread_t    idle;         /* our dearest idle task                         */
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     device_t         *timer_dev;    /* timer device which is connected to this unit  */
@@ -62,27 +85,7 @@ typedef struct sched_exec_unit_t
                                      */
 }sched_exec_unit_t;
 
-typedef struct sched_thread_t
-{
-    list_node_t        node;        /* node in the queue                             */
-    list_node_t        pend_node;   /* node for synchronization                      */
-    uint32_t           flags;       /* thread flags                                  */
-    void              *owner;       /* owner of the thread - if kernel, owner = null */
-    void              *context;     /* platform dependent context                    */
-    uint32_t           id;          /* thread id                                     */
-    uint16_t           prio;        /* priority                                      */
-    virt_addr_t        stack;       /* start of memory allocated for the stack       */
-    virt_size_t        stack_sz;    /* stack size                                    */
-    void              *entry_point; /* entry point of the thread                     */
-    void              *pv;          /* parameter for the entry point of the thread   */
-    sched_exec_unit_t *unit;        /* execution unit on which the thread is running */
 
-    spinlock_t        lock;         /* lock to protect the structure members         */
-    uint32_t          slept;        /* sleeping cursor                               */
-    uint32_t          to_sleep;     /* amount in ms to sleep                         */
-    uint32_t          remain;       /* reamining time before task switch             */
-    void              *rval;        /* return value */
-}sched_thread_t;
 
 
 int sched_cpu_init(device_t *timer, cpu_t *cpu);
