@@ -26,7 +26,7 @@ typedef struct pagemgr_root_t
 
 /* TODO: SUPPORT GUARD PAGES */
 
-typedef struct
+typedef struct pagemgr_path_t
 {
     uint16_t      pml5_ix;
     uint16_t      pml4_ix;
@@ -447,7 +447,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
     pdpte_bits_t pdpte;
     pde_bits_t   pde;
     pte_bits_t   pte;
-    phys_addr_t  paddr        = (uint64_t)&BOOTSTRAP_END;
+    phys_addr_t  paddr        = 0;
     phys_addr_t  phys_addr    = 0;
     virt_addr_t  vaddr        = 0;
     virt_addr_t  vbase        = 0;
@@ -460,8 +460,11 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
     uint16_t     pde_ix       = -1;
     uint16_t     pte_ix       = -1;
     uint8_t      krnl_tbl_ok  = 0;
-    uint8_t      pml5_support = page_manager.pml5_support;
+    uint8_t      pml5_support = 0;
     
+    paddr = (uint64_t)&BOOTSTRAP_END;
+    pml5_support = page_manager.pml5_support;
+
     /* setup the top most page table */    
     work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(ctx->page_phys_base);
     memset(work_ptr, 0, PAGE_SIZE);
@@ -823,6 +826,12 @@ static inline void pagemgr_invalidate(virt_addr_t addr)
 
 }
 
+static inline void pagemgr_invalidate_all(void)
+{
+    __write_cr3(__read_cr3());
+    cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
+}
+
 static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
     phys_size_t     used_pf = 0;
@@ -941,7 +950,7 @@ static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, v
                 {
                     memset(path->pt, 0, PAGE_SIZE);
                     clear = 0;
-                    pagemgr_invalidate(virt);
+                    //pagemgr_invalidate(virt);
                 }
             }
         }
@@ -1034,14 +1043,14 @@ static phys_size_t pagemgr_alloc_or_map_cb
         {
             if(path->virt_off == 0)
             {
-                pagemgr_invalidate(virt);
+                //pagemgr_invalidate(virt);
                 path->virt_off += PAGE_SIZE;
                 continue;
             }
             else if(path->virt_off + PAGE_SIZE >= path->req_len)
             {
                 path->virt_off += PAGE_SIZE;
-                pagemgr_invalidate(virt);
+                //pagemgr_invalidate(virt);
                 break;
             }
         }
@@ -1097,7 +1106,7 @@ static phys_size_t pagemgr_alloc_or_map_cb
         if(pagemgr_attr_translate(&path->pt[path->pt_ix], path->attr))
             return(0);
             
-        pagemgr_invalidate(virt);
+        //pagemgr_invalidate(virt);
 
         path->virt_off += PAGE_SIZE;
         used_pf++;
@@ -1170,7 +1179,7 @@ static int pagemgr_free_or_unmap_cb
                 path->pt[path->pt_ix].bits = 0;
 
                 /* Make sure that this entry is flushed from TLB */
-                pagemgr_invalidate(virt);
+                //pagemgr_invalidate(virt);
                 path->virt_off += PAGE_SIZE;
                 continue;
             }
@@ -1180,7 +1189,7 @@ static int pagemgr_free_or_unmap_cb
                 page_count++;
                 path->pt[path->pt_ix].bits = 0;
                 /* Make sure that this entry is flushed from TLB */
-                pagemgr_invalidate(virt);
+                //pagemgr_invalidate(virt);
 
                 path->virt_off += PAGE_SIZE;
                 continue;
@@ -1190,7 +1199,7 @@ static int pagemgr_free_or_unmap_cb
              */ 
             else
             {
-                pagemgr_invalidate(virt);
+                //pagemgr_invalidate(virt);
                 *phys = start_phys;
                 *count = page_count;
                 return(1);
@@ -1220,11 +1229,13 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
 {
     int        ret  =  0;
     virt_size_t virt_off = 0;
+
     /* Check if we have page path already built */
+    
     PAGE_PATH_RESET(path);
-
+    
     ret = pagemgr_check_page_path(path);
-
+    
     /* save the offset before reseting the path */
     virt_off = path->virt_off;
 
@@ -1236,10 +1247,10 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
 
     if(ret == 0)
         return(0);
-
+    
     ret = pfmgr->alloc(PAGE_SIZE, ALLOC_CB_STOP, 
                        pagemgr_alloc_pages_cb, (void*)path);
-
+    
     if(ret == -1 || path->req_len > path->virt_off)
         return(-1);
 
@@ -1289,7 +1300,7 @@ virt_addr_t pagemgr_map
     pg_frames     = length / PAGE_SIZE;
 
     pagemgr_alloc_or_map_cb(phys, pg_frames, &path);
-    
+    pagemgr_invalidate_all();
     spinlock_unlock_int(&ctx->lock, int_status);
     
     return(virt);
@@ -1334,20 +1345,21 @@ virt_addr_t pagemgr_alloc
     PAGE_PATH_RESET(&path);
 
     pg_frames = length / PAGE_SIZE;
-
+    
     ret = pfmgr->alloc(pg_frames, 0, 
                        (alloc_cb)pagemgr_alloc_or_map_cb, 
                        (void*)&path);    
-
+    
     if(ret < 0)
     {
         kprintf("NO MORE BMP\n");
         spinlock_unlock_int(&ctx->lock, int_status);
         pagemgr_free(ctx, virt, path.virt_off);
+        pagemgr_invalidate_all();
         kprintf("RELEASED\n");
         return(0);
     }
-
+    pagemgr_invalidate_all();
     spinlock_unlock_int(&ctx->lock, int_status);
 
     return(virt);
@@ -1387,7 +1399,7 @@ int pagemgr_attr_change
     
     ret = pagemgr_alloc_or_map_cb(0, pg_frames, &path) == pg_frames;
     ret = ret ? 0 : -1;
-
+    pagemgr_invalidate_all();
     spinlock_unlock_int(&ctx->lock, int_status);
 
     return((int)ret);
@@ -1430,7 +1442,7 @@ int pagemgr_free
     PAGE_PATH_RESET(&path);
     
     pfmgr->dealloc(pagemgr_free_or_unmap_cb, &path);
-
+    pagemgr_invalidate_all();
     spinlock_unlock_int(&ctx->lock, int_status);
 
     return(0);
@@ -1477,6 +1489,8 @@ int pagemgr_unmap
 
     while(pagemgr_free_or_unmap_cb(&dummy_phys, &dummy_count, &path));
 
+    pagemgr_invalidate_all();
+
     spinlock_unlock_int(&ctx->lock, int_status);
     
     return(0);
@@ -1516,7 +1530,7 @@ static int pagemgr_per_cpu_invl_handler
     int status = 0;
     
     
- //   kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
+   // kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
 
     __write_cr3(__read_cr3());
     return(0);

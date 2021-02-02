@@ -113,7 +113,7 @@ static spinlock_t lock = {.lock = 0
 
 static void* liballoc_memset(void* s, int c, size_t n)
 {
-    unsigned int i;
+   size_t i;
     for (i = 0; i < n; i++)
         ((char*)s)[i] = c;
 

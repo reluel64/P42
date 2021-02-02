@@ -53,6 +53,7 @@ typedef struct pfmgr_free_range_t
     pfmgr_range_header_t hdr;
     phys_size_t total_pf;
     phys_size_t avail_pf;
+    phys_size_t next_lkup;
     phys_addr_t bmp[0];
 }pfmgr_free_range_t;
 

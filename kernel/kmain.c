@@ -61,11 +61,11 @@ static sched_thread_t th[2];
        if(mtx_acquire(mtx, WAIT_FOREVER))
        kprintf("ERROR\n");
 {
-       kprintf("SLEEPING on CPU %d\n",cpu_id_get());
+    //   kprintf("SLEEPING on CPU %d\n",cpu_id_get());
        sched_sleep(2000);
        // for(uint32_t i = 0; i< UINT32_MAX/4;i++);
         
-        kprintf("DONE\n");
+     //   kprintf("DONE\n");
 
         mtx_release(mtx);
     }
@@ -80,11 +80,11 @@ static void kmain_th_2(void)
         #if 1
         if(mtx_acquire(mtx, 100)==0)
         {
-            kprintf("Hello World on cPU %d\n", cpu_id_get());
+           // kprintf("Hello World on cPU %d\n", cpu_id_get());
         }   
         else
         {
-            kprintf("FAIL\n");
+        //    kprintf("FAIL\n");
            
         }
         mtx_release(mtx);
@@ -92,6 +92,48 @@ static void kmain_th_2(void)
     }
 }
 
+
+static mask_test (void)
+{
+    uint64_t pf_pos = 0;
+    uint64_t pf_ix  = 0;
+    uint64_t mask = 0;
+    uint64_t mask_frames = 0;
+uint64_t comp_mask = 0;
+
+    for(pf_pos = 0; pf_pos < 256; pf_pos++)
+    {
+
+     pf_ix   = pf_pos % PF_PER_ITEM;
+        mask        = 0;
+        mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
+
+    
+        /* Compute the mask */
+       
+        if(mask_frames != PF_PER_ITEM)
+        {
+            for(phys_size_t i = 0; i < mask_frames; i++)
+            {
+                mask |= ((virt_size_t)1 << (i + pf_ix));
+            }
+            comp_mask = (1ull << mask_frames) - 1;
+             comp_mask = (comp_mask << pf_ix);
+        }
+        else
+        {
+            mask = ~(virt_size_t)0;
+            comp_mask = mask;
+        }
+
+        if(mask != comp_mask)
+        {
+           // kprintf("MASKS are not the same\n");
+        }
+
+        kprintf("MASK %x COMP %x\n",mask, comp_mask);
+    }
+}
 
 static void kmain_sys_init(void)
 {
@@ -114,7 +156,7 @@ static void kmain_sys_init(void)
             pciCheckVendor(bus, slot);
         }
     }
-    mtx = mtx_create();
+    mtx = mtx_create(0);
     sched_init_thread(&th[0], kmain_th_1, 0x1000, 0, 0);
 
     /* Enqueue the thread */
@@ -130,8 +172,10 @@ static void kmain_sys_init(void)
     while(1)
     {
         
-
-        sched_sleep(1000);
+      
+//mask_test();
+       
+        //sched_sleep(1000);
         sec++;
 
         if(sec == 60)
@@ -147,6 +191,11 @@ static void kmain_sys_init(void)
             hr++;
         }
         vga_print("HELLO\n");
+
+        vga_print("ALLOC\n");
+          virt_addr_t p = kmalloc(1024ull*1024ull*1024ull*20ull);
+          vga_print("FREE\n");
+         kfree(p);
        // kprintf("HELLO WORLD %d:%d:%d\n",hr,min,sec);
 
     }

@@ -1004,9 +1004,9 @@ virt_addr_t vmmgr_alloc
 
     if(ret_addr == 0)
         ret_addr = from_slot->base;
-
+    
     ret_addr = pagemgr_alloc(&ctx->pagemgr, ret_addr, len, attr);
-
+    
     if(ret_addr == 0)
 	{
         kprintf("PG_ALLOC_FAIL\n");
