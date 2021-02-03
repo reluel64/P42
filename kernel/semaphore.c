@@ -53,7 +53,7 @@ int sem_acquire(semaphore_t *sem, uint32_t wait_ms)
         if(block_flags & THREAD_SLEEPING)
         {
             /* remove the thread from the pendq */
-            linked_list_remove(&sem->pendq, &thread->pend_node);
+            /*linked_list_remove(&sem->pendq, &thread->pend_node);*/
             spinlock_unlock_int(&sem->lock, int_state);
             return(-1);
         }
@@ -92,6 +92,7 @@ int sem_acquire(semaphore_t *sem, uint32_t wait_ms)
 
         /* once the thread is woken up, it would lock again the semaphore */
         spinlock_lock_int(&sem->lock, &int_state);
+        linked_list_remove(&sem->pendq, &thread->pend_node);
     }
     
     __atomic_sub_fetch(&sem->count, 1, __ATOMIC_ACQUIRE);
@@ -124,7 +125,6 @@ int sem_release(semaphore_t *sem)
     thread = PEND_NODE_TO_THREAD(pend_node);
    
     spinlock_lock_int(&thread->lock, &unit_int_state);
-    linked_list_remove(&sem->pendq, pend_node);
     
     __atomic_add_fetch(&sem->count, 1, __ATOMIC_RELAXED);
     spinlock_unlock_int(&thread->lock, unit_int_state);

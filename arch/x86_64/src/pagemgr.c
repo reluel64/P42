@@ -783,7 +783,7 @@ static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
         kprintf("DIED @ %d\n",__LINE__);
         return(0);
     }
-    
+
     pte.bits = phys;
     pte.fields.read_write    = 1;
     pte.fields.present       = 1;

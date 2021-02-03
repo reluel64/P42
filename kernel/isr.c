@@ -172,18 +172,13 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
     spinlock_read_lock_int(&int_lst->lock, &int_status);
 
     node = linked_list_first(&int_lst->head);
-    
+
     while(node)
     {
         intr = (isr_t*)node;
 
         if(intr->ih)
-            status = intr->ih(intr->pv, &inf);
-
-        if(!status)
-        {
-            break;
-        }
+            intr->ih(intr->pv, &inf);
 
         node = linked_list_next(node);
     }
@@ -200,16 +195,13 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
         intr = (isr_t*)node;
 
         if(intr->ih)
-            status = intr->ih(intr->pv, &inf);
+            intr->ih(intr->pv, &inf);
 
-        if(!status)
-        {
-            spinlock_unlock_int(&eoi_lock, int_status);
-            return;
-        }
         node = linked_list_next(node);
     }
 
     spinlock_read_unlock_int(&eoi_lock, int_status);
+
+
 }
 

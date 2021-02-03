@@ -409,7 +409,6 @@ static int pfmgr_lkup_bmp_for_free_pf
                            start_addr,
                            req_pf * PAGE_SIZE))
     {
-       
         /* Start after ISA DMA */
         start_addr = ISA_DMA_MEMORY_LENGTH;
     }
@@ -428,12 +427,6 @@ static int pfmgr_lkup_bmp_for_free_pf
 
         if(mask_frames != PF_PER_ITEM)
         {
-            #if 0
-            for(phys_size_t i = 0; i < mask_frames; i++)
-            {
-                mask |= ((virt_addr_t)1 << (pf_ix + i));            
-            }
-            #endif
             mask = (1ull << mask_frames) - 1;
             mask = (mask << pf_ix);
         }
@@ -441,14 +434,7 @@ static int pfmgr_lkup_bmp_for_free_pf
         {
             mask = ~(virt_addr_t)0;
         }
-#if 0
-        if((1ull<<mask_frames + pf_ix) - (1ull << pf_ix) != mask)
-        {
-            kprintf("MASK_FRAMES %d - %d\n",mask_frames,pf_ix);
-            kprintf("IT'sDIFFERENT 0x%x 0x%x\n", mask, (1ull<<mask_frames + pf_ix) - (1ull << pf_ix) );
-            while(1);
-        }
-#endif
+
         if((freer->bmp[bmp_pos] & mask) == 0)
         {
             if(pf_ret == 0)
@@ -460,6 +446,7 @@ static int pfmgr_lkup_bmp_for_free_pf
         }
         else
         {
+          
             for(phys_size_t i = 0; i < mask_frames; i++)
             {
                 mask = ((virt_addr_t)1 << (pf_ix + i));     
@@ -533,8 +520,8 @@ static int pfmgr_mark_bmp
 
         if(mask_frames != PF_PER_ITEM)
         {
-                mask = (1ull << mask_frames) - 1;
-                mask = (mask << pf_ix);
+            mask = (1ull << mask_frames) - 1;
+            mask = (mask << pf_ix);
         }
         else
         {
@@ -595,14 +582,9 @@ static int pfmgr_clear_bmp
 
         /* Compute the mask */
        
+       
         if(mask_frames != PF_PER_ITEM)
         {
-           #if 0
-            for(phys_size_t i = 0; i < mask_frames; i++)
-            {
-                mask |= ((virt_size_t)1 << (i + pf_ix));
-            }
-            #endif
             mask = (1ull << mask_frames) - 1;
             mask = (mask << pf_ix);
         }
@@ -610,16 +592,6 @@ static int pfmgr_clear_bmp
         {
             mask = ~(virt_size_t)0;
         }
-
-#if 0
-        if(mask != comp_mask)
-        {
-            kprintf("MASKS are not the same\n");
-        }
-     #endif
-       // comp_mask = ~0ull - (1 << pf_ix) + 1;
-
-        //kprintf("MASK %d PF_IX %d res %x COMP %x\n",mask_frames, pf_ix, mask, comp_mask);
 
         if((freer->bmp[bmp_pos] & mask))
         {
@@ -677,9 +649,9 @@ static int pfmgr_alloc(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
         /* help the lookup a bit */
         addr = freer->hdr.base + freer->next_lkup * PAGE_SIZE;
         avail_pf   = req_pf;    
-        
+      
         lkup_sts   = pfmgr_lkup_bmp_for_free_pf(freer, &addr, &avail_pf);
-        
+
         used_pf    = 0;
 
         /* Contiguous pages should be satisfied from one lookup */
@@ -711,8 +683,6 @@ static int pfmgr_alloc(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
             next_addr = (addr - freer->hdr.base) / PAGE_SIZE + used_pf;
 
             freer->next_lkup = next_addr;
-
-            kprintf("avl %d total %d %first_free %d\n",freer->avail_pf, freer->total_pf, freer->next_lkup);
             
         }
 
@@ -896,4 +866,30 @@ int pfmgr_init(void)
 pfmgr_t *pfmgr_get(void)
 {
     return(&pfmgr_interface);
+}
+
+
+int pfmgr_show_free_memory(void)
+{
+    pfmgr_free_range_t *freer = NULL;
+    phys_size_t free_mem = 0;
+    phys_size_t total_mem = 0;
+    freer = linked_list_first(&base.freer);
+    
+    while(freer)
+    {
+
+
+        free_mem += freer->avail_pf;
+        total_mem+=freer->total_pf;
+
+        freer = linked_list_next(&freer->hdr.node);
+    }
+
+    free_mem *= PAGE_SIZE;
+    total_mem *= PAGE_SIZE;
+
+    kprintf("FREE MEMORY %d TOTAL MEMORY %d\n",free_mem, total_mem);
+
+    return(0);
 }

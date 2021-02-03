@@ -55,7 +55,9 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         {
             /* set recursion level to 1 */
             __atomic_store_n(&mtx->rlevel, 1, __ATOMIC_RELEASE);
+        
             spinlock_unlock_int(&mtx->lock, int_state);
+
             return(0);
         }
 
@@ -71,6 +73,8 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
                                        ))
         {
             /* if we are already the owner, increase the recursion level */
+
+
             if(mtx->opts & MUTEX_RECUSRIVE)
                 __atomic_add_fetch(&mtx->rlevel, 1, __ATOMIC_ACQUIRE);
             spinlock_unlock_int(&mtx->lock, int_state);
@@ -85,7 +89,6 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         if(block_flags & THREAD_SLEEPING)
         {
             /* remove the thread from the pendq */
-            linked_list_remove(&mtx->pendq, &thread->pend_node);
             spinlock_unlock_int(&mtx->lock, int_state);
             return(-1);
         }
@@ -120,7 +123,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         sched_yield();
 
         spinlock_lock_int(&mtx->lock, &int_state);
-
+        linked_list_remove(&mtx->pendq, &thread->pend_node); 
     }
 
     return(0);
@@ -164,7 +167,7 @@ int mtx_release(mutex_t *mtx)
             return(0);
         }
     }
-    
+
     /* Get the first pending task */
     pend_node = linked_list_first(&mtx->pendq);
 
@@ -174,11 +177,8 @@ int mtx_release(mutex_t *mtx)
         return(0);
     }
 
-
     thread = PEND_NODE_TO_THREAD(pend_node);
 
-    linked_list_remove(&mtx->pendq, pend_node);
-    
     /* Set the new owner */
     __atomic_store_n(&mtx->owner, thread, __ATOMIC_RELEASE);
     

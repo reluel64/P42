@@ -58,17 +58,18 @@ static sched_thread_t th[2];
 {
     while(1)
     {
-       if(mtx_acquire(mtx, WAIT_FOREVER))
-       kprintf("ERROR\n");
-{
-    //   kprintf("SLEEPING on CPU %d\n",cpu_id_get());
-       sched_sleep(2000);
-       // for(uint32_t i = 0; i< UINT32_MAX/4;i++);
+       if(mtx_acquire(mtx, WAIT_FOREVER) == 0)
+       
+        {
+            kprintf("ERROR\n");
+        kprintf("SLEEPING on CPU %d\n",cpu_id_get());
+        sched_sleep(2000);
+        // for(uint32_t i = 0; i< UINT32_MAX/4;i++);
         
-     //   kprintf("DONE\n");
+        //   kprintf("DONE\n");
 
-        mtx_release(mtx);
-    }
+            mtx_release(mtx);
+        }
     }
 }
 
@@ -80,14 +81,15 @@ static void kmain_th_2(void)
         #if 1
         if(mtx_acquire(mtx, 100)==0)
         {
-           // kprintf("Hello World on cPU %d\n", cpu_id_get());
+            kprintf("Hello World on cPU %d\n", cpu_id_get());
+            mtx_release(mtx);
         }   
         else
         {
-        //    kprintf("FAIL\n");
+            kprintf("FAIL\n");
            
         }
-        mtx_release(mtx);
+        
     #endif
     }
 }
@@ -157,13 +159,13 @@ static void kmain_sys_init(void)
         }
     }
     mtx = mtx_create(0);
-    sched_init_thread(&th[0], kmain_th_1, 0x1000, 0, 0);
+    sched_init_thread(&th[0], kmain_th_1, 0x1000, 100, 0);
 
     /* Enqueue the thread */
     sched_start_thread(&th[0]);
 
 
-    sched_init_thread(&th[1], kmain_th_2, 0x1000, 0, 0);
+    sched_init_thread(&th[1], kmain_th_2, 0x1000, 200, 0);
 
     /* Enqueue the thread */
     sched_start_thread(&th[1]);
@@ -174,8 +176,7 @@ static void kmain_sys_init(void)
         
       
 //mask_test();
-       
-        //sched_sleep(1000);
+        
         sec++;
 
         if(sec == 60)
@@ -190,13 +191,7 @@ static void kmain_sys_init(void)
             sec = 0;
             hr++;
         }
-        vga_print("HELLO\n");
-
-        vga_print("ALLOC\n");
-          virt_addr_t p = kmalloc(1024ull*1024ull*1024ull*20ull);
-          vga_print("FREE\n");
-         kfree(p);
-       // kprintf("HELLO WORLD %d:%d:%d\n",hr,min,sec);
+    
 
     }
 #endif
