@@ -8,6 +8,10 @@
 #include <ioapic.h>
 #include <platform.h>
 #include <apic_timer.h>
+#include <acpi.h>
+#include <serial.h>
+#include <utils.h>
+#define ACPI_MAX_INIT_TABLES   16
 
 extern int pcpu_init(void);
 extern int apic_register(void);
@@ -16,6 +20,25 @@ extern int acpi_mem_mgr_on(void);
 extern int ioapic_register(void);
 extern int pit8254_register(void);
 extern int apic_timer_register(void);
+
+static ACPI_TABLE_DESC      TableArray[ACPI_MAX_INIT_TABLES];
+
+
+int platform_pre_init(void)
+{
+    int status = 0;
+
+    /* init polling console */
+    init_serial();
+
+    /* initialize temporary mapping */
+    pagemgr_boot_temp_map_init();
+    
+    memset(TableArray, 0, sizeof(TableArray));
+    status = AcpiInitializeTables(TableArray, ACPI_MAX_INIT_TABLES, TRUE);
+
+    return(status);
+}
 
 int platform_early_init(void)
 {

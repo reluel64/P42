@@ -17,7 +17,6 @@
 #include <i8254.h>
 #include <apic_timer.h>
 #include <scheduler.h>
-#include <pcpu.h>
 #include <ioapic.h>
 
 extern void __cpu_switch_stack
@@ -27,14 +26,7 @@ extern void __cpu_switch_stack
     virt_addr_t *old_base
 );
 
-extern void __sti();
-extern void __cli();
-extern int  __geti();
-extern void __lidt(idt64_ptr_t *);
-extern void __hlt();
-extern void __pause();
-extern void __cpu_context_restore(void);
-extern void __resched_interrupt(void);
+
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -66,7 +58,7 @@ extern virt_addr_t isr_ec_sz_end;
 
 static volatile int cpu_on = 0;
 static spinlock_t lock;
-static void pcpu_entry_point(void);
+static void cpu_entry_point(void);
 
 static int pcpu_is_bsp(void)
 {
@@ -77,7 +69,7 @@ static int pcpu_is_bsp(void)
     return (!!(apic_base & (1 << 8)));
 }
 
-static uint32_t pcpu_id_get(void)
+uint32_t cpu_id_get(void)
 {
     static uint32_t hi_leaf = 0;
     uint32_t eax = 0;
@@ -128,7 +120,7 @@ static uint32_t pcpu_id_get(void)
     return((ebx >> 24) & 0xFF);
 }
 
-static phys_addr_t pcpu_max_phys_address(void)
+phys_addr_t cpu_phys_max(void)
 {
     uint32_t    eax       = 0;
     uint32_t    ebx       = 0;
@@ -149,7 +141,7 @@ static phys_addr_t pcpu_max_phys_address(void)
     return(phys_addr - 1);
 }
 
-static virt_addr_t pcpu_max_virt_address(void)
+virt_addr_t cpu_virt_max(void)
 {
     uint32_t    eax       = 0;
     uint32_t    ebx       = 0;
@@ -171,7 +163,7 @@ static virt_addr_t pcpu_max_virt_address(void)
 }
 
 
-static int pcpu_idt_entry_encode
+static int cpu_idt_entry_encode
 (
     virt_addr_t ih,
     uint8_t type_attr,
@@ -196,7 +188,7 @@ static int pcpu_idt_entry_encode
     return(0);
 }
 
-static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
+static int cpu_idt_setup(cpu_platform_driver_t *cpu_drv)
 {
     idt64_entry_t      *idt = NULL;
     uint32_t            isr_size = 0;
@@ -246,7 +238,7 @@ static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
             no_ec_ix++;
         }
 
-        pcpu_idt_entry_encode(ih,                              /* interrupt handler              */
+        cpu_idt_entry_encode(ih,                              /* interrupt handler              */
                       GDT_PRESENT_SET(1) |
                       GDT_TYPE_SET(GDT_SYSTEM_INTERUPT_GATE),  /* this is an interrupt           */
                       0,                                       /* no IST                         */
@@ -260,7 +252,7 @@ static int pcpu_idt_setup(cpu_platform_driver_t *cpu_drv)
 
     return(0);
 }
-
+#if 0
 static void pcpu_stack_relocate
 (
     virt_addr_t *new_stack_base,
@@ -330,9 +322,9 @@ static void pcpu_stack_relocate
                        old_stack_base
                       );
 }
+#endif
 
-
-static virt_addr_t pcpu_prepare_trampoline(void)
+static virt_addr_t cpu_prepare_trampoline(void)
 {
     virt_size_t tr_size      = 0;
     uint8_t     *tr_code     = NULL;
@@ -374,12 +366,12 @@ static virt_addr_t pcpu_prepare_trampoline(void)
     nx_on   [0] = pagemgr_nx_support();
     pt_base [0] = __read_cr3();
     stack   [0] = (virt_addr_t)_BSP_STACK_BASE;
-    entry_pt[0] = (virt_addr_t) pcpu_entry_point;
+    entry_pt[0] = (virt_addr_t) cpu_entry_point;
 
     return((virt_addr_t)tr_code);
 }
 
-static int pcpu_bring_cpu_up
+static int cpu_bring_cpu_up
 (
     device_t *issuer,
     uint32_t cpu,
@@ -435,7 +427,7 @@ static int pcpu_bring_cpu_up
     return(-1);
 }
 
-static int pcpu_issue_ipi
+int cpu_issue_ipi
 (
     uint8_t dest,
     uint32_t cpu,
@@ -447,6 +439,17 @@ static int pcpu_issue_ipi
     uint32_t cpu_id = 0;
 
     memset(&ipi, 0, sizeof(ipi_packet_t));
+
+    switch(vector)
+    {
+        case IPI_RESCHED:
+            vector = PLATFORM_RESCHED_VECTOR;
+            break;
+
+        case IPI_INVLPG:
+            vector = PLATFORM_PG_INVALIDATE_VECTOR;
+            break;
+    }
 
     ipi.dest      = dest;
     ipi.level     = IPI_LEVEL_ASSERT;
@@ -463,7 +466,7 @@ static int pcpu_issue_ipi
     return(0);
 }
 
-static int pcpu_ap_start
+int cpu_ap_start
 (
     uint32_t num,
     uint32_t timeout
@@ -480,7 +483,7 @@ static int pcpu_ap_start
     int                    use_x2_apic = 0;
     uint32_t               started_cpu = 1;
 
-    cpu_id = pcpu_id_get();
+    cpu_id = cpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
 
     /* Get the MADT table */
@@ -493,7 +496,7 @@ static int pcpu_ap_start
     }
 
     /* prepare trampoline code */
-    trampoline = pcpu_prepare_trampoline();
+    trampoline = cpu_prepare_trampoline();
 
     if(trampoline == 0)
     {
@@ -544,7 +547,7 @@ static int pcpu_ap_start
                 }
                 else
                 {
-                    pcpu_bring_cpu_up(dev, x2lapic->LocalApicId, timeout);
+                    cpu_bring_cpu_up(dev, x2lapic->LocalApicId, timeout);
                     started_cpu++;
                 }
             }
@@ -566,7 +569,7 @@ static int pcpu_ap_start
                 }
                 else
                 {
-                    pcpu_bring_cpu_up(dev, lapic->Id, timeout);
+                    cpu_bring_cpu_up(dev, lapic->Id, timeout);
                     started_cpu++;
                 }
             }
@@ -587,7 +590,7 @@ static int pcpu_ap_start
     return(0);
 }
 
-static void pcpu_entry_point(void)
+static void cpu_entry_point(void)
 {
     uint32_t cpu_id = 0;
     device_t *timer = NULL;
@@ -629,6 +632,8 @@ static void pcpu_entry_point(void)
     }
 
 }
+
+#if 0
 /* Setup platform specific cpu stuff
  * this should be called in the context of the cpu
  */
@@ -649,8 +654,6 @@ static int pcpu_setup(cpu_t *cpu)
         return(-1);
 
     pcpu = cpu->cpu_pv;
-
-    cpu->context = kcalloc(sizeof(pcpu_context_t), 1);
 
     /* Prepare the GDT */
     gdt_per_cpu_init(cpu->cpu_pv);
@@ -688,8 +691,8 @@ static int pcpu_setup(cpu_t *cpu)
 
     return(0);
 }
-
-static uint32_t pcpu_get_domain
+#endif
+static uint32_t cpu_get_domain
 (
     uint32_t cpu_id
 )
@@ -735,7 +738,7 @@ static uint32_t pcpu_get_domain
     return(domain);
 }
 
-static void pcpu_ctx_save(virt_addr_t iframe, void *th)
+void cpu_ctx_save(virt_addr_t iframe, void *th)
 {
     pcpu_context_t *context = NULL;
     virt_addr_t     reg_loc = 0;
@@ -749,7 +752,7 @@ static void pcpu_ctx_save(virt_addr_t iframe, void *th)
     memcpy(&context->regs, (uint8_t*)reg_loc, sizeof(pcpu_regs_t));
 }
 
-static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
+void cpu_ctx_restore(virt_addr_t iframe, void *th)
 {
 
     pcpu_context_t    *context = NULL;
@@ -776,7 +779,7 @@ static void pcpu_ctx_restore(virt_addr_t iframe, void *th)
     gdt_update_tss(cpu_pv, context->esp0);
 }
 
-static void *pcpu_ctx_init
+void *cpu_ctx_init
 (
     void *thread,
     void *exec_pt,
@@ -823,7 +826,7 @@ static void *pcpu_ctx_init
     return(ctx);
 }
 
-static int pcpu_ctx_destroy(void *thread)
+int cpu_ctx_destroy(void *thread)
 {
     sched_thread_t *th = NULL;
     pcpu_context_t *ctx = NULL;
@@ -851,7 +854,80 @@ static int pcpu_ctx_destroy(void *thread)
 
 static int pcpu_dev_init(device_t *dev)
 {
-    cpu_setup(dev);
+    cpu_t                 *cpu            = NULL;
+    device_t              *apic_dev       = NULL;
+    device_t              *apic_timer_dev = NULL;
+    driver_t              *drv            = NULL;
+    cpu_platform_t        *pcpu           = NULL;
+    cpu_platform_driver_t *pdrv           = NULL;
+    uint32_t               cpu_id         = 0;
+
+    cpu_int_lock();
+
+    drv = devmgr_dev_drv_get(dev);
+    pdrv = devmgr_drv_data_get(drv);
+
+    cpu_id = cpu_id_get();
+    pagemgr_per_cpu_init();
+
+    cpu = kcalloc(sizeof(cpu_t), 1);
+
+    if(cpu == NULL)
+        return(-1);
+
+    pcpu = kcalloc(sizeof(cpu_platform_t), 1);
+
+    if(pcpu == NULL)
+    {
+        kfree(cpu);
+        return(-1);
+    }
+
+    cpu->dev = dev;
+
+    devmgr_dev_data_set(dev, cpu);
+
+    cpu->cpu_id = cpu_id;
+    cpu->proximity_domain = cpu_get_domain(cpu_id);
+
+    cpu->cpu_pv = pcpu;
+
+    /* Prepare the GDT */
+    gdt_per_cpu_init(cpu->cpu_pv);
+
+    /* Load the IDT */
+    __lidt(&pdrv->idt_ptr);
+
+    if(!devmgr_dev_create(&apic_dev))
+    {
+        devmgr_dev_name_set(apic_dev, APIC_DRIVER_NAME);
+        devmgr_dev_type_set(apic_dev, INTERRUPT_CONTROLLER);
+        devmgr_dev_index_set(apic_dev, cpu_id);
+
+        if(devmgr_dev_add(apic_dev, dev))
+        {
+            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
+            return(-1);
+        }
+
+        kprintf("DEV_TYPE %s\n",devmgr_dev_type_get(apic_dev));
+    }
+
+    if(!devmgr_dev_create(&apic_timer_dev))
+    {
+        devmgr_dev_name_set(apic_timer_dev, APIC_TIMER_NAME);
+        devmgr_dev_type_set(apic_timer_dev, TIMER_DEVICE_TYPE);
+        devmgr_dev_index_set(apic_timer_dev, cpu_id);
+
+        if(devmgr_dev_add(apic_timer_dev, apic_dev))
+        {
+            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
+            return(-1);
+        }
+    }
+
+    cpu_int_unlock();
+
     return(0);
 }
 
@@ -888,7 +964,7 @@ static int pcpu_drv_init(driver_t *drv)
                                                VMM_ATTR_WRITABLE);
 
     /* Setup the IDT */
-    pcpu_idt_setup(cpu_drv);
+    cpu_idt_setup(cpu_drv);
 
     /* make IDT read-only */
     vmmgr_change_attrib(NULL, (virt_addr_t)cpu_drv->idt,
@@ -903,7 +979,7 @@ static int pcpu_drv_init(driver_t *drv)
         devmgr_dev_name_set(cpu_bsp,PLATFORM_CPU_NAME);
         devmgr_dev_type_set(cpu_bsp, CPU_DEVICE_TYPE);
 
-        cpu_id = pcpu_id_get();
+        cpu_id = cpu_id_get();
 
         devmgr_dev_index_set(cpu_bsp, cpu_id);
 
@@ -931,29 +1007,19 @@ static int pcpu_drv_init(driver_t *drv)
     return(0);
 }
 
-
-static cpu_api_t cpu_api =
+cpu_t *cpu_current_get(void)
 {
-    .cpu_setup      = pcpu_setup,
-    .cpu_id_get     = pcpu_id_get,
-    .cpu_get_domain = pcpu_get_domain,
-    .stack_relocate = pcpu_stack_relocate,
-    .int_lock       = __cli,
-    .int_unlock     = __sti,
-    .int_check      = __geti,
-    .is_bsp         = pcpu_is_bsp,
-    .start_ap       = pcpu_ap_start,
-    .max_virt_addr  = pcpu_max_virt_address,
-    .max_phys_addr  = pcpu_max_phys_address,
-    .ipi_issue      = pcpu_issue_ipi,
-    .halt           = __hlt,
-    .pause          = __pause,
-    .ctx_save       = pcpu_ctx_save,
-    .ctx_restore    = pcpu_ctx_restore,
-    .ctx_init       = pcpu_ctx_init,
-    .ctx_destroy    = pcpu_ctx_destroy,
-    .resched        = __resched_interrupt
-};
+    device_t *dev = NULL;
+    uint32_t cpu_id = 0;
+    cpu_t    *cpu = NULL;
+
+    cpu_id = cpu_id_get();
+    
+    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, cpu_id);
+    cpu = devmgr_dev_data_get(dev);
+
+    return(cpu);
+}
 
 static driver_t x86_cpu =
 {
@@ -964,18 +1030,12 @@ static driver_t x86_cpu =
     .dev_uninit = NULL,
     .drv_init   = pcpu_drv_init,
     .drv_uninit = NULL,
-    .drv_api    = &cpu_api
+    .drv_api    = NULL
 };
 
-int pcpu_init(void)
+int cpu_init(void)
 {
     devmgr_drv_add(&x86_cpu);
     devmgr_drv_init(&x86_cpu);
-    return(0);
-}
-
-int pcpu_api_register(cpu_api_t **api)
-{
-    *api = &cpu_api;
     return(0);
 }

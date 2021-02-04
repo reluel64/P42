@@ -47,6 +47,9 @@
  */
 #include <vmmgr.h>
 #include <liballoc.h>
+#include <scheduler.h>
+#include <semaphore.h>
+#include <mutex.h>
 #include "acpi.h"
 #include "accommon.h"
 #include "amlcode.h"
@@ -1532,8 +1535,9 @@ ACPI_THREAD_ID
 AcpiOsGetThreadId (
     void)
 {
- 
-    return (0);
+    kprintf("GEt thread ID\n");
+   // return ((ACPI_THREAD_ID)sched_thread_self());
+    return(0);
 }
 
 
@@ -1557,7 +1561,11 @@ AcpiOsExecute (
     ACPI_OSD_EXEC_CALLBACK  Function,
     void                    *Context)
 {
-   
+    sched_thread_t *th = NULL;
+
+    kprintf("INITIALIZING\n");
+   // while(1);
+
     return (0);
 }
 

@@ -5,6 +5,7 @@
 #include <utils.h>
 #include <liballoc.h>
 #include <cpu.h>
+#include <platform.h>
 
 static int timer_dev_loop_callback
 (

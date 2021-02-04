@@ -2,6 +2,7 @@
 #define platformh
 #include <gdt.h>
 #include <cpu.h>
+
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -75,7 +76,40 @@ typedef struct interrupt_frame_t
     uint64_t ss;
 }__attribute__((packed))  interrupt_frame_t;
 
-int pcpu_register(cpu_api_t **api);
+
+typedef struct pcpu_regs_t
+{
+    uint64_t rax;
+    uint64_t rbx;
+    uint64_t rcx;
+    uint64_t rdx;
+    uint64_t rsi;
+    uint64_t rdi;
+    uint64_t r8;
+    uint64_t r9;
+    uint64_t r10;
+    uint64_t r11;
+    uint64_t r12;
+    uint64_t r13;
+    uint64_t r14;
+    uint64_t r15;
+    uint64_t rbp;
+}__attribute__((packed))  pcpu_regs_t;
+
+typedef struct pcpu_context_t
+{
+    uint64_t          dseg;
+    uint64_t          addr_spc;
+    pcpu_regs_t       regs;
+    interrupt_frame_t iframe;
+    
+    /* below should go things that 
+     * do not need to be popped from the stack 
+     */
+    
+    uint64_t          esp0;
+}__attribute__((packed))  pcpu_context_t;
+
 
 extern void        __wrmsr(uint64_t reg, uint64_t val);
 extern uint64_t    __rdmsr(uint64_t msr);
@@ -104,6 +138,24 @@ extern void        __cpuid
     uint32_t *ecx,
     uint32_t *edx
 );
+
+extern void __sti();
+extern void __cli();
+extern int  __geti();
+extern void __lidt(idt64_ptr_t *);
+extern void __hlt();
+extern void __pause();
+extern void __cpu_context_restore(void);
+
+
+#define cpu_halt        __hlt
+#define cpu_pause       __pause
+#define cpu_int_lock    __cli
+#define cpu_int_unlock  __sti
+#define cpu_int_check   __geti
+
+
+int platform_pre_init(void);
 int platform_early_init(void);
 int platform_init(void);
 #endif

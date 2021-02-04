@@ -4,7 +4,7 @@
 
 #include <spinlock.h>
 #include <cpu.h>
-
+#include <platform.h>
 void spinlock_init(spinlock_t *s)
 {
     s->lock       = 0;

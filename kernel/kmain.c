@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <serial.h>
+
 #include <utils.h>
 #include <pfmgr.h>
 #include <pagemgr.h>
@@ -51,92 +51,6 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
     } return (vendor);
 }
 
-mutex_t *mtx = NULL;
-static sched_thread_t th[2];
-
- void kmain_th_1(void)
-{
-    while(1)
-    {
-       if(mtx_acquire(mtx, WAIT_FOREVER) == 0)
-       
-        {
-            kprintf("ERROR\n");
-        kprintf("SLEEPING on CPU %d\n",cpu_id_get());
-        sched_sleep(2000);
-        // for(uint32_t i = 0; i< UINT32_MAX/4;i++);
-        
-        //   kprintf("DONE\n");
-
-            mtx_release(mtx);
-        }
-    }
-}
-
-static void kmain_th_2(void)
-{
-    int i = 0;
-    while(1)
-    {
-        #if 1
-        if(mtx_acquire(mtx, 100)==0)
-        {
-            kprintf("Hello World on cPU %d\n", cpu_id_get());
-            mtx_release(mtx);
-        }   
-        else
-        {
-            kprintf("FAIL\n");
-           
-        }
-        
-    #endif
-    }
-}
-
-
-static mask_test (void)
-{
-    uint64_t pf_pos = 0;
-    uint64_t pf_ix  = 0;
-    uint64_t mask = 0;
-    uint64_t mask_frames = 0;
-uint64_t comp_mask = 0;
-
-    for(pf_pos = 0; pf_pos < 256; pf_pos++)
-    {
-
-     pf_ix   = pf_pos % PF_PER_ITEM;
-        mask        = 0;
-        mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
-
-    
-        /* Compute the mask */
-       
-        if(mask_frames != PF_PER_ITEM)
-        {
-            for(phys_size_t i = 0; i < mask_frames; i++)
-            {
-                mask |= ((virt_size_t)1 << (i + pf_ix));
-            }
-            comp_mask = (1ull << mask_frames) - 1;
-             comp_mask = (comp_mask << pf_ix);
-        }
-        else
-        {
-            mask = ~(virt_size_t)0;
-            comp_mask = mask;
-        }
-
-        if(mask != comp_mask)
-        {
-           // kprintf("MASKS are not the same\n");
-        }
-
-        kprintf("MASK %x COMP %x\n",mask, comp_mask);
-    }
-}
-
 static void kmain_sys_init(void)
 {
     int hr = 0;
@@ -158,19 +72,8 @@ static void kmain_sys_init(void)
             pciCheckVendor(bus, slot);
         }
     }
-    mtx = mtx_create(0);
-    sched_init_thread(&th[0], kmain_th_1, 0x1000, 100, 0);
 
-    /* Enqueue the thread */
-    sched_start_thread(&th[0]);
-
-
-    sched_init_thread(&th[1], kmain_th_2, 0x1000, 200, 0);
-
-    /* Enqueue the thread */
-    sched_start_thread(&th[1]);
-
-#if 1
+#if 0
     while(1)
     {
         
@@ -204,16 +107,9 @@ static void kmain_sys_init(void)
 
 void kmain()
 {
-    
-    /*register CPU API */
-    cpu_api_register();
 
-    /* init polling console */
-    init_serial();
+    platform_pre_init();
 
-    /* initialize temporary mapping */
-    pagemgr_boot_temp_map_init();
-    
     /* initialize early page frame manager */
     pfmgr_early_init();
  

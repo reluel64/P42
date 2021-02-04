@@ -97,7 +97,6 @@ int sched_init_thread
     virt_size_t stack_sz,
     uint32_t    prio,
     void *pv
-    
 );
 int sched_start_thread(sched_thread_t *th);
 sched_thread_t *sched_thread_self(void);

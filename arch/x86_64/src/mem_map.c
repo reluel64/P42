@@ -8,13 +8,13 @@
 #include <defs.h>
 
 
-#define ACPI_MAX_INIT_TABLES   16
+
 #undef  MEM_MAP_TEST_CALLBACK 
 extern uint32_t mem_map_addr; /* address of the multiboot header */
 extern uint32_t mem_map_sig; /* multiboot header presence */
 
 
-static ACPI_TABLE_DESC      TableArray[ACPI_MAX_INIT_TABLES];
+
 static int numa_check_init = -1;
 
 
@@ -31,9 +31,6 @@ static void mem_map_numa_check_init(void)
 
     if(numa_check_init == -1)
     {
-        memset(TableArray, 0, sizeof(TableArray));
-        status = AcpiInitializeTables(TableArray, ACPI_MAX_INIT_TABLES, TRUE);
-
         if(status != AE_OK)
         {
             numa_check_init = 0;

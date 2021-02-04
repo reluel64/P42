@@ -8,22 +8,35 @@
                                 ((uint8_t*)(x) -  \
                                 offsetof(sched_thread_t, pend_node)))
 
-semaphore_t *sem_create(uint32_t init_val)
+sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count)
 {
-    semaphore_t *sem = NULL;
-
-    sem = kcalloc(1, sizeof(semaphore_t));
 
     if(sem == NULL)
         return(NULL);
-    
+
+    sem->max_count = max_count;
+
     __atomic_store_n(&sem->count, init_val, __ATOMIC_RELEASE);
+
     linked_list_init(&sem->pendq);
+
     spinlock_init(&sem->lock);
+
     return(sem);
 }
 
-int sem_acquire(semaphore_t *sem, uint32_t wait_ms)
+sem_t *sem_create(uint32_t init_val, uint32_t max_count)
+{
+    sem_t *sem = NULL;
+
+    sem = kcalloc(1, sizeof(sem_t));
+
+    return(sem_init(sem, init_val, max_count));
+}
+
+
+
+int sem_acquire(sem_t *sem, uint32_t wait_ms)
 {
     int int_state = 0;
     int th_int_state = 0;
@@ -102,7 +115,7 @@ int sem_acquire(semaphore_t *sem, uint32_t wait_ms)
     return(0);
 }
 
-int sem_release(semaphore_t *sem)
+int sem_release(sem_t *sem)
 {
     int int_state = 0;
     int unit_int_state = 0;
@@ -112,6 +125,10 @@ int sem_release(semaphore_t *sem)
     list_node_t    *pend_node = NULL;
     
     spinlock_lock_int(&sem->lock, &int_state);
+
+    if(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) < sem->max_count)
+        __atomic_add_fetch(&sem->count, 1, __ATOMIC_RELEASE);
+    
 
     /* Get the first pending task */
     pend_node = linked_list_first(&sem->pendq);
@@ -126,7 +143,7 @@ int sem_release(semaphore_t *sem)
    
     spinlock_lock_int(&thread->lock, &unit_int_state);
     
-    __atomic_add_fetch(&sem->count, 1, __ATOMIC_RELAXED);
+    
     spinlock_unlock_int(&thread->lock, unit_int_state);
 
     sched_unblock_thread(thread);
