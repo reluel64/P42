@@ -62,5 +62,5 @@
 
 #define ACPI_USE_NATIVE_DIVIDE
 #define ACPI_USE_NATIVE_MATH64
-
+#define ACPI_SINGLE_THREADED
 #endif /* __ACQNX_H__ */

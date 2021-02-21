@@ -13,6 +13,8 @@
 
 extern virt_size_t __max_linear_address(void);
 
+#define VMM_SLOT_SIZE (PAGE_SIZE)
+
 #define VIRT_START_IN_BLOCK(virt, fblock)  ((fblock)->base <= (virt)) && \
       (((fblock)->base + (fblock)->length) >= ((virt)))
 
@@ -21,12 +23,18 @@ extern virt_size_t __max_linear_address(void);
                                 (fblock)->length, \
                                 (virt), (len))
 
-#define NODE_TO_FREE_DESC(node) ((vmmgr_free_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
-#define NODE_TO_RSRVD_DESC(node) ((vmmgr_rsrvd_mem_t*)(((uint8_t*)(node)) + (sizeof(list_node_t))))
+
+
+#define ENTRY_TO_HEADER(entry)         (void*)(((virt_addr_t)(entry)) - \
+                                              (((virt_addr_t)(entry)) %  \
+                                              PAGE_SIZE ))
+
+
+
 #define VMM_RSRVD_OFFSET    (0x0)
 #define VMM_FREE_OFFSET     (PAGE_SIZE)
 
-static vmmgr_ctx_t vmmgr_kernel_ctx;
+static vmmgr_ctx_t kernel_ctx;
 
 static inline int vmmgr_split_free_block
 (
@@ -52,10 +60,10 @@ void vmmgr_list_entries()
     vmmgr_free_mem_hdr_t *fh = NULL;
     vmmgr_rsrvd_mem_hdr_t *rh = NULL;
 
-    kprintf("FREE_DESC_PER_PAGE %d\n",vmmgr_kernel_ctx.free_ent_per_page);
-    kprintf("RSRV_DESC_PER_PAGE %d\n",vmmgr_kernel_ctx.rsrvd_ent_per_page);
+    kprintf("FREE_DESC_PER_PAGE %d\n",kernel_ctx.free_per_slot);
+    kprintf("RSRV_DESC_PER_PAGE %d\n",kernel_ctx.rsrvd_per_slot);
 
-    node = linked_list_first(&vmmgr_kernel_ctx.free_mem);
+    node = linked_list_first(&kernel_ctx.free_mem);
 
     kprintf("----LISTING FREE RANGES----\n");
 
@@ -65,9 +73,9 @@ void vmmgr_list_entries()
 
         next_node = linked_list_next(node);
 
-        for(uint16_t i = 0; i < vmmgr_kernel_ctx.free_ent_per_page; i++)
+        for(uint16_t i = 0; i < kernel_ctx.free_per_slot; i++)
         {
-            fmem  = &fh->fmem[i];
+            fmem  = &fh->array[i];
 
             if(fmem->base != 0  && fmem->length != 0)
                 kprintf("BASE 0x%x LENGTH 0x%x\n",fmem->base,fmem->length);
@@ -76,7 +84,7 @@ void vmmgr_list_entries()
         node = next_node;
     }
 #if 1
-    node = linked_list_first(&vmmgr_kernel_ctx.rsrvd_mem);
+    node = linked_list_first(&kernel_ctx.rsrvd_mem);
 
     kprintf("----LISTING RESERVED RANGES----\n");
 
@@ -85,9 +93,9 @@ void vmmgr_list_entries()
         next_node = linked_list_next(node);
         rh = (vmmgr_rsrvd_mem_hdr_t*)node;
 
-        for(uint16_t i = 0; i < vmmgr_kernel_ctx.rsrvd_ent_per_page; i++)
+        for(uint16_t i = 0; i < kernel_ctx.rsrvd_per_slot; i++)
         {
-            rsrvd  = &rh->rsrvd[i];
+            rsrvd  = &rh->array[i];
             if(rsrvd->base != 0  && rsrvd->length != 0)
                 kprintf("BASE 0x%x LENGTH 0x%x\n",rsrvd->base,rsrvd->length);
         }
@@ -104,32 +112,37 @@ int vmmgr_init(void)
 
     virt_addr_t           vmmgr_base  = 0;
     virt_addr_t           vmmgr_max = 0;
+    uint32_t              offset  = 0;
 
     vmmgr_max = cpu_virt_max();
 
-    memset(&vmmgr_kernel_ctx, 0, sizeof(vmmgr_ctx_t));
+    memset(&kernel_ctx, 0, sizeof(vmmgr_ctx_t));
     
-    if(pagemgr_init(&vmmgr_kernel_ctx.pagemgr) == -1)
+    if(pagemgr_init(&kernel_ctx.pagemgr) == -1)
         return(-1);
 
     vmmgr_base = (~vmmgr_base) - (vmmgr_max >> 1);
 
     kprintf("Initializing Virtual Memory Manager BASE - 0x%x\n",vmmgr_base);
 
-    vmmgr_kernel_ctx.vmmgr_base = vmmgr_base;
+    kernel_ctx.vmmgr_base = vmmgr_base;
 
-    linked_list_init(&vmmgr_kernel_ctx.free_mem);
-    linked_list_init(&vmmgr_kernel_ctx.rsrvd_mem);
-    spinlock_init(&vmmgr_kernel_ctx.lock);
+    linked_list_init(&kernel_ctx.free_mem);
+    linked_list_init(&kernel_ctx.rsrvd_mem);
+    spinlock_init(&kernel_ctx.lock);
 
-    rh = (vmmgr_rsrvd_mem_hdr_t*)pagemgr_alloc(&vmmgr_kernel_ctx.pagemgr,
-                                                vmmgr_kernel_ctx.vmmgr_base + VMM_RSRVD_OFFSET,
-                                                PAGE_SIZE,
+    rh = (vmmgr_rsrvd_mem_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
+                                                kernel_ctx.vmmgr_base + 
+                                                offset,
+                                                VMM_SLOT_SIZE,
                                                 PAGE_WRITABLE | PAGE_WRITE_THROUGH);
 
-    fh  = (vmmgr_free_mem_hdr_t*)pagemgr_alloc(&vmmgr_kernel_ctx.pagemgr,
-                                                vmmgr_kernel_ctx.vmmgr_base + VMM_FREE_OFFSET,
-                                                PAGE_SIZE,
+    offset += VMM_SLOT_SIZE;
+
+    fh  = (vmmgr_free_mem_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
+                                                kernel_ctx.vmmgr_base + 
+                                                offset,
+                                                VMM_SLOT_SIZE,
                                                 PAGE_WRITABLE | PAGE_WRITE_THROUGH);
 
     kprintf("rsrvd_start 0x%x\n", rh);
@@ -138,27 +151,27 @@ int vmmgr_init(void)
     if(rh == NULL || fh == NULL)
         return(-1);
 
-    memset(rh, 0, PAGE_SIZE);
-    memset(fh, 0, PAGE_SIZE);
+    memset(rh, 0, VMM_SLOT_SIZE);
+    memset(fh, 0, VMM_SLOT_SIZE);
     
-    linked_list_add_head(&vmmgr_kernel_ctx.rsrvd_mem, &rh->node);
-    linked_list_add_head(&vmmgr_kernel_ctx.free_mem, &fh->node);
+    linked_list_add_head(&kernel_ctx.rsrvd_mem, &rh->node);
+    linked_list_add_head(&kernel_ctx.free_mem, &fh->node);
 
     /* How many free entries can we store per page */
-    vmmgr_kernel_ctx.free_ent_per_page = (PAGE_SIZE - sizeof(vmmgr_free_mem_hdr_t)) /
+    kernel_ctx.free_per_slot = (PAGE_SIZE - sizeof(vmmgr_free_mem_hdr_t)) /
                                               sizeof(vmmgr_free_mem_t);
 
     /* How many reserved entries can we store per page */
-    vmmgr_kernel_ctx.rsrvd_ent_per_page = (PAGE_SIZE - sizeof(vmmgr_rsrvd_mem_hdr_t)) /
+    kernel_ctx.rsrvd_per_slot = (PAGE_SIZE - sizeof(vmmgr_rsrvd_mem_hdr_t)) /
                                                 sizeof(vmmgr_rsrvd_mem_t);
 
     /* Get the start of the array */
 
-    fh->fmem[0].base = vmmgr_kernel_ctx.vmmgr_base;
-    fh->fmem[0].length = (((uintptr_t)-1) - fh->fmem->base)+1;
+    fh->array[0].base = kernel_ctx.vmmgr_base;
+    fh->array[0].length = (((uintptr_t)-1) - fh->array[0].base)+1;
 
-    fh->avail = vmmgr_kernel_ctx.free_ent_per_page ;
-    rh->avail = vmmgr_kernel_ctx.rsrvd_ent_per_page;
+    fh->avail = kernel_ctx.free_per_slot ;
+    rh->avail = kernel_ctx.rsrvd_per_slot;
  
     /* Start reserving entries that 
      * must remain in virtual memory 
@@ -166,19 +179,19 @@ int vmmgr_init(void)
      * */
 
     /* Reserve kernel image - only the higher half */
-    vmmgr_reserve(&vmmgr_kernel_ctx,
+    vmmgr_reserve(&kernel_ctx,
                   _KERNEL_VMA     + _BOOTSTRAP_END,
                   _KERNEL_VMA_END - _KERNEL_VMA,
                    VMM_RES_KERNEL_IMAGE);
 
     /* Reserve remapping table */
-    vmmgr_reserve(&vmmgr_kernel_ctx,
+    vmmgr_reserve(&kernel_ctx,
                   REMAP_TABLE_VADDR,
                   REMAP_TABLE_SIZE,
                   VMM_REMAP_TABLE);
 
     /* reserve head of tracking for free addresses */
-    vmmgr_reserve(&vmmgr_kernel_ctx,
+    vmmgr_reserve(&kernel_ctx,
                   (virt_addr_t)fh,
                   PAGE_SIZE,
                   VMM_RES_FREE);
@@ -186,7 +199,7 @@ int vmmgr_init(void)
     /* reserve head of tracking for reserved addresses 
      * Yes, that some kind of a chicken-egg situation
      */
-    vmmgr_reserve(&vmmgr_kernel_ctx,
+    vmmgr_reserve(&kernel_ctx,
                   (virt_addr_t)rh,
                   PAGE_SIZE,
                   VMM_RES_RSRVD);
@@ -223,9 +236,9 @@ static virt_addr_t vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
          * We try to use a best fit approach to reduce fragmentation
          */
 
-        for(uint16_t i = 0; i < ctx->free_ent_per_page; i++)
+        for(uint16_t i = 0; i < ctx->free_per_slot; i++)
         {
-            fdesc = &fh->fmem[i];
+            fdesc = &fh->array[i];
 
             if(from_slot == NULL)
                 from_slot = fdesc;
@@ -253,7 +266,7 @@ static virt_addr_t vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
 
     addr = pagemgr_alloc(&ctx->pagemgr,
                           from_slot->base, 
-                          PAGE_SIZE, 
+                          VMM_SLOT_SIZE, 
                           PAGE_WRITABLE);
 
     if(addr == 0)
@@ -262,7 +275,7 @@ static virt_addr_t vmmgr_alloc_tracking(vmmgr_ctx_t *ctx)
     from_slot->base   += PAGE_SIZE;
     from_slot->length -= PAGE_SIZE;
 
-    memset((void*)addr, 0, PAGE_SIZE);
+    memset((void*)addr, 0, VMM_SLOT_SIZE);
 
     return(addr);
 }
@@ -279,22 +292,23 @@ static inline int vmm_is_in_range
     virt_size_t req_len
 )
 {
-    virt_size_t rem = 0;
+    virt_size_t limit     = 0;
+    virt_size_t req_limit = 0;
+    virt_size_t req_end   = 0;
+    virt_size_t end       = 0;
 
-    /* There's no chance that this is in range */
-    if (req_base < base)
-        return(0);
+    if(len >= 1)
+        limit = len - 1;
+    
+    if(req_len >= 1)
+        req_limit = req_len - 1;
 
-    rem = len - (req_base - base);
-
-    /* If the remaining of the segment can
-     * fit the request and if the remaining of the
-     * segment is less or equal than the total length
-     * we can say that the segment is in the range
-     */
-    if (rem >= req_len && len >= rem)
+    req_end = req_base + req_limit;
+    end     = base     + limit;
+    
+    if(req_base >= base && req_end <= end)
         return(1);
-
+    
     return(0);
 }
 
@@ -310,31 +324,43 @@ static inline int vmm_is_in_range
     virt_size_t req_len
 )
 {
-    virt_size_t rem = 0;
+    virt_size_t limit     = 0;
+    virt_size_t req_limit = 0;
+    virt_size_t req_end   = 0;
+    virt_size_t end       = 0;
+    
+    if(len >= 1)
+        limit = len - 1;
+    
+    if(req_len >= 1)
+        req_limit = req_len - 1;
 
-    if(req_base < base)
+    req_end = req_base + req_limit;
+    end     = base     + limit;
+
+    if(base >= req_base)
     {
-        rem = base - req_base;
-
-        if(rem >= req_len)
-            return(0);
-
-        else
+        if((req_end <= end && req_end >= base) || (req_end >= end))
             return(1);
     }
-    else
+    else if(req_end >= end)
     {
-        rem = len - (req_base - base);
-
-        if (rem >= req_len && len >= rem)
+        if((base <= req_base && req_base <= end) || (base >= req_base))
             return(1);
     }
+    else if(req_base >= base && req_end <= end)
+        return(1);
 
     return(0);
 }
 
 /* Check if a virtual address is reserved */
-static int vmmgr_is_reserved(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
+static int vmmgr_is_reserved
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len
+)
 {
     list_node_t *node      = NULL;
     list_node_t *next_node = NULL;
@@ -348,10 +374,15 @@ static int vmmgr_is_reserved(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len
 
         rh = (vmmgr_rsrvd_mem_hdr_t*)node;
 
-        for(uint16_t i = 0; i < ctx->rsrvd_ent_per_page; i++)
+        for(uint16_t i = 0; i < ctx->rsrvd_per_slot; i++)
         {
-            if(vmm_touches_range(rh->rsrvd[i].base, rh->rsrvd[i].length, virt, len))
+            if(vmm_touches_range(rh->array[i].base, 
+                                 rh->array[i].length, 
+                                 virt, 
+                                 len))
+            {
                 return(1);
+            }
         }
 
         node = next_node;
@@ -361,7 +392,12 @@ static int vmmgr_is_reserved(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len
 }
 
 /* Check if the virtual address is free or is not mapped */
-static int vmmgr_is_free(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
+static int vmmgr_is_free
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len
+)
 {
     list_node_t      *node      = NULL;
     list_node_t      *next_node = NULL;
@@ -376,11 +412,16 @@ static int vmmgr_is_free(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
 
         fh = (vmmgr_free_mem_hdr_t*)node;
 
-        for(uint16_t i = 0; i < ctx->free_ent_per_page; i++)
+        for(uint16_t i = 0; i < ctx->free_per_slot; i++)
         {
             /*  Start of interval is in range */
-            if(vmm_touches_range(fh->fmem[i].base, fh->fmem[i].length, virt, len))
+            if(vmm_touches_range(fh->array[i].base, 
+                                 fh->array[i].length, 
+                                 virt, 
+                                 len))
+            {
                 return(1);
+            }
         }
 
         node = next_node;
@@ -390,7 +431,13 @@ static int vmmgr_is_free(vmmgr_ctx_t *ctx, virt_addr_t virt, virt_size_t len)
 }
 
 /* Add tracking information to the reserved list */
-static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
+static int vmmgr_add_reserved
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt,
+    virt_size_t len,
+    uint32_t    type
+)
 {
     list_node_t           *rn        = NULL;
     list_node_t           *next_rn   = NULL;
@@ -412,75 +459,39 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
         /* If this slot is already full,
          * then there are no available entries to
          * store the reserved data
-         */ 
-        if(rh->avail == 0)
-        {
-            /* Check if we are at the end of the list 
-             * and if we are, then allocate a new node.
-             * Otherwise skip ahead
-             */
-
-            if(next_rn != NULL)
-            {
-                rn = next_rn;
-                continue;
-            }
-
-            
-            next_rn = (list_node_t*)vmmgr_alloc_tracking(ctx);
-
-            if(next_rn != NULL)
-            {
-                rh = (vmmgr_rsrvd_mem_hdr_t*)next_rn;
-                rh->avail = ctx->rsrvd_ent_per_page - 1;
-
-                /* First entry in the reserved section is the reserved page itself */
-                rh->rsrvd[0].base   = (virt_addr_t)next_rn;
-                rh->rsrvd[0].length = PAGE_SIZE;
-                rh->rsrvd[0].type   = VMM_RES_RSRVD;
-                linked_list_add_tail(&ctx->rsrvd_mem, &rh->node);
-            }
-
-            rn = next_rn;
-            continue;
-        }
+     
 
         /* We have a reserved area which can hold 
          * the information that we want to store
          * so let's find the exact location in the page
          */ 
-        for(uint16_t i = 0; i < ctx->rsrvd_ent_per_page; i++)
+
+        if(rh->avail > 0)
         {
-            /* TODO: Support coalescing if the types are the same */
-
-            rdesc = &rh->rsrvd[i];
-
-            if(candidate == NULL)
+            for(uint16_t i = 0; i < ctx->rsrvd_per_slot; i++)
             {
-                /* Let's see if this is our candidate slot
-                 * to store the data 
-                 * */
+                rdesc = &rh->array[i];
+
+                    /* Let's see if this is our candidate slot
+                    * to store the data 
+                    * */
                 if(rdesc->base == 0 &&
                    rdesc->length == 0)
                 {
-                    candidate = rdesc;
-                    done = 1;
+                    rdesc->base = virt;
+                    rdesc->length = len;
+                    rdesc->type = type;
                     rh->avail--;
-                    break;
+                    return(0);
+                }
+                /* Check if the 'to reserve memory' is already in the list */
+                else if(!memcmp(rsrvd, candidate, sizeof(vmmgr_rsrvd_mem_t)))
+                {
+                    return(-1);
                 }
             }
-            /* Check if the 'to reserve memory' is already in the list */
-            else if(!memcmp(rsrvd, candidate, sizeof(vmmgr_rsrvd_mem_t)))
-            {
-                candidate = NULL;
-                done = 1;
-                break;
-            }
         }
-
-        if(done)
-            break;
-
+        
         if(next_rn == NULL)
         {
             next_rn = (list_node_t*)vmmgr_alloc_tracking(ctx);
@@ -488,10 +499,14 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
             if(next_rn != NULL)
             {
                 rh = (vmmgr_rsrvd_mem_hdr_t*)next_rn;
-                rh->avail = ctx->rsrvd_ent_per_page - 1;
-                rh->rsrvd[0].base   = (virt_addr_t)next_rn;
-                rh->rsrvd[0].length = PAGE_SIZE;
-                rh->rsrvd[0].type   = VMM_RES_RSRVD;
+
+                /* the reserved slot is...reserved
+                 * so we will subtract one from the available slots 
+                 * */
+                rh->avail           = ctx->rsrvd_per_slot - 1;
+                rh->array[0].base   = (virt_addr_t)next_rn;
+                rh->array[0].length = VMM_SLOT_SIZE;
+                rh->array[0].type   = VMM_RES_RSRVD;
                 linked_list_add_tail(&ctx->rsrvd_mem, &rh->node);
             }
         }
@@ -499,69 +514,78 @@ static int vmmgr_add_reserved(vmmgr_ctx_t *ctx, vmmgr_rsrvd_mem_t *rsrvd)
         rn = next_rn;
     }
 
-    if(candidate)
-        *candidate = *rsrvd;
-    else
-        return(-1);
-
-    return(0);
+    return(-1);
 }
 
 /* vmmgr_merge_free_block - merge adjacent memory blocks */
 
-static int vmmgr_merge_free_block(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
+static int vmmgr_merge_free_block
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt,
+    virt_size_t len
+)
 {
     list_node_t          *fn      = NULL;
     list_node_t          *next_fn = NULL;
     vmmgr_free_mem_hdr_t *fh      = NULL;
     vmmgr_free_mem_t     *fdesc   = NULL;
+    vmmgr_free_mem_t     *to_merge = NULL;
+    vmmgr_free_mem_hdr_t *to_merge_hdr = NULL;
     int                   merged  = 0;
 
     fn = linked_list_first(&ctx->free_mem);
 
     while(fn)
     {
+        merged = 0;
         next_fn = linked_list_next(fn);
 
         fh = (vmmgr_free_mem_hdr_t*)fn;
 
-        for(uint16_t i = 0; i < ctx->free_ent_per_page; i++)
+        for(uint16_t i = 0; i < ctx->free_per_slot; i++)
         {
-            fdesc = &fh->fmem[i];
+            fdesc = &fh->array[i];
 
             /* Merge from left */
-            if(fdesc->base == fmem->base + fmem->length)
+            if(fdesc->base == virt + len)
             {
-                fdesc->base    = fmem->base;
-                fdesc->length += fmem->length;
+                fdesc->base    = virt;
+                fdesc->length += len;
 
                 if(merged == 1)
                 {
-                    fmem->base = 0;
-                    fmem->length = 0;
-                    fh->avail++;
+                    to_merge->base = 0;
+                    to_merge->length = 0;
+                    to_merge_hdr = ENTRY_TO_HEADER(to_merge);
+                    to_merge_hdr->avail++;
                 }
 
-                fmem = fdesc;
+                to_merge = fdesc;
+                virt = to_merge->base;
+                len  = to_merge->length;
                 /* Start again */
                 next_fn = linked_list_first(&ctx->free_mem);
                 merged = 1;
                 break;
             }
             /* Merge from right */
-            else if(fdesc->base + fdesc->length == fmem->base)
+            else if(fdesc->base + fdesc->length == virt)
             {
-                fdesc->length += fmem->length;
-                fmem = fdesc;
+                fdesc->length += len;
 
                 if(merged == 1)
                 {
-                    fmem->base = 0;
-                    fmem->length = 0;
-                    fh->avail++;
+                    to_merge->base = 0;
+                    to_merge->length = 0;
+                    to_merge_hdr = ENTRY_TO_HEADER(to_merge);
+                    to_merge_hdr->avail++;
                 }
 
                 /* Start again */
+                to_merge = fdesc;
+                virt = to_merge->base;
+                len  = to_merge->length;
                 next_fn = linked_list_first(&ctx->free_mem);
                 merged = 1;
                 break;
@@ -577,56 +601,68 @@ static int vmmgr_merge_free_block(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
     return(-1);
 }
 
-/* vmmgr_split_free_block - split a free block 
+/* vmmgr_split_block - split a block 
  * and return the remaining block size
  * */
 
-static inline int vmmgr_split_free_block
+static inline int vmmgr_split_block
 (
-    vmmgr_free_mem_t *from,
-    virt_addr_t       virt,
-    virt_size_t       len,
-    vmmgr_free_mem_t *rem
+    virt_addr_t *from_virt,
+    virt_size_t *from_len,
+    const virt_addr_t virt,
+    const virt_size_t len,
+    virt_addr_t *rem_virt,
+    virt_size_t *rem_len
 )
 {
-
-    if(VIRT_FROM_FREE_BLOCK(virt, len, from))
+    if(vmm_is_in_range(*from_virt, 
+                       *from_len, 
+                       virt, 
+                       len))
     {
-        rem->base    = (virt + len) ;
-        rem->length  = (from->base + from->length)  - rem->base;
-        from->length = virt - from->base;
+        *rem_virt = (virt + len) ;
+        *rem_len  = ((*from_virt) + (*from_len))  - (*rem_virt);
+        *from_len  = virt - (*from_virt);
 
-        if(rem->length == 0)
+        if((*rem_len) == 0)
         {
-            rem->base = 0;
+            (*rem_base) = 0;
+            return(0);
         }
 
-        if(from->length == 0)
+        if((*from_len) == 0)
         {
-            *from = *rem;
-            rem->base = 0;
-            rem->length = 0;
+            *from_virt = *rem_virt;
+            *from_len = *rem_len;
+
+            (*rem_virt) = 0;
+            (*rem_len) = 0;
+
+            return(0);
         }
 
-        return(0);
+        return(1);
     }
-    else
-    {
-        return(-1);
-    }
+    
+    return(-1);
+    
 }
 
 /* vmmgr_put_free_mem - place a free memory block in the free memory list 
  * This routine is similar in implementation with vmmgr_add_reserved
  * */
 
-static int vmmgr_put_free_mem(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
+static int vmmgr_put_free_mem
+(
+    vmmgr_ctx_t *ctx, 
+    virt_addr_t virt,
+    virt_size_t len
+)
 {
     list_node_t          *fn       = NULL;
     list_node_t          *next_fn  = NULL;
     vmmgr_free_mem_hdr_t *fh       = NULL;
     vmmgr_free_mem_t     *fdesc    = NULL;
-    vmmgr_rsrvd_mem_t    rsrvd;
 
     fn = linked_list_first(&ctx->free_mem);
 
@@ -635,47 +671,27 @@ static int vmmgr_put_free_mem(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
         next_fn = linked_list_next(fn);
         fh = (vmmgr_free_mem_hdr_t*)fn;
 
-        /* Nothing here, advance */
-
-        if(fh->avail == 0)
+        if(fh->avail > 0)
         {
-            if(next_fn == NULL)
+            for(uint16_t i = 0; i < ctx->free_per_slot; i++)
             {
-                next_fn = (list_node_t*)vmmgr_alloc_tracking(ctx);
+                fdesc = &fh->array[i];
 
-                if(next_fn != NULL)
+                if((fdesc->length == 0) && 
+                   (fdesc->base   == 0))
                 {
-                    memset(&rsrvd, 0, sizeof(vmmgr_rsrvd_mem_t));
-
-                    fh = (vmmgr_free_mem_hdr_t*)next_fn;
-                    fh->avail = ctx->free_ent_per_page;
-                    linked_list_add_tail(&ctx->free_mem, &fh->node);
-
-                    /* Reserve */
-                    rsrvd.base = (virt_addr_t)next_fn;
-                    rsrvd.length = PAGE_SIZE;
-                    rsrvd.type = VMM_RES_FREE;
-
-                    vmmgr_add_reserved(ctx, &rsrvd);
+                    fdesc->base = virt;
+                    fdesc->length = len;
+                    fh->avail--;
+                    return(0);
                 }
             }
-
-            fn = next_fn;
-            continue;
         }
 
-        for(uint16_t i = 0; i < ctx->free_ent_per_page; i++)
-        {
-            fdesc = &fh->fmem[i];
-
-            if(fdesc->length == 0)
-            {
-                memcpy(fdesc, fmem, sizeof(vmmgr_free_mem_t));
-                fh->avail--;
-                return(0);
-            }
-        }
-
+        /* if next_fn is null, we don't have a slot 
+         * to place the free entry so we will need to allocate a new one.
+         * If we fail, well...bad luck :/
+         */ 
         if(next_fn == NULL)
         {
             next_fn = (list_node_t*)vmmgr_alloc_tracking(ctx);
@@ -683,20 +699,19 @@ static int vmmgr_put_free_mem(vmmgr_ctx_t *ctx, vmmgr_free_mem_t *fmem)
             if(next_fn != NULL)
             {
                 fh = (vmmgr_free_mem_hdr_t*)next_fn;
-                fh->avail = ctx->free_ent_per_page;
+                fh->avail = ctx->free_per_slot;
+
                 linked_list_add_tail(&ctx->free_mem, &fh->node);
 
-                /* Reserve */
-                rsrvd.base = (virt_addr_t)next_fn;
-                rsrvd.length = PAGE_SIZE;
-                rsrvd.type = VMM_RES_FREE;
-
-                vmmgr_add_reserved(ctx,&rsrvd);
+                vmmgr_add_reserved(ctx, (virt_addr_t)next_fn, 
+                                        VMM_SLOT_SIZE, 
+                                        VMM_RES_FREE);
             }
         }
 
         fn = next_fn;
     }
+
     return(-1);
 }
 
@@ -718,17 +733,16 @@ int vmmgr_reserve
     vmmgr_free_mem_t      rem;
     vmmgr_rsrvd_mem_t     rsrvd;
     int                   int_status = 0;
+    int                   rc         = 0;
+
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
 
     memset(&rem, 0, sizeof(vmmgr_free_mem_t));
     
     spinlock_lock_int(&ctx->lock, &int_status);
 
     fn           = linked_list_first(&ctx->free_mem);
-    rsrvd.base   = virt;
-    rsrvd.length = len;
-    rsrvd.type   = type;
 
     while(fn)
     {
@@ -736,18 +750,25 @@ int vmmgr_reserve
 
         fh = (vmmgr_free_mem_hdr_t*)fn;
 
-        for(uint16_t i = 0; i < ctx->free_ent_per_page; i++)
+        for(uint16_t i = 0; i < ctx->free_per_slot; i++)
         {
-            if(VIRT_FROM_FREE_BLOCK(virt, len, &fh->fmem[i]))
-            {
-                vmmgr_split_free_block(&fh->fmem[i], virt, len, &rem);
-                vmmgr_add_reserved(ctx, &rsrvd);
+            fdesc = &fh->array[i];
 
-                if(rem.length != 0)
-                    vmmgr_put_free_mem(ctx, &rem);
+            if(vmm_is_in_range(fdesc->base, fdesc->length, virt, len))
+            {    
+                rc = vmmgr_add_reserved(ctx, virt, len, type);
 
+                if(vmmgr_split_free_block(&fh->array[i], virt, len, &rem) > 0)
+                {
+                    rc = vmmgr_put_free_mem(ctx, &rem);
+
+                    if(rc < 0)
+                    {
+                        ;
+                    }
+                }
                 spinlock_unlock_int(&ctx->lock, int_status);
-                return(0);
+                return(rc);
             }
         }
 
@@ -760,13 +781,137 @@ int vmmgr_reserve
         fn = next_fn;
     }
 
-    vmmgr_add_reserved(ctx, &rsrvd);
+    rc = vmmgr_add_reserved(ctx, &rsrvd);
     
     spinlock_unlock_int(&ctx->lock, int_status);
 
-    return(0);
+    return(rc);
 }
 
+
+static virt_addr_t vmmgr_acquire_mem
+(
+    vmmgr_ctx_t *ctx,
+    virt_addr_t virt,
+    virt_size_t len,
+)
+{
+    list_node_t          *fn         = NULL;
+    list_node_t          *next_fn    = NULL;
+    vmmgr_free_mem_t     *fdesc      = NULL;
+    vmmgr_free_mem_t     *from_slot  = NULL;
+    vmmgr_free_mem_hdr_t *fh         = NULL;
+    virt_addr_t           ret_addr   = 0;
+    virt_addr_t           map_addr   = 0;
+    virt_addr_t           rem_virt   = 0;
+    virt_size_t           rem_len    = 0;
+    int                   int_status = 0;
+    int                   rc         = 0;
+    int found  = 0;
+
+    if(ctx == NULL)
+        ctx = &kernel_ctx;
+
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
+    ret_addr = virt;
+
+    fn = linked_list_first(&ctx->free_mem);
+
+    while(fn)
+    {
+        next_fn = linked_list_next(fn);
+        fh = (vmmgr_free_mem_hdr_t*)fn;
+
+
+        if(fh->avail > 0)
+        {
+            for(uint16_t i  = 0; i < ctx->free_per_slot; i++)
+            {
+                fdesc = &fh->array[i];
+
+                if(fdesc->length == 0)
+                    continue;
+
+                if(from_slot == NULL)
+                    from_slot = fdesc;
+
+                if(virt != 0)
+                {
+                    if(vmm_is_in_range(from_slot->base, 
+                                        from_slot->length, 
+                                        virt, 
+                                        len))
+                    {
+                        ret_addr = virt;
+                        break;
+                    }
+
+                    from_slot = NULL;
+                }
+                else if(from_slot)
+                {
+                    /* Save the best-fit slot found so far */
+
+                    if(from_slot->length < len && fdesc->length >= len)
+                    {
+                        from_slot = fdesc;
+                    }
+                    else if((from_slot->length > fdesc->length) &&
+                            (fdesc->length >= len))
+                    {
+                        from_slot = fdesc;
+                    }
+                }
+            }
+        }   
+
+        if(next_fn == NULL && virt != 0 && !found)
+        {
+            kprintf("RESTARTING\n");
+            virt = 0;
+            fn = linked_list_first(&ctx->free_mem);
+            from_slot = NULL;
+            continue;
+        }
+
+        if(found)
+            break;
+
+        fn = next_fn;
+    }
+
+    if(from_slot->length < len)
+    {
+        return(0);
+    }
+
+    if(vmmgr_split_block(&from_slot->base,
+                         &from_slot->length,
+                         ret_addr, 
+                         len, 
+                         &rem_virt,
+                         &rem_len) > 0)
+    {
+        rc = vmmgr_put_free_mem(ctx, rem_virt, rem_len);
+
+        /* if we cannot store the free entry, then we 
+         * must revert the change to avoid loosing free memory
+         */ 
+        if(rc < 0)
+        {
+            if(vmmgr_merge_free_block(ctx, rem_virt, rem_len) < 0)
+            {
+                kprintf("ERROR while reversing the allocation\n");
+                while(1);
+            }
+        }
+    }
+
+    return(0);
+}
+#if 0
 /* vmmgr_map - map phyical address to virtual address */
 virt_addr_t vmmgr_map
 (
@@ -785,17 +930,17 @@ virt_addr_t vmmgr_map
     vmmgr_free_mem_hdr_t *fh         = NULL;
     virt_addr_t           ret_addr   = 0;
     virt_addr_t           map_addr   = 0;
+    virt_addr_t           rem_virt   = 0;
+    virt_size_t           rem_len    = 0
     int                   int_status = 0;
 
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
 
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
 
     ret_addr = virt;
-
-    memset(&rem, 0, sizeof(vmmgr_free_mem_t));
 
     spinlock_lock_int(&ctx->lock, &int_status);
 
@@ -812,9 +957,9 @@ virt_addr_t vmmgr_map
             continue;
         }
 
-        for(uint16_t i  = 0; i < ctx->free_ent_per_page; i++)
+        for(uint16_t i  = 0; i < ctx->free_per_slot; i++)
         {
-            fdesc = &fh->fmem[i];
+            fdesc = &fh->array[i];
 
             if(fdesc->length == 0)
                 continue;
@@ -879,17 +1024,15 @@ virt_addr_t vmmgr_map
                             attr);
 
     if(map_addr == 0)
-	{
-		pagemgr_unmap(&ctx->pagemgr,
+    {
+        pagemgr_unmap(&ctx->pagemgr,
                        from_slot->base, 
                        len);
         spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
-	}
+    }
 
-    vmmgr_split_free_block(from_slot, ret_addr, len, &rem);
-
-    if(rem.base != 0)
+    if(vmmgr_split_free_block(from_slot, ret_addr, len, &rem) > 0)
     {
         vmmgr_put_free_mem(ctx, &rem);
     }
@@ -920,7 +1063,7 @@ virt_addr_t vmmgr_alloc
     int                   int_status = 0;
 
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
 
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
@@ -942,9 +1085,9 @@ virt_addr_t vmmgr_alloc
             continue;
         }
 
-        for(uint16_t i  = 0; i < ctx->free_ent_per_page; i++)
+        for(uint16_t i  = 0; i < ctx->free_per_slot; i++)
         {
-            fdesc = &fh->fmem[i];
+            fdesc = &fh->array[i];
 
             if(fdesc->length == 0)
                 continue;
@@ -1008,15 +1151,15 @@ virt_addr_t vmmgr_alloc
     ret_addr = pagemgr_alloc(&ctx->pagemgr, ret_addr, len, attr);
     
     if(ret_addr == 0)
-	{
+    {
         kprintf("PG_ALLOC_FAIL\n");
         spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
-	}
+    }
 
-    vmmgr_split_free_block(from_slot, ret_addr, len, &rem);
+    
 
-    if(rem.length != 0)
+    if(vmmgr_split_free_block(from_slot, ret_addr, len, &rem) > 0)
     {
         vmmgr_put_free_mem(ctx, &rem);
     }      
@@ -1041,7 +1184,7 @@ int vmmgr_free
     int              int_status = 0;
 
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
 
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
@@ -1068,7 +1211,7 @@ int vmmgr_free
         return(-1);
     }
 
-    status = vmmgr_merge_free_block(ctx, &mm);
+    status = vmmgr_merge_free_block(ctx, virt, len);
 
     if(status != 0)
         status = vmmgr_put_free_mem(ctx, &mm);
@@ -1097,14 +1240,11 @@ int vmmgr_unmap
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
 
-    mm.base = virt;
-    mm.length = len;
-
     if(virt == 0)
         return(-1);
 
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
 
     spinlock_lock_int(&ctx->lock, &int_status);
 
@@ -1119,7 +1259,7 @@ int vmmgr_unmap
         return(-1);
     }
 
-    status = vmmgr_merge_free_block(ctx, &mm);
+    status = vmmgr_merge_free_block(ctx, virt, len);
 
     if(status != 0)
         status = vmmgr_put_free_mem(ctx, &mm);
@@ -1147,7 +1287,7 @@ int vmmgr_change_attrib
         return(-1);
 
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
 
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
@@ -1183,7 +1323,7 @@ virt_addr_t vmmgr_temp_identity_map
 )
 {
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
     
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
@@ -1200,7 +1340,7 @@ int vmmgr_temp_identity_unmap
 {
     int status = 0;
     if(ctx == NULL)
-        ctx = &vmmgr_kernel_ctx;
+        ctx = &kernel_ctx;
 
 
     if(len % PAGE_SIZE)
@@ -1209,4 +1349,4 @@ int vmmgr_temp_identity_unmap
     status = pagemgr_unmap(&ctx->pagemgr,(virt_addr_t)vaddr, len);
 
     return(status);
-}
+}#endif

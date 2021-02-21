@@ -44,7 +44,6 @@ typedef struct pfmgr_range_header_t
     phys_addr_t base;
     phys_size_t len;
     phys_size_t struct_len;
-    uint32_t domain_id;
     uint32_t type;
 }pfmgr_range_header_t;
 

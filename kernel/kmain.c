@@ -59,7 +59,7 @@ static void kmain_sys_init(void)
 
     /* Start APs */
     kprintf("starting APs\n");
-    cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
+    
     kprintf("Platform init\n");
     platform_init();
 
@@ -127,10 +127,6 @@ void kmain()
 
     /* initialize interrupt handler */
     if(isr_init())
-        return;
-
-    /* install ISR handlers for the page manager */
-    if(pagemgr_install_handler())
         return;
 
     /* Initialize basic platform functionality */

@@ -30,8 +30,10 @@ typedef struct vmmgr_ctx_t
 {
     list_head_t free_mem;  /* free memory ranges */
     list_head_t rsrvd_mem;  /* reserved memory ranges */
-    uint16_t    free_ent_per_page;
-    uint16_t    rsrvd_ent_per_page;
+    list_head_t alloc_mem; /* allocated memory */
+    uint16_t    free_per_slot;
+    uint16_t    rsrvd_per_slot;
+    uint16_t    alloc_per_slot;
     uint16_t    low_ent_per_page;
     virt_addr_t vmmgr_base; /* base address where we will keep the structures */
     pagemgr_ctx_t pagemgr;
@@ -57,14 +59,14 @@ typedef struct vmmgr_rsrvd_mem_hdr_t
 {
     list_node_t node;
     uint16_t avail;
-    vmmgr_rsrvd_mem_t rsrvd[0];
+    vmmgr_rsrvd_mem_t array[0];
 }vmmgr_rsrvd_mem_hdr_t;
 
 typedef struct vmmgr_free_mem_hdr_t
 {
     list_node_t node;
     uint16_t avail;
-    vmmgr_free_mem_t fmem[0];
+    vmmgr_free_mem_t array[0];
 }vmmgr_free_mem_hdr_t;
 
 int vmmgr_init(void);

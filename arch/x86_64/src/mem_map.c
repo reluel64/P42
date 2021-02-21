@@ -17,7 +17,7 @@ extern uint32_t mem_map_sig; /* multiboot header presence */
 
 static int numa_check_init = -1;
 
-
+#if 0
 
 /*
  * Checks if numa is supported and
@@ -215,7 +215,7 @@ static void mem_map_show_domains(void)
     AcpiPutTable((ACPI_TABLE_HEADER*)srat);
 
 }
-
+#endif
 
 static void mem_map_show_e820(void)
 {
@@ -297,6 +297,7 @@ int mem_map_iter
                 callback(&mem_entry, pv); 
             }
         }
+#if 0
         else
         {
             mem_map_show_e820();
@@ -338,6 +339,7 @@ int mem_map_iter
             kprintf("DONE\n");
 
         }
+#endif
     }
 #ifdef MEM_MAP_TEST_CALLBACK
     while(1)

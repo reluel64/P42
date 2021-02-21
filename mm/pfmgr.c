@@ -1,4 +1,4 @@
-/* NUMA-aware page frame allocator 
+/* page frame allocator 
  * Part of P42
  */
 
