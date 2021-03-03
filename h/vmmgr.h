@@ -15,6 +15,9 @@
 #define VM_ALLOW_SWAP              (1 << 6)
 #define VM_GUARD_MEMORY            (1 << 7)
 #define VM_RES_LOW                 (1 << 8)
+#define VM_RES_ALLOC               (1 << 9)
+
+
 
 #define VM_ATTR_WRITABLE          PAGE_WRITABLE
 #define VM_ATTR_USER              PAGE_USER
@@ -27,8 +30,16 @@
 #define VM_ATTR_EXECUTABLE        PAGE_EXECUTABLE
 
 
+#define VM_PERMANENT       (1 << 0)
+#define VM_ALLOC           (1 << 1)
+#define VM_MAPPED          (1 << 2)
 
-typedef struct vmctx_t
+#define VM_FREE_HDR  (1 << 0)
+#define VM_ALLOC_HDR (1 << 1)
+#define VM_RSRVD_HDR (1 << 2)
+
+
+typedef struct vm_ctx_t
 {
     list_head_t free_mem;  /* free memory ranges */
     list_head_t rsrvd_mem;  /* reserved memory ranges */
@@ -36,55 +47,39 @@ typedef struct vmctx_t
     uint16_t    free_per_slot;
     uint16_t    rsrvd_per_slot;
     uint16_t    alloc_per_slot;
-    uint16_t    low_ent_per_page;
+    uint16_t     ;
     virt_addr_t vm_base; /* base address where we will keep the structures */
     pagemgr_ctx_t pagemgr;
     spinlock_t   lock;
 }vm_ctx_t;
 
-typedef struct vm_free_mem_t
+
+
+typedef struct vm_extent_t
 {
     virt_addr_t base;
     virt_size_t length;
-}vm_free_mem_t;
+    uint8_t type;
+    void    *data;     /* extent specific data */
+
+}vm_extent_t;
 
 
-
-typedef struct vm_rsrvd_mem_t
-{
-    virt_addr_t base;
-    virt_size_t length;
-    uint32_t  type;
-}vm_rsrvd_mem_t;
-
-typedef struct vm_alloc_mem_t
-{
-    virt_addr_t base;
-    virt_size_t length;
-    uint32_t flags;
-}vm_alloc_mem_t;
-
-typedef struct vm_rsrvd_mem_hdr_t
+typedef struct vm_slot_hdr_t
 {
     list_node_t node;
-    uint16_t avail;
-    vm_rsrvd_mem_t array[0];
-}vm_rsrvd_mem_hdr_t;
+    uint32_t avail;
+    uint8_t  type;
+    vm_extent_t array[];
+}vm_slot_hdr_t;
 
-typedef struct vm_free_mem_hdr_t
-{
-    list_node_t node;
-    uint16_t avail;
-    vm_free_mem_t array[0];
-}vm_free_mem_hdr_t;
 
-typedef struct vm_alloc_mem_hdr_t
-{
-    list_node_t node;
-    uint16_t avail;
-    vm_alloc_mem_t array[0];
-}vm_alloc_mem_hdr_t;
-
+typedef int (*vm_lookup_cb)
+(
+    vm_ctx_t *ctx, 
+    vm_slot_hdr_t *hdr, 
+    void *pv
+);
 
 int vm_init(void);
 
