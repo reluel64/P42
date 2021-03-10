@@ -17,8 +17,6 @@
 #define VM_RES_LOW                 (1 << 8)
 #define VM_RES_ALLOC               (1 << 9)
 
-
-
 #define VM_ATTR_WRITABLE          PAGE_WRITABLE
 #define VM_ATTR_USER              PAGE_USER
 #define VM_ATTR_WRITE_THROUGH     PAGE_WRITE_THROUGH
@@ -30,27 +28,41 @@
 #define VM_ATTR_EXECUTABLE        PAGE_EXECUTABLE
 
 
-#define VM_PERMANENT       (1 << 0)
-#define VM_ALLOC           (1 << 1)
-#define VM_MAPPED          (1 << 2)
+#define VM_FREE_LOW        (1 << 0)
+#define VM_FREE_HI         (1 << 1)
+
+#define VM_PERMANENT       (1 << 0) /* this entry cannot be freed */
+#define VM_ALLOC           (1 << 1) /* extent represents allocated memory */
+#define VM_MAPPED          (1 << 2) /* extent represents mapped memory */
+#define VM_MAP_LOW         (1 << 3) /* mapped - low memory */
+#define VM_MAP_HI          (1 << 4) /* mapped high memory */
+#define VM_ALLOC_HI        (1 << 5) /* allocated from hi memory */
+#define VM_ALLOC_LO        (1 << 6) /* allocated from lo memory */
+
+
 
 #define VM_FREE_HDR  (1 << 0)
 #define VM_ALLOC_HDR (1 << 1)
 #define VM_RSRVD_HDR (1 << 2)
 
+#define VM_LOW_MEM   (1 << 0)
+#define VM_HIGH_MEM  (1 << 1)
+#define VM_MAPPED    (1 << 2)
+#define VM_ALLOCED   (1 << 3)
+#define VM_PERMANENT (1 << 4)
 
+#define VM_REGION_MASK (VM_LOW_MEM | VM_HIGH_MEM)
+#define VM_MEM_TYPE_MASK (VM_ALLOC | VM_MAPPED)
 typedef struct vm_ctx_t
 {
     list_head_t free_mem;  /* free memory ranges */
-    list_head_t rsrvd_mem;  /* reserved memory ranges */
     list_head_t alloc_mem; /* allocated memory */
     uint16_t    free_per_slot;
-    uint16_t    rsrvd_per_slot;
     uint16_t    alloc_per_slot;
-    uint16_t     ;
     virt_addr_t vm_base; /* base address where we will keep the structures */
     pagemgr_ctx_t pagemgr;
     spinlock_t   lock;
+    uint32_t     flags;
 }vm_ctx_t;
 
 
@@ -59,7 +71,7 @@ typedef struct vm_extent_t
 {
     virt_addr_t base;
     virt_size_t length;
-    uint8_t type;
+    uint32_t flags;
     void    *data;     /* extent specific data */
 
 }vm_extent_t;

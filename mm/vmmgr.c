@@ -19,9 +19,6 @@ extern virt_size_t __max_linear_address(void);
                                               (((virt_addr_t)(entry)) %  \
                                               VM_SLOT_SIZE ))
 
-#define EXTENT_IS_EMPTY(ext) (((!(ext)->base) && \
-                             (!(ext)->length)))
-
 static vm_ctx_t kernel_ctx;
 
 static int vm_extent_acquire
@@ -202,17 +199,16 @@ static int vm_setup_protected_regions
                 VM_SLOT_SIZE,
                 VM_RES_RSRVD);
 }
-
+ 
 int vm_init(void)
 {
-    vm_rsrvd_mem_hdr_t   *rh      = NULL;
-    vm_free_mem_hdr_t    *fh_hi   = NULL;
-    vm_free_mem_hdr_t    *fh_lo   = NULL;
-    vm_alloc_mem_hdr_t   *ah      = NULL;
+
 
     virt_addr_t           vm_base = 0;
     virt_addr_t           vm_max  = 0;
     uint32_t              offset  = 0;
+    vm_slot_hdr_t         *hdr = NULL;
+    vm_extent_t           ext;
 
     vm_max = cpu_virt_max();
 
@@ -228,166 +224,164 @@ int vm_init(void)
     kernel_ctx.vm_base = vm_base;
 
     linked_list_init(&kernel_ctx.free_mem);
-    linked_list_init(&kernel_ctx.rsrvd_mem);
     linked_list_init(&kernel_ctx.alloc_mem);
     spinlock_init(&kernel_ctx.lock);
 
-    memset(&rem_extent, 0, sizeof(vm_extent_t));
+    hdr = (vm_slot_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
+                                        kernel_ctx.vm_base,
+                                        VM_SLOT_SIZE,
+                                        PAGE_WRITABLE | 
+                                        PAGE_WRITE_THROUGH);
 
-    rh = (vm_rsrvd_mem_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
-                                                kernel_ctx.vm_base + 
-                                                offset,
-                                                VM_SLOT_SIZE,
-                                                PAGE_WRITABLE | 
-                                                PAGE_WRITE_THROUGH);
-
-    offset += VM_SLOT_SIZE;
-
-    fh_hi  = (vm_free_mem_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
-                                                kernel_ctx.vm_base + 
-                                                offset,
-                                                VM_SLOT_SIZE,
-                                                PAGE_WRITABLE | 
-                                                PAGE_WRITE_THROUGH);
-
-    offset += VM_SLOT_SIZE;
-
-    fh_lo  = (vm_free_mem_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
-                                                kernel_ctx.vm_base + 
-                                                offset,
-                                                VM_SLOT_SIZE,
-                                                PAGE_WRITABLE | 
-                                                PAGE_WRITE_THROUGH);
-
-    offset += VM_SLOT_SIZE;
-
-    ah    = (vm_alloc_mem_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
-                                                kernel_ctx.vm_base + 
-                                                offset,
-                                                VM_SLOT_SIZE,
-                                                PAGE_WRITABLE | 
-                                                PAGE_WRITE_THROUGH);
-
-
-    kprintf("rsrvd_start 0x%x\n", rh);
-    kprintf("free_start hi 0x%x\n", fh_hi);
-    kprintf("free_start lo 0x%x\n", fh_lo);
-    kprintf("alloc_start hi 0x%x\n", ah);
-
-    if(rh == NULL    || 
-       fh_hi == NULL || 
-       fh_lo == NULL || 
-       ah == NULL)
+    if(hdr == NULL)
     {
-        return(-1);
+        kprintf("Failed to initialize VMM\n");
+        while(1);
     }
 
     /* Clear the memory */
-    memset(rh,    0, VM_SLOT_SIZE);
-    memset(fh_hi, 0, VM_SLOT_SIZE);
-    memset(fh_lo, 0, VM_SLOT_SIZE);
-    memset(ah,    0, VM_SLOT_SIZE);
-    
-    linked_list_add_head(&kernel_ctx.rsrvd_mem, &rh->node);
-    linked_list_add_head(&kernel_ctx.free_mem,  &fh_hi->node);
-    linked_list_add_head(&kernel_ctx.free_mem,  &fh_lo->node);
-    linked_list_add_head(&kernel_ctx.alloc_mem, &ah->node);
+    memset(hdr,    0, VM_SLOT_SIZE);
+
+    linked_list_add_head(&kernel_ctx.free_mem,  &hdr->node);
 
     /* How many free entries can we store per slot */
     kernel_ctx.free_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
                                                sizeof(vm_extent_t);
 
-    /* How many reserved entries can we store per slot */
-    kernel_ctx.rsrvd_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
-                                                sizeof(vm_extent_t);
-
     /* How many allocated entries can we store per slot */
     kernel_ctx.alloc_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
                                                 sizeof(vm_extent_t);
 
-    /* Get the start of the array */
+    hdr->avail = kernel_ctx.free_per_slot;
 
-    fh_hi->array[0].base   = kernel_ctx.vm_base;
-    fh_hi->array[0].length = (((uintptr_t)-1) - kernel_ctx.vm_base)+1;
+    memset(&ext, 0, sizeof(vm_extent_t));
 
-    /* the base of the lower memory cannot be 0, otherwise
-     * we might be able to map/allocate from address 0 which would be a 
-     * very bad thing 
-     * */
+    /* Insert higher memory */
+    ext.base   = kernel_ctx.vm_base;
+    ext.length = (((uintptr_t)-1) - kernel_ctx.vm_base)+1;
+    ext.flags  = VM_HIGH_MEM;
 
-    fh_lo->array[0].base = PAGE_SIZE;
-    fh_lo->array[0].length = (vm_max >> 1);
+    vm_extent_insert(&kernel_ctx.free_mem, 
+                     hdr->avail, 
+                     &ext);
 
-    fh_hi->avail = kernel_ctx.free_per_slot;
-    fh_lo->avail = kernel_ctx.free_per_slot;
-    rh->avail    = kernel_ctx.rsrvd_per_slot;
-    ah->avail    = kernel_ctx.alloc_per_slot;
- 
-    /* Start reserving entries that 
-     * must remain in virtual memory 
-     * no matter what
-     * */
+    /* Insert lower memory */
+    ext.base   = PAGE_SIZE;
+    ext.length = (vm_max >> 1);
+    ext.flags  = VM_LOW_MEM;
 
+    vm_extent_insert(&kernel_ctx.free_mem, 
+                      hdr->avail, 
+                      &ext);
 
 
     return(0);
 }
 
-static virt_addr_t vm_alloc_slot(vm_ctx_t *ctx)
+static int vm_alloc_slot
+(
+    vm_ctx_t *ctx, 
+    list_head_t *lh,
+    uint32_t ext_per_slot
+)
 {
-    vm_extent_t *fext = NULL;
-    vm_slot_hdr_t *slot = NULL;
-    vm_extent_t rem_ext;
+    virt_addr_t  addr = 0;
+    vm_extent_t   fext;
+    vm_slot_hdr_t *head_slot = NULL;
+    vm_slot_hdr_t *new_slot = NULL;
+    vm_extent_t alloc_ext;
+    
     int          status = 0;
     
-    /* extract the free slot */ 
+    memset(&fext, 0, sizeof(vm_extent_t));
+
+    /* we want free memory to come from the high memory area */
+    fext.length = VM_SLOT_SIZE;
+    fext.flags  = VM_HIGH_MEM;
+
+    /* extract a free slot that would fit our allocation*/ 
     status = vm_extent_extract(&ctx->free_mem, 
-                                ctx->free_per_slot, 
-                                0, 
-                                VM_SLOT_SIZE, 
+                                ctx->free_per_slot,  
                                 &fext);
                 
     if(status < 0)
     {
-        return(0);
+        return(-1);
     }
 
-    memset(&rem_ext, 0, sizeof(vm_extent_t));
+    new_slot = (vm_slot_hdr_t*)pagemgr_alloc(&ctx->pagemgr,
+                                             fext.base, 
+                                             VM_SLOT_SIZE, 
+                                             PAGE_WRITABLE);
 
-    addr = pagemgr_alloc(&ctx->pagemgr,
-                          fmem->base, 
-                          VM_SLOT_SIZE, 
-                          PAGE_WRITABLE);
-
-    if(!addr)
+    if(new_slot == NULL)
     {
-        return(0);
+        return(-1);
     }
 
-    vm_extent_split(fext, 
-                    fext->base, 
-                    VM_SLOT_SIZE, 
-                    &rem_ext);
-    
+    /* clear the slot memory */
+    memset(new_slot, 0, VM_SLOT_SIZE);
 
-    
-    /* update the free slot */
-    fext->base   += VM_SLOT_SIZE;
-    fext->length -= VM_SLOT_SIZE;
+    /* prepare the new slot */
+    new_slot->avail = ext_per_slot;
 
-    /* update the header if necessary */
-    if(fext->length == 0)
+    /* add it where it belongs */
+    linked_list_add_tail(lh, &new_slot->node);
+
+    /* take out the slot we've acquired */
+    fext.base   += VM_SLOT_SIZE;
+    fext.length -= VM_SLOT_SIZE;
+
+    /* insert the remaining free memory in the list */
+    vm_extent_insert(&ctx->free_mem, 
+                      ctx->free_per_slot, 
+                      &fext);
+    
+    
+    /* prepare to add the new slot to the allocated memory */
+    memset(&alloc_ext, 0, sizeof(vm_extent_t));
+    
+    alloc_ext.base = (virt_addr_t)new_slot;
+    alloc_ext.length = VM_SLOT_SIZE;
+
+    /* Memory is allocated and MUST NOT be swapped */
+    alloc_ext.flags = VM_ALLOC | VM_PERMANENT;
+    
+    /* insert the allocated memory into the list */
+
+    status = vm_extent_insert(&ctx->alloc_mem, 
+                      ctx->alloc_per_slot, 
+                      &alloc_ext);
+    
+    /* Plot twist - we don't have extents to store the 
+     * newly allocated slot
+     */ 
+    if(status == -ENOMEM)
     {
-        memset(fext, 0, sizeof(vm_extent_t));
-        
-        slot = EXTENT_TO_HEADER(fext);
+        /* let's call the routine again. Yes, we're recursing */
+        status = vm_alloc_slot(ctx, 
+                              &ctx->alloc_mem, 
+                              ctx->alloc_per_slot);
 
-        slot->avail++;
+        if(status != 0)
+        {
+            kprintf("CANNOT ALLOCATE A NEW SLOT\n");
+            while(1);
+        }
+
+        /* Let's try again */
+        status = vm_extent_insert(&ctx->alloc_mem, 
+                      ctx->alloc_per_slot, 
+                      &alloc_ext);
+
+        if(status != 0)
+        {
+            kprintf("WE'RE DOOMED\n");
+            while(1);
+        }
     }
 
-    memset((void*)addr, 0, VM_SLOT_SIZE);
-
-    return(addr);
+    return(0);
 }
 
 /*
@@ -470,12 +464,12 @@ static int vm_virt_is_present
     virt_addr_t virt,
     virt_size_t len,
     list_head_t *lh,
-    uint32_t ent_per_slot
+    uint32_t    ext_per_slot
 )
 {
     list_node_t *node      = NULL;
     list_node_t *next_node = NULL;
-    vm_slot_hdr_t *eh = NULL;
+    vm_slot_hdr_t *hdr = NULL;
 
     node = linked_list_first(lh);
 
@@ -483,17 +477,17 @@ static int vm_virt_is_present
     {
         next_node  = linked_list_next(node);
 
-        eh = (vm_slot_hdr_t*)node;
+        hdr = (vm_slot_hdr_t*)node;
 
-        for(uint16_t i = 0; i < ent_per_slot; i++)
+        for(uint16_t i = 0; i < ext_per_slot; i++)
         {
-            if(EXTENT_IS_EMPTY(&eh->array[i]))
+            if(!hdr->array[i].length)
                 continue;
 
-            if(vmm_is_in_range(eh->array[i].base, 
-                                 eh->array[i].length, 
-                                 virt, 
-                                 len))
+            if(vmm_is_in_range(hdr->array[i].base, 
+                               hdr->array[i].length, 
+                               virt, 
+                               len))
             {
                 return(1);
             }
@@ -505,44 +499,19 @@ static int vm_virt_is_present
     return(0);
 }
 
-static int vm_insert_extent_in_slot
-(
-    vm_slot_hdr_t *hdr,
-    vm_extent_t   *ext,
-    uint32_t      ext_per_slot
-)
-{
-    vm_extent_t *c_ext = NULL;
-
-    for(uint32_t i = 0; i < ext_per_slot; i++)
-    {
-        c_ext = &hdr->array[i];    
-
-        if(EXTENT_IS_EMPTY(c_ext))
-        {
-            memcpy(c_ext, ext, sizeof(vm_extent_t));
-            hdr->avail--;
-            return(0);
-        }
-    }
-
-    return(-1);
-}
-
 static int vm_extent_insert
 (
     list_head_t *lh,
-    uint32_t ent_per_slot,
+    uint32_t ext_per_slot,
     vm_extent_t *ext
 )
 {
     list_node_t     *en        = NULL;
     list_node_t     *next_en   = NULL;
-    vm_slot_hdr_t *eh        = NULL;
-    vm_extent_t     *edesc     = NULL;
-    vm_extent_t     rsrv_ext;
+    vm_slot_hdr_t *hdr        = NULL;
+    vm_extent_t     *c_ext     = NULL;
 
-    if(EXTENT_IS_EMPTY(ext))
+    if(!ext->length)
         return(-ENOENT);
 
     en = linked_list_first(lh);
@@ -555,13 +524,21 @@ static int vm_extent_insert
     while(en)
     {
         next_en = linked_list_next(en);
-        eh = (vm_slot_hdr_t*)en;
+        hdr = (vm_slot_hdr_t*)en;
 
-        if(eh->avail > 0)
+        if(hdr->avail > 0)
         {
-            /* try to insert the slot */
-            if(!vm_insert_extent_in_slot(eh, ext, ent_per_slot))
-                return(0);
+            for(uint32_t i = 0; i < ext_per_slot; i++)
+            {
+                c_ext = &hdr->array[i];    
+
+                if(!c_ext->length)
+                {
+                    memcpy(c_ext, ext, sizeof(vm_extent_t));
+                    hdr->avail--;
+                    return(0);
+                }
+            }
         }
 
         en = next_en;
@@ -574,9 +551,7 @@ static int vm_extent_extract
 (
     list_head_t *lh,
     uint32_t    ext_per_slot,
-    virt_addr_t virt,
-    virt_size_t len,
-    vm_extent_t *out_ext
+    vm_extent_t *ext
 )
 {
     list_node_t   *hn      = NULL;
@@ -587,7 +562,7 @@ static int vm_extent_extract
     int           found    = 0;
 
     /* no length? no entry */
-    if(len == 0)
+    if(!ext || !ext->length  || !ext->flags)
         return(-1);
 
     hn = linked_list_first(lh);
@@ -598,7 +573,7 @@ static int vm_extent_extract
 
         hdr = (vm_slot_hdr_t*)hn;
 
-        /* if hdr->avail == ctx->free_per_slot, we don't have
+        /* if hdr->avail == ext_per_slot, we don't have
          * anything useful here
          */ 
         if(hdr->avail == ext_per_slot)
@@ -611,27 +586,30 @@ static int vm_extent_extract
         {
             cext = &hdr->array[i];
 
-            if(EXTENT_IS_EMPTY(cext))
+            if(!cext->length)
                 continue;
 
             if(best == NULL)
                 best = cext;
 
-            if(virt != 0)
+            if(ext->base != 0)
             {
                 if(vmm_is_in_range(cext->base, 
                                    cext->length, 
-                                   virt, 
-                                   len))
+                                   ext->base, 
+                                   ext->length))
                 {
                     found = 1;
+                    best = cext;
                     break;
                 }
             }
-            else if(best != NULL && hdr->type == VM_FREE_HDR)
+            else if(best != NULL)
             {
-                if((best->length < len && cext->length >= len) ||
-                   (best->length > cext->length && cext->length >= len))
+                if((best->length < ext->length   && 
+                    cext->length >= ext->length) ||
+                   (best->length > cext->length  && 
+                   cext->length >= ext->length))
                 {
                     best = cext;
                 }
@@ -644,29 +622,35 @@ static int vm_extent_extract
         hn = next_hn;
     }
 
-    if(best != NULL)
+    if(!best || (best->length < ext->length))
     {
-        if(best->length < len)
-            best = NULL;
+        return(-1);
     }
 
-    if(best != NULL)
+    hdr = EXTENT_TO_HEADER(best);
+
+    if(hdr->avail < ext_per_slot)
+        hdr->avail++;
+    else
+        kprintf("ALREADY AT MAX\n");
+
+    /* export the slot */ 
+    memcpy(ext, best, sizeof(vm_extent_t));
+
+    /* clear the slot that we've acquired */
+    memset(best, 0, sizeof(vm_extent_t));
+
+    /* shift the header to be the first in list 
+     * so that an insert will not require
+     * a potential re-iteration
+     * */
+    if(linked_list_first(lh) != &hdr->node)
     {
-        hdr = EXTENT_TO_HEADER(best);
-
-        if(hdr->avail < ext_per_slot)
-            hdr->avail++;
-        else
-            kprintf("ALREADY AT MAX\n");
-
-        /* export the slot */ 
-        memcpy(out_ext, best, sizeof(vm_extent_t));
-
-        /* clear the slot that we've acquired */
-        memset(best, 0, sizeof(vm_extent_t));
+        linked_list_remove(lh, &hdr->node);
+        linked_list_add_head(lh, &hdr->node);
     }
 
-    return((best == NULL) ? -1 : 0);
+    return(0);
 
 }
 
@@ -789,6 +773,11 @@ static inline int vm_extent_split
                        (dst->base);
         src->base  = virt - (src->base);
 
+        /* make sure the flags are the same regardless
+         * of what happens next 
+         */
+        dst->flags = src->flags;
+
         if(dst->length == 0)
         {
             dst->base = 0;
@@ -813,607 +802,173 @@ static inline int vm_extent_split
     
 }
 
-/* vm_acquire_free_slot - releases a slot */
 
-static int vm_release_mem
-(
-    vm_ctx_t      *ctx,
-    virt_addr_t    virt,
-    virt_size_t    len
-)
-{
-    list_node_t       *fn         = NULL;
-    list_node_t       *next_fn    = NULL;
-    vm_alloc_mem_t    *adesc      = NULL;
-    vm_alloc_mem_t    *from_slot  = NULL;
-    vm_alloc_mem_hdr_t *fh         = NULL;
-    uint8_t            found      = 0;
-
-    fn = linked_list_first(&ctx->free_mem);
-
-
-    if(vm_acquire_alloc_slot(ctx, virt, len, &adesc) < 0)
-        return(-1);
-
-
-    return(0);
-
-}
-
-/* 
- * vm_acquire_mem - acquires memory 
- */
-
-static virt_addr_t vm_acquire_mem
+virt_addr_t vm_space_alloc
 (
     vm_ctx_t *ctx,
-    virt_addr_t virt,
+    virt_addr_t addr,
     virt_size_t len,
-    uint32_t    type
+    uint32_t flags
 )
 {
-    vm_free_mem_t         *fmem      = NULL;
-    virt_addr_t           ret_addr   = 0;
-    virt_addr_t           map_addr   = 0;
-    virt_addr_t           rem_virt   = 0;
-    virt_size_t           rem_len    = 0;
-    int                   rc         = 0;
+    vm_extent_t req_ext;
+    vm_extent_t rem_ext;
+    vm_extent_t alloc_ext;
 
+    int status = 0;
 
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
+    /* check if we're stupid or not */
+    if((flags & VM_REGION_MASK) == VM_REGION_MASK)
+        return(-1);
+
+    if((flags & VM_MEM_TYPE_MASK) == VM_MEM_TYPE_MASK)
+        return(-1);
+
+    /* clear the extent */
+    memset(&req_ext, 0, sizeof(vm_extent_t));
 
     if(len % PAGE_SIZE)
         len = ALIGN_UP(len, PAGE_SIZE);
 
-    if(vm_acquire_free_slot(ctx, virt, len, &fmem) < 0)
+    if(addr % PAGE_SIZE)
+        len = ALIGN_DOWN(len, PAGE_SIZE);
+
+    /* fill up the request extent */
+    req_ext.base   = addr;
+    req_ext.length = len;
+    req_ext.flags  = flags & VM_REGION_MASK;
+
+    /* acquire the extent */
+    status = vm_extent_extract(&ctx->free_mem,
+                               ctx->free_per_slot,
+                               &req_ext);
+    
+    /* If we've failed and we had an address,
+     * try again by letting the extraction
+     * routine decide the best slot
+     */ 
+    if(status < 0 && addr != 0)
     {
-        return(0);
+        /* clear the base as that's
+         * how we tell to auto find the best slot 
+         */
+        req_ext.base = 0;
+        status = vm_extent_extract(&ctx->free_mem,
+                               ctx->free_per_slot,
+                               &req_ext);
     }
 
-    if(vm_split_block(&fmem->base,
-                      &fmem->length,
-                      ret_addr, 
-                      len, 
-                      &rem_virt,
-                      &rem_len) > 0)
+    if(status < 0)
     {
-        rc = vm_put_free_mem(ctx, rem_virt, rem_len);
+        kprintf("OOOPS...no memory\n");
+        return(NULL);
+    }
+    
+    memset(&rem_ext, 0, sizeof(vm_extent_t));
+    
+    /* split the extent if needed */
+    /* in case we don't have the a preferred address,
+     * we would set the address to req_ext.base
+     * to do the split
+     */ 
+    if(addr == 0)
+        addr = req_ext.base;
 
-        /* if we cannot store the free entry, then we 
-         * must revert the change to avoid loosing free memory
-         */ 
-        if(rc < 0)
+    /* do the split */
+    status = vm_extent_split(&req_ext, 
+                              addr, 
+                              len, 
+                              &rem_ext);
+
+    /* Insert the left side - this is guaranteed to work 
+     * If it doesn't...well...we're fucked
+     */
+
+    vm_extent_insert(&ctx->free_mem,
+                     ctx->free_per_slot,
+                     &req_ext);
+
+    /* If we have a right side, insert it */
+    if(status > 0)
+    {
+        status = vm_extent_insert(&ctx->free_mem,
+                                  ctx->free_per_slot,
+                                  &req_ext);
+
+        /* Hehe... no slots?...try to allocate */
+        if(status == -ENOMEM)
         {
-            if(vm_merge_free_block(ctx, rem_virt, rem_len) < 0)
+            status = vm_alloc_slot(ctx, 
+                                   &ctx->free_mem, 
+                                   ctx->free_per_slot);
+            
+            /* status != 0? ...well..FUCK */
+            if(status != 0)
             {
-                kprintf("ERROR while reversing the allocation\n");
+                /* we should revert what we did earlier and bail out, 
+                 * but for now we will deadlock here
+                 */
+                kprintf("OOOPS....no memory chief\n");
                 while(1);
             }
+
+            /* Ok, let's do this again, shall we? */
+            status = vm_extent_insert(&ctx->free_mem,
+                                       ctx->free_per_slot,
+                                      &req_ext);
         }
     }
 
+    /* set the alloc_ext to what 
+     * we want to add to the 
+     * allocated list 
+     */
 
-    return(0);
-}
+    alloc_ext.base = addr;
+    alloc_ext.length = len;
+    alloc_ext.flags = flags;
 
+    status = vm_extent_insert(&ctx->alloc_mem, 
+                               ctx->alloc_per_slot, 
+                              &alloc_ext);
 
-/* vm_reserve - reserve virtual memory */
-
-int vm_reserve
-(
-    vm_ctx_t    *ctx, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t    type
-)
-{
-    vm_extent_t *fext = NULL;
-    vm_extent_t rem_ext;
-    int                   int_status = 0;
-
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-    memset(&rem, 0, sizeof(vm_free_mem_t));
     
-    spinlock_lock_int(&ctx->lock, &int_status);
-    
-
-    if(vm_extent_acquire(&ctx->free_mem, 
-                          ctx->free_per_slot, 
-                          virt, 
-                          len, 
-                          &fext) < 0)
+     /* Hehe... no slots?....again?...try to allocate */
+    if(status == -ENOMEM)
     {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(-1);
-    }
-
-
-    fn = linked_list_first(&ctx->free_mem);
-
-    while(fn)
-    {
-        next_fn = linked_list_next(fn);
-
-        fh = (vm_free_mem_hdr_t*)fn;
-
-        for(uint16_t i = 0; i < ctx->free_per_slot; i++)
+        status = vm_alloc_slot(ctx, 
+                               &ctx->alloc_mem, 
+                               ctx->alloc_per_slot);
+        
+        /* status != 0? ...well..FUCK */
+        if(status != 0)
         {
-            fdesc = &fh->array[i];
-
-            if(vmm_is_in_range(fdesc->base, fdesc->length, virt, len))
-            {    
-                rc = vm_add_reserved(ctx, virt, len, type);
-
-                if(vm_split_free_block(&fh->array[i], virt, len, &rem) > 0)
-                {
-                    rc = vm_put_free_mem(ctx, &rem);
-
-                    if(rc < 0)
-                    {
-                        ;
-                    }
-                }
-                spinlock_unlock_int(&ctx->lock, int_status);
-                return(rc);
-            }
+            /* we should revert what we did earlier and bail out, 
+                * but for now we will deadlock here
+                */
+            kprintf("OOOPS....no memory chief\n");
+            while(1);
         }
 
-        if(next_fn == NULL)
-        {
-            kprintf("Not enough space!!!\n");
-            break;
-        }
- 
-        fn = next_fn;
+        /* Ok, let's do this again, shall we? */
+        status = vm_extent_insert(&ctx->alloc_mem,
+                                   ctx->alloc_per_slot,
+                                   &alloc_ext);
     }
 
-    rc = vm_add_reserved(ctx, &rsrvd);
-    
-    spinlock_unlock_int(&ctx->lock, int_status);
 
-    return(rc);
+    if(!status)
+    {
+        return(alloc_ext.base);
+    }
+    else
+    {
+        /* That's not enough - we must undo any changes if we are
+         * unable to allocate
+         */
+
+        return(NULL);
+    }
+
 }
 
-#if 0
-/* vm_map - map phyical address to virtual address */
-virt_addr_t vm_map
-(
-    vm_ctx_t *ctx,
-    phys_addr_t phys, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t    attr
-)
-{
-    list_node_t          *fn         = NULL;
-    list_node_t          *next_fn    = NULL;
-    vm_free_mem_t     *fdesc      = NULL;
-    vm_free_mem_t      rem;
-    vm_free_mem_t     *from_slot  = NULL;
-    vm_free_mem_hdr_t *fh         = NULL;
-    virt_addr_t           ret_addr   = 0;
-    virt_addr_t           map_addr   = 0;
-    virt_addr_t           rem_virt   = 0;
-    virt_size_t           rem_len    = 0
-    int                   int_status = 0;
-
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-    ret_addr = virt;
-
-    spinlock_lock_int(&ctx->lock, &int_status);
-
-    fn = linked_list_first(&ctx->free_mem);
-
-    while(fn)
-    {
-        next_fn = linked_list_next(fn);
-        fh = (vm_free_mem_hdr_t*)fn;
-
-        if(fh->avail == 0)
-        {
-            fn = next_fn;
-            continue;
-        }
-
-        for(uint16_t i  = 0; i < ctx->free_per_slot; i++)
-        {
-            fdesc = &fh->array[i];
-
-            if(fdesc->length == 0)
-                continue;
-
-            if(from_slot == NULL)
-                from_slot = fdesc;
-
-            if(virt != 0)
-            {
-                if(VIRT_FROM_FREE_BLOCK(virt, len, from_slot))
-                {
-                    ret_addr = virt;
-                    break;
-                }
-
-                from_slot = NULL;
-            }
-            else if(from_slot)
-            {
-                /* Save the best-fit slot found so far */
-
-                if(from_slot->length < len && fdesc->length >= len)
-                {
-                    from_slot = fdesc;
-                }
-                else if((from_slot->length > fdesc->length) &&
-                        (fdesc->length >= len))
-                {
-                    from_slot = fdesc;
-                }
-            }
-        }
-
-        if(next_fn == NULL && virt != 0 && ret_addr == 0)
-        {
-            kprintf("RESTARTING\n");
-            virt = 0;
-            fn = linked_list_first(&ctx->free_mem);
-            from_slot = NULL;
-            continue;
-        }
-
-        if(ret_addr == virt)
-            break;
-
-        fn = next_fn;
-    }
-
-    if(from_slot->length < len)
-    {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(0);
-    }
-
-    if(ret_addr == 0)
-        ret_addr = from_slot->base;
-
-    map_addr = pagemgr_map(&ctx->pagemgr, 
-                            ret_addr, 
-                            phys, 
-                            len, 
-                            attr);
-
-    if(map_addr == 0)
-    {
-        pagemgr_unmap(&ctx->pagemgr,
-                       from_slot->base, 
-                       len);
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(0);
-    }
-
-    if(vm_split_free_block(from_slot, ret_addr, len, &rem) > 0)
-    {
-        vm_put_free_mem(ctx, &rem);
-    }
-
-    spinlock_unlock_int(&ctx->lock, int_status);
-
-    return(ret_addr);
-}
-
-/* vm_alloc - allocate virtual memory */
-virt_addr_t vm_alloc
-(
-    vm_ctx_t *ctx,
-    virt_addr_t virt, 
-    virt_size_t len,
-    uint32_t    attr
-)
-{
-    list_node_t          *fn         = NULL;
-    list_node_t          *next_fn    = NULL;
-    virt_addr_t           ret_addr   = 0;
-    virt_size_t           dist       = 0;
-    vm_free_mem_t     *fdesc      = NULL;
-    vm_free_mem_t      rem;
-    vm_free_mem_t     *from_slot  = NULL;
-    vm_free_mem_hdr_t *fh         = NULL;
-    virt_addr_t           near_virt  = 0;
-    int                   int_status = 0;
-
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-    memset(&rem, 0, sizeof(vm_free_mem_t));
-
-    spinlock_lock_int(&ctx->lock, &int_status);
-    
-    fn = linked_list_first(&ctx->free_mem);
-
-    while(fn)
-    {
-        next_fn = linked_list_next(fn);
-        fh = (vm_free_mem_hdr_t*) fn;
-
-        if(fh->avail == 0)
-        {
-            fn = next_fn;
-            continue;
-        }
-
-        for(uint16_t i  = 0; i < ctx->free_per_slot; i++)
-        {
-            fdesc = &fh->array[i];
-
-            if(fdesc->length == 0)
-                continue;
-
-            if(from_slot == NULL)
-                from_slot = fdesc;
-
-            if(virt != 0)
-            {
-                if(VIRT_FROM_FREE_BLOCK(virt, len, from_slot))
-                {
-                    kprintf("FROM_SLOT 0x%x 0x%x\n",from_slot->base,from_slot->length);
-                    ret_addr = virt;
-                    break;
-                }
-
-                from_slot = NULL;
-            }
-            else if(from_slot)
-            {
-                /* Save the best-fit slot found so far */
-                if(from_slot->length < len && fdesc->length >= len)
-                    from_slot = fdesc;
-
-                else if((from_slot->length > fdesc->length) &&
-                        (fdesc->length >= len))
-                    from_slot = fdesc;
-            }
-        }
-
-        /* Now...surprise me */
-        if(next_fn == NULL && virt != 0 && ret_addr == 0)
-        {
-            kprintf("restarting\n");
-            virt = 0;
-            fn = linked_list_first(&ctx->free_mem);
-            from_slot = NULL;
-            continue;
-        }
-
-        if(ret_addr == virt)
-            break;
-
-        fn = next_fn;
-    }
-
-    if( from_slot->length < len)
-    {
-        kprintf("Not From slot 0x%x - 0x%x 0x%x\n", 
-                from_slot->base, 
-                from_slot->length, 
-                len);
-
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(0);
-    }
-
-    if(ret_addr == 0)
-        ret_addr = from_slot->base;
-    
-    ret_addr = pagemgr_alloc(&ctx->pagemgr, ret_addr, len, attr);
-    
-    if(ret_addr == 0)
-    {
-        kprintf("PG_ALLOC_FAIL\n");
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(0);
-    }
-
-    
-
-    if(vm_split_free_block(from_slot, ret_addr, len, &rem) > 0)
-    {
-        vm_put_free_mem(ctx, &rem);
-    }      
-
-    spinlock_unlock_int(&ctx->lock, int_status);
-
-    return(ret_addr);
-}
-
-/* vm_free - free virtual memory */
-
-int vm_free
-(
-    vm_ctx_t *ctx,
-    virt_addr_t vaddr, 
-    virt_size_t len
-)
-{
-    virt_addr_t      virt = 0;
-    vm_free_mem_t mm;
-    int              status     = 0;
-    int              int_status = 0;
-
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-
-    virt    = vaddr;
-    mm.base = virt;
-    mm.length = len;
-
-    if(virt == 0)
-        return(-1);
-    
-    spinlock_lock_int(&ctx->lock, &int_status);
-    
-    if(vm_is_free(ctx, virt, len))
-    {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(-1);
-    }
-
-    if(vm_is_reserved(ctx, virt, len))
-    {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(-1);
-    }
-
-    status = vm_merge_free_block(ctx, virt, len);
-
-    if(status != 0)
-        status = vm_put_free_mem(ctx, &mm);
-
-    if(status == 0)
-        status = pagemgr_free(&ctx->pagemgr, virt, len);
-
-    spinlock_unlock_int(&ctx->lock, int_status);
-
-    return(status);
-}
-
-/* vm_unmap - unmap virtual memory */
-int vm_unmap
-(
-    vm_ctx_t *ctx,
-    virt_addr_t vaddr, 
-    virt_size_t len
-)
-{
-    virt_addr_t virt = (virt_addr_t)vaddr;
-    vm_free_mem_t mm;
-    int status  = 0;
-    int int_status = 0;
-
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-    if(virt == 0)
-        return(-1);
-
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-    spinlock_lock_int(&ctx->lock, &int_status);
-
-    if(vm_is_free(ctx, virt, len))
-    {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(-1);
-    }
-    if(vm_is_reserved(ctx, virt, len))
-    {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(-1);
-    }
-
-    status = vm_merge_free_block(ctx, virt, len);
-
-    if(status != 0)
-        status = vm_put_free_mem(ctx, &mm);
-
-    if(status == 0)
-        status = pagemgr_unmap(&ctx->pagemgr, virt, len);
-    
-    spinlock_unlock_int(&ctx->lock, int_status);
-
-    return(status);
-}
-
-
-int vm_change_attrib
-(
-    vm_ctx_t *ctx,
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t    attr
-)
-{
-    int status = 0;
-    int int_status = 0;
-    if(len == 0 || virt == 0)
-        return(-1);
-
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-    spinlock_lock_int(&ctx->lock, &int_status);
-
-    if(vm_is_reserved(ctx, virt, len))
-    {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(-1);
-    }
-    
-    if(vm_is_free(ctx, virt, len))
-    {
-        spinlock_unlock_int(&ctx->lock, int_status);
-        return(-1);
-    }
-
-    status = pagemgr_attr_change(&ctx->pagemgr, virt, len, attr);
-    
-    spinlock_unlock_int(&ctx->lock, int_status);
-
-    return(status);
-}
-
-virt_addr_t vm_temp_identity_map
-(
-    vm_ctx_t *ctx,
-    phys_addr_t phys, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t    attr
-)
-{
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-    
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-    return(pagemgr_map(&ctx->pagemgr,virt, phys, len, attr));
-}
-
-int vm_temp_identity_unmap
-(
-    vm_ctx_t *ctx,
-    virt_addr_t vaddr, 
-    virt_size_t len
-)
-{
-    int status = 0;
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-    status = pagemgr_unmap(&ctx->pagemgr,(virt_addr_t)vaddr, len);
-
-    return(status);
-}
-#endif
