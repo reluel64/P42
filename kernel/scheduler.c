@@ -61,7 +61,7 @@ int sched_init_thread
 
     memset(th, 0, sizeof(sched_thread_t));
 
-    th->stack = vmmgr_alloc(NULL, 0, stack_sz, VMM_ATTR_WRITABLE);
+    th->stack = vm_alloc(NULL, 0, stack_sz, VM_ATTR_WRITABLE);
 
     if(!th->stack)
     {
@@ -697,7 +697,7 @@ void sched_sleep(uint32_t delay)
 static inline void sched_clean_thread(sched_thread_t *th)
 {
     memset((void*)th->stack, 0, th->stack_sz);
-    vmmgr_free(NULL, th->stack, th->stack_sz);
+    vm_free(NULL, th->stack, th->stack_sz);
     cpu_ctx_destroy(th);
 
     if(th->flags & THREAD_ALLOCATED)

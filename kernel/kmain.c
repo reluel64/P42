@@ -118,7 +118,7 @@ void kmain()
         return;
     
     /* initialize Virtual Memory Manager */
-    if(vmmgr_init())
+    if(vm_init())
         return;
 
     /* initialize Page Frame Manager*/

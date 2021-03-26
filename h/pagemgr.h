@@ -5,8 +5,10 @@
 #include <defs.h>
 #include <spinlock.h>
 #include <platform.h>
+
 #define REMAP_TABLE_VADDR (0xFFFFFFFFFFE00000)
 #define REMAP_TABLE_SIZE  (0x200000)
+#define BOOT_REMAP_TABLE_VADDR (0xFFFFFFFFBFE00000)
 
 
 #define PAGE_WRITABLE        (1 << 0)
@@ -23,19 +25,19 @@
 
 typedef struct pagemgr_ctx_t
 {
-     phys_addr_t page_phys_base; /* physical location of the first
+     phys_addr_t pg_phys; /* physical location of the first
                                   * level of paging
                                   */ 
     spinlock_t  lock;
+    uint8_t max_level;                /* paging level */
 }pagemgr_ctx_t;
 
 
 
 
 int         pagemgr_init(pagemgr_ctx_t *ctx);
-virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr);
-virt_addr_t pagemgr_boot_temp_map_big(virt_addr_t phys_addr, virt_size_t len);
-int         pagemgr_boot_temp_unmap_big(virt_addr_t vaddr, virt_size_t len);
+virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
+int         pagemgr_temp_unmap(virt_addr_t vaddr);
 void        pagemgr_boot_temp_map_init(void);
 int         pagemgr_install_handler(void);
 uint64_t    page_manager_get_base(void);

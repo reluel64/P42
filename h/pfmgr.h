@@ -16,7 +16,7 @@
 typedef phys_size_t (*alloc_cb)(phys_addr_t phys, phys_size_t count, void *pv);
 typedef int     (*free_cb) (phys_addr_t *phys, phys_size_t *count, void *pv);
 
-typedef struct
+typedef struct pfmgr_t
 {
     int  (*alloc)(phys_size_t pages, uint8_t flags, alloc_cb cb, void *pv);
     int  (*dealloc)(free_cb cb, void *pv);

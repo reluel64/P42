@@ -272,7 +272,7 @@ int mem_map_iter
     callback = mem_map_test_callback;
 #endif
 
-    mem_map_numa_check_init();
+    //mem_map_numa_check_init();
 
     has_numa = (numa_check_init == 1);
 

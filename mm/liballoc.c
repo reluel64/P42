@@ -875,7 +875,7 @@ void* liballoc_alloc(size_t pages)
 {
     void *v = NULL;
 
-    v = (void*)vmmgr_alloc(NULL, 0, pages * PAGE_SIZE, VMM_ATTR_WRITABLE);
+    v = (void*)vm_alloc(NULL, 0, pages * PAGE_SIZE, VM_ATTR_WRITABLE);
 
     return(v);
 }
@@ -892,7 +892,7 @@ int liballoc_free(void*p, size_t pages)
 {
     int ret = 0;
 
-    ret = vmmgr_free(NULL, (virt_addr_t)p, pages * PAGE_SIZE);
+    ret = vm_free(NULL, (virt_addr_t)p, pages * PAGE_SIZE);
     return(ret);
 }
   

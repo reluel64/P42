@@ -23,12 +23,12 @@ static vga_t vga;
 
 void vga_init()
 {
-    vga.base = (uint16_t*)vmmgr_map(NULL, 
+    vga.base = (uint16_t*)vm_map(NULL, 
                                     FB_PHYS_MEM, 
                                     0, 
                                     FB_LEN, 
-                                    VMM_ATTR_WRITABLE|
-                                    VMM_ATTR_STRONG_UNCACHED
+                                    VM_ATTR_WRITABLE|
+                                    VM_ATTR_STRONG_UNCACHED
                                     );
 
     vga.col = 0;

@@ -40,30 +40,47 @@ static int vm_virt_is_present
 
 static int vm_extent_insert
 (
-    vm_ctx_t *ctx,
     list_head_t *lh,
-    uint32_t ent_per_slot,
+    uint32_t ext_per_slot,
     vm_extent_t *ext
 );
 
-static int vm_insert_extent_in_slot
+static int vm_extent_extract
 (
-    vm_slot_hdr_t *hdr,
-    vm_extent_t   *ext,
-    uint32_t      ext_per_slot
+    list_head_t *lh,
+    uint32_t    ext_per_slot,
+    vm_extent_t *ext
 );
+
+static int vm_undo
+(
+    list_head_t *undo_from,
+    list_head_t *undo_to,
+    uint32_t    undo_from_ext_cnt,
+    uint32_t    undo_to_ext_cnt,
+    vm_extent_t *ext_left,
+    vm_extent_t *ext_mid,
+    vm_extent_t *ext_right
+);
+
+virt_addr_t vm_space_alloc
+(
+    vm_ctx_t *ctx,
+    virt_addr_t addr,
+    virt_size_t len,
+    uint32_t flags
+);
+
 
 void vm_list_entries()
 {
     list_node_t *node = NULL;
     list_node_t *next_node = NULL;
-    vm_free_mem_t *fmem = NULL;
-    vm_rsrvd_mem_t *rsrvd  = NULL;
-    vm_free_mem_hdr_t *fh = NULL;
-    vm_rsrvd_mem_hdr_t *rh = NULL;
+    vm_slot_hdr_t *hdr = NULL;
+    vm_extent_t *e = NULL;
 
     kprintf("FREE_DESC_PER_PAGE %d\n",kernel_ctx.free_per_slot);
-    kprintf("RSRV_DESC_PER_PAGE %d\n",kernel_ctx.rsrvd_per_slot);
+    kprintf("ALLOC_DESC_PER_PAGE %d\n",kernel_ctx.alloc_per_slot);
 
     node = linked_list_first(&kernel_ctx.free_mem);
 
@@ -71,35 +88,35 @@ void vm_list_entries()
 
     while(node)
     {
-        fh = (vm_free_mem_hdr_t*)node;
+        hdr = (vm_slot_hdr_t*)node;
 
         next_node = linked_list_next(node);
 
         for(uint16_t i = 0; i < kernel_ctx.free_per_slot; i++)
         {
-            fmem  = &fh->array[i];
+            e  = &hdr->array[i];
 
-            if(fmem->base != 0  && fmem->length != 0)
-                kprintf("BASE 0x%x LENGTH 0x%x\n",fmem->base,fmem->length);
+            if(e->length != 0)
+                kprintf("BASE 0x%x LENGTH 0x%x\n",e->base,e->length);
         }
 
         node = next_node;
     }
 #if 1
-    node = linked_list_first(&kernel_ctx.rsrvd_mem);
+    node = linked_list_first(&kernel_ctx.alloc_mem);
 
-    kprintf("----LISTING RESERVED RANGES----\n");
+    kprintf("----LISTING ALLOCATED RANGES----\n");
 
     while(node)
     {
         next_node = linked_list_next(node);
-        rh = (vm_rsrvd_mem_hdr_t*)node;
+        hdr = (vm_slot_hdr_t*)node;
 
-        for(uint16_t i = 0; i < kernel_ctx.rsrvd_per_slot; i++)
+        for(uint16_t i = 0; i < kernel_ctx.alloc_per_slot; i++)
         {
-            rsrvd  = &rh->array[i];
-            if(rsrvd->base != 0  && rsrvd->length != 0)
-                kprintf("BASE 0x%x LENGTH 0x%x\n",rsrvd->base,rsrvd->length);
+            e  = &hdr->array[i];
+            if(e->length != 0)
+                kprintf("BASE 0x%x LENGTH 0x%x\n",e->base,e->length);
         }
 
         node = next_node;
@@ -108,96 +125,50 @@ void vm_list_entries()
 }
 
 
+
 static int vm_setup_protected_regions
 (
     vm_ctx_t *ctx
 )
 {
-    vm_extent_t          *ext     = NULL;
-    vm_extent_t           rem_extent; 
-    int status = 0;
 
-    vm_extent_t rsrvd_extents[] = 
+    vm_slot_hdr_t *hdr = NULL;
+    uint32_t   rsrvd_count = 0;
+
+    vm_extent_t re[] = 
     {
+        /* Reserve kernel image - only the higher half */
         {
-            .base   =  _KERNEL_VMA     + _BOOTSTRAP_END
+            .base   =  _KERNEL_VMA     + _BOOTSTRAP_END,
             .length =  _KERNEL_VMA_END - _KERNEL_VMA,
-            .type   = VM_PERMANENT,
+            .flags   = VM_PERMANENT,
         },
+        /* Reserve remapping table */
         {
-            .base   =  REMAP_TABLE_VADDR
+            .base   =  REMAP_TABLE_VADDR,
             .length =  REMAP_TABLE_SIZE,
-            .type   = VM_PERMANENT,
+            .flags   = VM_PERMANENT,
         },
+        /* reserve head of tracking for free addresses */
         {
-            .base   =  _KERNEL_VMA     + _BOOTSTRAP_END
+            .base   =  (virt_addr_t)linked_list_first(&ctx->free_mem),
             .length =  VM_SLOT_SIZE,
-            .type   = VM_PERMANENT,
+            .flags   = VM_PERMANENT,
         },
         {
-            .base   =  _KERNEL_VMA     + _BOOTSTRAP_END
-            .length = VM_SLOT_SIZE,
-            .type   = VM_PERMANENT,
+            .base   =  (virt_addr_t)linked_list_first(&ctx->alloc_mem),
+            .length =  VM_SLOT_SIZE,
+            .flags   = VM_PERMANENT,
         },
-    }
+        
+    };
 
-    vm_extent_acquire(&ctx->free_mem,
-                       ctx->free_per_slot,
-                      _KERNEL_VMA     + _BOOTSTRAP_END,
-                      _KERNEL_VMA_END - _KERNEL_VMA,
-                      &ext);
+    rsrvd_count = sizeof(re) / sizeof(vm_extent_t);
 
-    status = vm_extent_split(ext,
-                    _KERNEL_VMA     + _BOOTSTRAP_END,
-                    _KERNEL_VMA_END - _KERNEL_VMA,
-                    &rem_extent);
-
-    if(status > 0)
+    for(uint32_t i = 0; i < rsrvd_count; i++)
     {
-        vm_extent_insert(ctx, 
-                        &ctx->alloc_mem, 
-                        ctx->alloc_per_slot,
-                        &rem_extent);
+        vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags);
     }
-
-    
-
-    /* Reserve kernel image - only the higher half */
-    vm_reserve(&kernel_ctx,
-                _KERNEL_VMA     + _BOOTSTRAP_END,
-                _KERNEL_VMA_END - _KERNEL_VMA,
-                VM_RES_KERNEL_IMAGE);
-
-    /* Reserve remapping table */
-    vm_reserve(&kernel_ctx,
-                REMAP_TABLE_VADDR,
-                REMAP_TABLE_SIZE,
-                VM_REMAP_TABLE);
-
-    /* reserve head of tracking for free addresses */
-    vm_reserve(&kernel_ctx,
-                (virt_addr_t)fh_hi,
-                VM_SLOT_SIZE,
-                VM_RES_FREE);
-
-    vm_reserve(&kernel_ctx,
-                (virt_addr_t)fh_lo,
-                VM_SLOT_SIZE,
-                VM_RES_FREE);
-
-    /* reserve head of tracking for allocated addresses */
-    vm_reserve(&kernel_ctx,
-                (virt_addr_t)ah,
-                VM_SLOT_SIZE,
-                VM_RES_FREE);
-
-    /* reserve head of tracking for reserved addresses 
-     * Yes, that some kind of a chicken-egg situation
-     */
-    vm_reserve(&kernel_ctx,
-                (virt_addr_t)rh,
-                VM_SLOT_SIZE,
-                VM_RES_RSRVD);
 }
  
 int vm_init(void)
@@ -262,19 +233,36 @@ int vm_init(void)
     ext.flags  = VM_HIGH_MEM;
 
     vm_extent_insert(&kernel_ctx.free_mem, 
-                     hdr->avail, 
+                     kernel_ctx.free_per_slot, 
                      &ext);
 
     /* Insert lower memory */
-    ext.base   = PAGE_SIZE;
-    ext.length = (vm_max >> 1);
+    ext.base   = 0;
+    ext.length = ((vm_max >> 1) - ext.base) + 1;
     ext.flags  = VM_LOW_MEM;
 
     vm_extent_insert(&kernel_ctx.free_mem, 
-                      hdr->avail, 
+                      kernel_ctx.free_per_slot, 
                       &ext);
 
+    hdr = (vm_slot_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
+                                        kernel_ctx.vm_base + VM_SLOT_SIZE,
+                                        VM_SLOT_SIZE,
+                                        PAGE_WRITABLE | 
+                                        PAGE_WRITE_THROUGH);
+    
+    if(hdr == NULL)
+    {
+        return(-1);
+    }
 
+    memset(hdr,    0, VM_SLOT_SIZE);
+    linked_list_add_head(&kernel_ctx.alloc_mem, &hdr->node);
+    hdr->avail = kernel_ctx.alloc_per_slot;
+
+    vm_setup_protected_regions(&kernel_ctx);
+    vm_list_entries();
+while(1);
     return(0);
 }
 
@@ -292,7 +280,7 @@ static int vm_alloc_slot
     vm_extent_t alloc_ext;
     
     int          status = 0;
-    
+
     memset(&fext, 0, sizeof(vm_extent_t));
 
     /* we want free memory to come from the high memory area */
@@ -345,7 +333,7 @@ static int vm_alloc_slot
     alloc_ext.length = VM_SLOT_SIZE;
 
     /* Memory is allocated and MUST NOT be swapped */
-    alloc_ext.flags = VM_ALLOC | VM_PERMANENT;
+    alloc_ext.flags = VM_ALLOCED | VM_PERMANENT;
     
     /* insert the allocated memory into the list */
 
@@ -356,7 +344,7 @@ static int vm_alloc_slot
     /* Plot twist - we don't have extents to store the 
      * newly allocated slot
      */ 
-    if(status == -ENOMEM)
+    if(status == VM_NOMEM)
     {
         /* let's call the routine again. Yes, we're recursing */
         status = vm_alloc_slot(ctx, 
@@ -385,10 +373,10 @@ static int vm_alloc_slot
 }
 
 /*
- * vmm_is_in_range - checks if a segment is in the range of another segment
+ * vm_is_in_range - checks if a segment is in the range of another segment
  */
 
-static inline int vmm_is_in_range
+static inline int vm_is_in_range
 (
     virt_addr_t base,
     virt_size_t len,
@@ -417,10 +405,10 @@ static inline int vmm_is_in_range
 }
 
 /*
- * vmm_touches_range - checks if a segment touches another segment
+ * vm_touches_range - checks if a segment touches another segment
  */
 
- static inline int vmm_touches_range
+ static inline int vm_touches_range
 (
     virt_addr_t base,
     virt_size_t len,
@@ -484,7 +472,7 @@ static int vm_virt_is_present
             if(!hdr->array[i].length)
                 continue;
 
-            if(vmm_is_in_range(hdr->array[i].base, 
+            if(vm_is_in_range(hdr->array[i].base, 
                                hdr->array[i].length, 
                                virt, 
                                len))
@@ -511,8 +499,9 @@ static int vm_extent_insert
     vm_slot_hdr_t *hdr        = NULL;
     vm_extent_t     *c_ext     = NULL;
 
+   // kprintf("INSERTING %x %x\n",ext->base, ext->length);
     if(!ext->length)
-        return(-ENOENT);
+        return(VM_NOENT);
 
     en = linked_list_first(lh);
 
@@ -544,7 +533,7 @@ static int vm_extent_insert
         en = next_en;
     }
 
-    return(-ENOMEM);
+    return(VM_NOMEM);
 }
 
 static int vm_extent_extract
@@ -562,7 +551,7 @@ static int vm_extent_extract
     int           found    = 0;
 
     /* no length? no entry */
-    if(!ext || !ext->length  || !ext->flags)
+    if(!ext || !ext->length)
         return(-1);
 
     hn = linked_list_first(lh);
@@ -594,7 +583,7 @@ static int vm_extent_extract
 
             if(ext->base != 0)
             {
-                if(vmm_is_in_range(cext->base, 
+                if(vm_is_in_range(cext->base, 
                                    cext->length, 
                                    ext->base, 
                                    ext->length))
@@ -606,6 +595,13 @@ static int vm_extent_extract
             }
             else if(best != NULL)
             {
+                if((cext->flags & VM_REGION_MASK) == 
+                   (ext->flags  & VM_REGION_MASK))
+                {
+                    best = NULL;
+                    continue;
+                }
+
                 if((best->length < ext->length   && 
                     cext->length >= ext->length) ||
                    (best->length > cext->length  && 
@@ -641,7 +637,7 @@ static int vm_extent_extract
     memset(best, 0, sizeof(vm_extent_t));
 
     /* shift the header to be the first in list 
-     * so that an insert will not require
+     * so that an immediate insert will not require
      * a potential re-iteration
      * */
     if(linked_list_first(lh) != &hdr->node)
@@ -654,8 +650,10 @@ static int vm_extent_extract
 
 }
 
-/* vm_merge_free_block - merge adjacent memory blocks */
-
+/* vm_merge_free_block - merge adjacent memory blocks 
+ * This routine requires to be re-written
+ */
+#if 0
 static int vm_extent_merge
 (
     list_head_t *lst,
@@ -744,7 +742,7 @@ static int vm_extent_merge
 
     return(merged ? 0 : -1);
 }
-
+#endif
 
 
 /* vm_split_block - split a block 
@@ -763,7 +761,7 @@ static inline int vm_extent_split
     dst->base = 0;
     dst->length = 0;
 
-    if(vmm_is_in_range(src->base, 
+    if(vm_is_in_range(src->base, 
                        src->length, 
                        virt, 
                        len))
@@ -771,7 +769,7 @@ static inline int vm_extent_split
         dst->base = (virt + len) ;
         dst->length  = (src->base + src->length)  - 
                        (dst->base);
-        src->base  = virt - (src->base);
+        src->length  = virt - (src->base);
 
         /* make sure the flags are the same regardless
          * of what happens next 
@@ -814,8 +812,7 @@ virt_addr_t vm_space_alloc
     vm_extent_t req_ext;
     vm_extent_t rem_ext;
     vm_extent_t alloc_ext;
-
-    int status = 0;
+    int         status = 0;
 
     /* check if we're stupid or not */
     if((flags & VM_REGION_MASK) == VM_REGION_MASK)
@@ -831,7 +828,7 @@ virt_addr_t vm_space_alloc
         len = ALIGN_UP(len, PAGE_SIZE);
 
     if(addr % PAGE_SIZE)
-        len = ALIGN_DOWN(len, PAGE_SIZE);
+        addr = ALIGN_DOWN(addr, PAGE_SIZE);
 
     /* fill up the request extent */
     req_ext.base   = addr;
@@ -842,11 +839,18 @@ virt_addr_t vm_space_alloc
     status = vm_extent_extract(&ctx->free_mem,
                                ctx->free_per_slot,
                                &req_ext);
-    
+
+//kprintf("EXTENT IS %x %x\n",req_ext.base, req_ext.length);
+    /* Hmm...should the routine be smart?
+     * make it stupid for now and report
+     * error in case we cannot satisfy a 'prefferred' address
+     */ 
+#if 0
     /* If we've failed and we had an address,
      * try again by letting the extraction
      * routine decide the best slot
      */ 
+
     if(status < 0 && addr != 0)
     {
         /* clear the base as that's
@@ -857,11 +861,11 @@ virt_addr_t vm_space_alloc
                                ctx->free_per_slot,
                                &req_ext);
     }
-
+#endif
     if(status < 0)
     {
         kprintf("OOOPS...no memory\n");
-        return(NULL);
+        return(0);
     }
     
     memset(&rem_ext, 0, sizeof(vm_extent_t));
@@ -873,13 +877,13 @@ virt_addr_t vm_space_alloc
      */ 
     if(addr == 0)
         addr = req_ext.base;
-
+//kprintf("BEFORE SPLIT %x %x - %x %x - %x %x\n", req_ext.base,req_ext.length, rem_ext.base, rem_ext.length, addr, len);
     /* do the split */
     status = vm_extent_split(&req_ext, 
                               addr, 
                               len, 
                               &rem_ext);
-
+    kprintf("AFTER SPLIT %x %x - %x %x - %x %x\n", req_ext.base,req_ext.length, rem_ext.base, rem_ext.length, addr, len);
     /* Insert the left side - this is guaranteed to work 
      * If it doesn't...well...we're fucked
      */
@@ -893,10 +897,10 @@ virt_addr_t vm_space_alloc
     {
         status = vm_extent_insert(&ctx->free_mem,
                                   ctx->free_per_slot,
-                                  &req_ext);
+                                  &rem_ext);
 
         /* Hehe... no slots?...try to allocate */
-        if(status == -ENOMEM)
+        if(status == VM_NOMEM)
         {
             status = vm_alloc_slot(ctx, 
                                    &ctx->free_mem, 
@@ -908,8 +912,15 @@ virt_addr_t vm_space_alloc
                 /* we should revert what we did earlier and bail out, 
                  * but for now we will deadlock here
                  */
-                kprintf("OOOPS....no memory chief\n");
-                while(1);
+                vm_undo(&ctx->alloc_mem, 
+                        &ctx->free_mem,
+                        ctx->alloc_per_slot,
+                        ctx->free_per_slot,
+                        &req_ext,
+                        &alloc_ext,
+                        &rem_ext);
+
+                return(0);
             }
 
             /* Ok, let's do this again, shall we? */
@@ -926,7 +937,7 @@ virt_addr_t vm_space_alloc
 
     alloc_ext.base = addr;
     alloc_ext.length = len;
-    alloc_ext.flags = flags;
+    alloc_ext.flags = flags | req_ext.flags & VM_REGION_MASK;
 
     status = vm_extent_insert(&ctx->alloc_mem, 
                                ctx->alloc_per_slot, 
@@ -934,7 +945,7 @@ virt_addr_t vm_space_alloc
 
     
      /* Hehe... no slots?....again?...try to allocate */
-    if(status == -ENOMEM)
+    if(status == VM_NOMEM)
     {
         status = vm_alloc_slot(ctx, 
                                &ctx->alloc_mem, 
@@ -946,8 +957,15 @@ virt_addr_t vm_space_alloc
             /* we should revert what we did earlier and bail out, 
                 * but for now we will deadlock here
                 */
-            kprintf("OOOPS....no memory chief\n");
-            while(1);
+            vm_undo(&ctx->alloc_mem, 
+                    &ctx->free_mem,
+                    ctx->alloc_per_slot,
+                    ctx->free_per_slot,
+                    &req_ext,
+                    &alloc_ext,
+                    &rem_ext);
+                    
+            return(0);
         }
 
         /* Ok, let's do this again, shall we? */
@@ -955,7 +973,6 @@ virt_addr_t vm_space_alloc
                                    ctx->alloc_per_slot,
                                    &alloc_ext);
     }
-
 
     if(!status)
     {
@@ -967,8 +984,280 @@ virt_addr_t vm_space_alloc
          * unable to allocate
          */
 
-        return(NULL);
+        kprintf("FAILED\n");
+        status = vm_undo(&ctx->alloc_mem, 
+                            &ctx->free_mem,
+                            ctx->alloc_per_slot,
+                            ctx->free_per_slot,
+                            &req_ext,
+                            &alloc_ext,
+                            &rem_ext);
+        return(0);
     }
-
 }
 
+int vm_space_free
+(
+    vm_ctx_t *ctx,
+    virt_addr_t addr,
+    virt_size_t len
+)
+{
+    vm_extent_t req_ext;
+    vm_extent_t rem_ext;
+    vm_extent_t free_ext;
+    int         status = 0;
+
+    if(len % PAGE_SIZE)
+        len = ALIGN_UP(len, PAGE_SIZE);
+
+    if(addr % PAGE_SIZE)
+        addr = ALIGN_DOWN(addr, PAGE_SIZE);
+
+    memset(&req_ext, 0, sizeof(vm_extent_t));
+
+    /* set up the request */
+    req_ext.base = addr;
+    req_ext.length = len;
+
+    status = vm_extent_extract(&ctx->alloc_mem, 
+                                ctx->alloc_per_slot,
+                                &req_ext);
+    
+    /* If the extent does not exist, the there is no memory allocated 
+     * at that address
+     */ 
+    if(status < 0)
+    {
+        return(-1);
+    }
+
+    status = vm_extent_split(&req_ext, 
+                             addr, 
+                             len, 
+                             &rem_ext);
+
+    free_ext.base = addr;
+    free_ext.length = addr;
+    free_ext.flags = req_ext.flags & VM_REGION_MASK;
+
+
+    vm_extent_insert(&ctx->alloc_mem,
+                    ctx->alloc_per_slot,
+                    &req_ext);
+
+    if(status > 0)
+    {
+        /* We have a remainder - insert it */
+        status = vm_extent_insert(&ctx->alloc_mem,
+                                  ctx->alloc_per_slot,
+                                  &rem_ext);
+
+        if(status == VM_NOMEM)
+        {
+            status = vm_alloc_slot(ctx, 
+                                  &ctx->alloc_mem,
+                                  ctx->alloc_per_slot);
+
+            if(status != 0)
+            {
+                kprintf("NO MEMORY\n");
+
+                status = vm_undo(&ctx->free_mem, 
+                             &ctx->alloc_mem,
+                             ctx->free_per_slot,
+                             ctx->alloc_per_slot,
+                             &req_ext,
+                             &free_ext,
+                             &rem_ext);
+                             
+                return(status);
+            }
+
+            /* Do the insertion again */
+            status = vm_extent_insert(&ctx->alloc_mem,
+                                  ctx->alloc_per_slot,
+                                  &rem_ext);
+
+        }
+    }
+
+    status = vm_extent_insert(&ctx->free_mem, 
+                               ctx->free_per_slot, 
+                               &free_ext);
+
+    if(status == VM_NOMEM)
+    {
+        /* We have a remainder - insert it */
+        status = vm_alloc_slot(ctx, 
+                               &ctx->free_mem,
+                               ctx->free_per_slot);
+
+        if(status != 0)
+        {
+            status = vm_undo(&ctx->free_mem, 
+                             &ctx->alloc_mem,
+                             ctx->free_per_slot,
+                             ctx->alloc_per_slot,
+                             &req_ext,
+                             &free_ext,
+                             &rem_ext);
+            return(status);
+        }
+
+        /* Do the insertion again */
+        status = vm_extent_insert(&ctx->free_mem,
+                                  ctx->free_per_slot,
+                                  &free_ext);
+    }
+
+    return(status);
+}
+
+static int vm_undo
+(
+    list_head_t *undo_from,
+    list_head_t *undo_to,
+    uint32_t    undo_from_ext_cnt,
+    uint32_t    undo_to_ext_cnt,
+    vm_extent_t *ext_left,
+    vm_extent_t *ext_mid,
+    vm_extent_t *ext_right
+)
+{
+    int status = 0;
+
+
+    /* Do some sanity checks */
+
+    if(ext_left->base + ext_left->length > ext_mid->base)
+        return(-1);
+
+    if(ext_mid->base + ext_mid->length > ext_right->base)
+        return(-1);
+
+    status = vm_extent_extract(undo_to, 
+                               undo_to_ext_cnt,
+                               ext_left);
+
+    if(status < 0)
+    {
+        kprintf("Left extent is not here....\n");
+    }
+    
+    status = vm_extent_extract(undo_to,
+                               undo_to_ext_cnt,
+                               ext_right);
+
+    if(status < 0)
+    {
+        kprintf("Right extent is not here\n");
+    }
+
+    status = vm_extent_extract(undo_from,
+                               undo_from_ext_cnt,
+                               ext_mid);
+    
+    if(status < 0)
+    {
+        kprintf("Middle extent is not here\n");
+    }
+
+    ext_left->length += ext_mid->length + 
+                        ext_right->length;
+
+    status = vm_extent_insert(undo_to,
+                              undo_to_ext_cnt,
+                              ext_left);
+    
+    return(status);
+    
+}
+
+virt_addr_t vm_alloc
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+)
+{
+    while(1);
+}
+
+
+int vm_unmap
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t vaddr, 
+    virt_size_t len
+)
+{
+    while(1);
+}
+
+
+int vm_free
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t vaddr, 
+    virt_size_t len
+)
+{
+    while(1);
+}
+virt_addr_t vm_map
+(
+    vm_ctx_t *ctx, 
+    phys_addr_t phys, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+)
+{
+    while(1);
+}
+
+int vm_temp_identity_unmap
+(
+    vm_ctx_t *ctx,
+    virt_addr_t vaddr, 
+    virt_size_t len
+)
+{
+    while(1);
+}
+
+virt_addr_t vm_temp_identity_map
+(
+    vm_ctx_t *ctx,
+    phys_addr_t phys, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+)
+{
+    while(1);
+}
+
+int vm_reserve
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t type
+)
+{
+    while(1);
+}
+
+int vm_change_attrib
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    uint32_t attr
+)
+{
+    while(1);
+}

@@ -260,7 +260,6 @@ kernel_higher_half:
     mov gs, rax
     mov rbp, kstack_base
     mov rsp, kstack_base
-    invlpg [0]
     ; clear the interrupts before entering kmain
 
     cli

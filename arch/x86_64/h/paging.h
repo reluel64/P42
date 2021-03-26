@@ -161,6 +161,18 @@ typedef union pat_t
     pat_bits_t fields;
 }__attribute__ ((packed)) pat_t;
 
+#define PML5_SHIFT 48
+#define PML4_SHIFT 39
+#define PDPT_SHIFT 30
+#define PDT_SHIFT   21
+#define PT_SHIFT    12
+
+#define PML5_ENTRY_LEN (1 << 48)
+#define PML4_ENTRY_LEN (1 << 39)
+#define PDPT_ENTRY_LEN (1 << 30)
+#define PDT_ENTRY_LEN  (1 << 21)
+#define PT_ENTRY_LEN   (1 << 12)
+
 #define VIRT_TO_PML5_INDEX(x)  (((x) >> 48) & 0x1FF)
 #define VIRT_TO_PML4_INDEX(x)  (((x) >> 39) & 0x1FF)
 #define VIRT_TO_PDPT_INDEX(x) (((x) >> 30) & 0x1FF)
@@ -168,7 +180,7 @@ typedef union pat_t
 #define VIRT_TO_PT_INDEX(x)   (((x) >> 12) & 0x1FF)
 #define VIRT_TO_OFFSET(x)      ((x)         & 0x1FFF)
 
-#define PML5_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 47)
+#define PML5_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 48)
 #define PML4_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 39 )
 #define PDPT_INDEX_TO_VIRT(x) (((x) & 0x1FF) << 30 )
 #define PDT_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 21)

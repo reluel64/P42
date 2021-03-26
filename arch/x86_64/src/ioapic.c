@@ -331,10 +331,10 @@ static int ioapic_device_init
     ioapic->id        = entry->ioapic_id;
     
     /* Map registers into virtual memory */
-    ioapic->virt_base = (virt_addr_t)vmmgr_map(NULL, ioapic->phys_base,
+    ioapic->virt_base = (virt_addr_t)vm_map(NULL, ioapic->phys_base,
                                       0,    PAGE_SIZE, 
-                                      VMM_ATTR_STRONG_UNCACHED |
-                                      VMM_ATTR_WRITABLE
+                                      VM_ATTR_STRONG_UNCACHED |
+                                      VM_ATTR_WRITABLE
                                       );
    
     if(ioapic->virt_base == 0)
@@ -362,7 +362,7 @@ static int ioapic_device_init
 
     if(tbl == NULL)
     {
-        vmmgr_unmap(NULL, ioapic->virt_base, PAGE_SIZE);
+        vm_unmap(NULL, ioapic->virt_base, PAGE_SIZE);
         kfree(ioapic);
         return(-1);
     }

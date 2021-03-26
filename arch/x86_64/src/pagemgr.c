@@ -18,11 +18,22 @@
 
 typedef struct pagemgr_root_t
 {
-    virt_addr_t remap_table_vaddr;
+    virt_addr_t remap_tbl;
     uint8_t     pml5_support;
     uint8_t     nx_support;
+    
     pat_t pat;
 }pagemgr_root_t;
+
+const uint8_t pg_shift[] = 
+{   
+    0,
+    PT_SHIFT,
+    PDT_SHIFT,
+    PDPT_SHIFT,
+    PML4_SHIFT,
+    PML5_SHIFT
+};
 
 /* TODO: SUPPORT GUARD PAGES */
 
@@ -69,14 +80,13 @@ typedef struct pagemgr_path_t
                                   ((path))->pdt_ix    = ~0; \
                                   ((path))->virt_off  =  (virt_size_t)0;
 
+#define PAGEMGR_LEVEL_STACK       (5)
 
 /* locals */
 static pagemgr_root_t page_manager = {0};
 
 static pfmgr_t       *pfmgr        = NULL;
 
-static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
-static int         pagemgr_temp_unmap(virt_addr_t vaddr);
 static int         pagemgr_page_fault_handler(void *pv, isr_info_t *inf);
 static int         pagemgr_per_cpu_invl_handler
 (
@@ -128,203 +138,28 @@ uint8_t pagemgr_nx_support(void)
     return(page_manager.nx_support);
 }
 
-/*
- * This routine maps 8KB of memory from the 
- * page table created by the bootstrap.
- * After the page table is changed, this routine will
- * no longer work.
- */
-virt_addr_t pagemgr_boot_temp_map(phys_addr_t phys_addr)
-{
-    uint16_t   offset = 0;
-    virt_addr_t   virt_addr = 0;
-    virt_addr_t   page_table = 0;
-    virt_addr_t  *page = NULL;
-      
-    offset = phys_addr % PAGE_SIZE;
-    phys_addr -= offset;
-
-    if(page_manager.remap_table_vaddr == 0)
-    {
-         page_table = (virt_addr_t)&BOOT_PAGING;
-         virt_addr =  (virt_addr_t)&KERNEL_VMA   |
-                       PDT_INDEX_TO_VIRT(511)    |
-                       PT_INDEX_TO_VIRT(510);
-
-         page = (virt_addr_t*)(page_table + 
-                              PAGE_TABLE_BOOT_OFFSET + 
-                              511 * PAGE_SIZE + 510 * 8);
-
-        /* mark the page as present, writeable and write through*/
-
-        page[0] =  phys_addr            | 0x1B;
-        page[1] =  phys_addr + 0x1000   | 0x1B;
-
-        __invlpg(virt_addr);
-        __invlpg(virt_addr + PAGE_SIZE);
-    }
-    else
-    {
-       virt_addr = pagemgr_temp_map(phys_addr, 510);
-       pagemgr_temp_map(phys_addr + PAGE_SIZE, 511);
-    }
-  
-    return(virt_addr + offset);
-}
-
-
 void pagemgr_boot_temp_map_init(void)
 {
     virt_addr_t page_table = 0;
-    virt_addr_t *page = NULL;
-
-    page_table = (virt_addr_t)&BOOT_PAGING;
-
-    page = (virt_addr_t*)(page_table + 
-                         PAGE_TABLE_BOOT_OFFSET + 
-                         511 * PAGE_SIZE );
-
-    memset(page, 0, PAGE_SIZE);
-
-}
-
-virt_addr_t pagemgr_boot_temp_map_big(phys_addr_t phys_addr, virt_addr_t len)
-{
-    uint16_t     offset = 0;
-    virt_addr_t  virt_addr = 0;
-    virt_addr_t  page_table = 0;
-    virt_addr_t *page = NULL;
-    uint16_t     pages  = 0;
-    uint16_t     free_start = 0;
-
-    int found = 0;
-
-    offset = phys_addr % PAGE_SIZE;
-    phys_addr -= offset;
-
-    len+=offset;
-
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
-
-    if(page_manager.remap_table_vaddr == 0)
-    {
-         page_table = (virt_addr_t)&BOOT_PAGING;
-         virt_addr =  (virt_addr_t)&KERNEL_VMA   |
-                       PDT_INDEX_TO_VIRT(511)    |
-                       PT_INDEX_TO_VIRT(0);
-
-        page = (virt_addr_t*)(page_table             + 
-                              PAGE_TABLE_BOOT_OFFSET + 
-                              511 * PAGE_SIZE );
-
-        /* Start to lookup */
-
-        for(int i = 0; i < 510; i++)
-        {
-            if(page[i] == 0)
-            {
-                if(free_start == 0)
-                    free_start = i;
-
-                pages++;
-
-                if(pages * PAGE_SIZE >= len)
-                {
-                    found = 1;
-                    break;
-                }
-            }
-            else
-            {
-                free_start = 0;
-            }
-        }
-        
-        if(found == 0)
-        {
-            kprintf("NOT FOUND %x %x\n", free_start, pages);
-            return(0);
-        }
-
-        for(uint16_t i = free_start; i < 510; i++)
-        {
-            
-            /* present, writable, wirte through */
-            page[i] = (phys_addr + PAGE_SIZE * (i - free_start)) | 0x1B;
-           // kprintf("ADDR 0x%x\n",(phys_addr + PAGE_SIZE * (i - free_start)));
-            __invlpg(virt_addr + PAGE_SIZE * i);
-
-            if(--pages == 0)
-                break;            
-        }
-    }
-    else
-    {
-        kprintf("WARNING - NOT IMPLEMENTED \n");
-        while(1);
-    }
-  
-    return((virt_addr + free_start * PAGE_SIZE) + offset);
-}
-
-
-int pagemgr_boot_temp_unmap_big(virt_addr_t vaddr, virt_size_t len)
-{
-    uint16_t   offset = 0;
-    virt_addr_t   virt_addr = 0;
-    virt_addr_t   page_table = 0;
-    virt_addr_t  *page = NULL;
-    uint16_t ix  = 0;
-
-    offset = vaddr % PAGE_SIZE;
-    vaddr -= offset;
+    virt_addr_t *pde = 0;
+    virt_addr_t *remap_page = 0;
     
-    len+=offset;
+    page_table = (virt_addr_t)&KERNEL_VMA + 
+                 (virt_addr_t)&BOOT_PAGING;
 
-    if(len % PAGE_SIZE)
-        len = ALIGN_UP(len, PAGE_SIZE);
+    pde = (virt_addr_t*)((virt_addr_t)&BOOT_PAGING + 0x3000 + 511 * 8);
 
-    if(vaddr == 0)
-    {
-        kprintf("ERROR\n");
-        while(1);
-    }
+    remap_page = (virt_addr_t*)
+                 (page_table + 0x4000 + 512 * 511 * 8);
 
-    if(page_manager.remap_table_vaddr == 0)
-    {
-         page_table = (virt_addr_t)&BOOT_PAGING;
-         virt_addr =  (virt_addr_t)&KERNEL_VMA   |
-                       PDT_INDEX_TO_VIRT(511)    |
-                       PT_INDEX_TO_VIRT(0);
+    /* make the first page in the table to point to the table itself */
+    *remap_page = *pde;
 
-        page = (virt_addr_t*)(page_table + PAGE_TABLE_BOOT_OFFSET + 511 * PAGE_SIZE );
-        ix = (vaddr - virt_addr) / PAGE_SIZE;
+    page_manager.remap_tbl = BOOT_REMAP_TABLE_VADDR;   
 
-        if(ix > 512)
-        {
-            kprintf("VADDR 0x%x - > VIRT 0x%x\n",vaddr,virt_addr);
-        }
-
-        for(uint32_t i = 0; i < len; i += PAGE_SIZE)
-        {
-
-            /* mark the page as present and writeable */
-            page[ix++] = 0;
-            __invlpg(vaddr);
-            vaddr += PAGE_SIZE;
-        }
-    }
-    else
-    {
-       kprintf("Unimplemented\n");
-       while(1);
-    }
-  
-    return(0);
 }
 
-static phys_size_t pagemgr_boot_alloc_cb
+static phys_size_t pagemgr_alloc_pf_cb
 (
     phys_addr_t phys, 
     phys_size_t count, 
@@ -341,103 +176,171 @@ static phys_size_t pagemgr_boot_alloc_cb
     return(1);
 }
 
-static phys_addr_t pagemgr_boot_alloc_pf()
+static phys_addr_t pagemgr_alloc_pf()
 {
     phys_addr_t pf = 0;
 
-    pfmgr->alloc(1, 0, pagemgr_boot_alloc_cb, &pf);
+    pfmgr->alloc(1, 0, pagemgr_alloc_pf_cb, &pf);
 
     return(pf);
 }
 
+static phys_addr_t pagemgr_free_pf_cb
+(
+    phys_addr_t *paddr, 
+    phys_size_t *count, 
+    void *pv
+)
+{
+    *paddr = *(phys_addr_t*)pv;
+    *count = 1;
+
+    return(0);
+}
+
+static int pagemgr_free_pf
+(
+    phys_addr_t addr
+)
+{
+    pfmgr->dealloc(pagemgr_free_pf_cb, &addr);
+}
+
+
 static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
 {
-    if(pte->fields.present)
+    if(!pte->fields.present)
     {
-        pte->fields.read_write      = !!(attr & PAGE_WRITABLE);
-        pte->fields.user_supervisor = !!(attr & PAGE_USER);
-        pte->fields.xd              =  !(attr & PAGE_EXECUTABLE) && 
-                                        page_manager.nx_support;
+        return(-1);
+    }
+    pte->fields.read_write      = !!(attr & PAGE_WRITABLE);
+    pte->fields.user_supervisor = !!(attr & PAGE_USER);
+    pte->fields.xd              =  !(attr & PAGE_EXECUTABLE) && 
+                                    page_manager.nx_support;
 
-        
-        /* Translate caching attributes */
-        /*
-         * PAT PCD PWT PAT Entry
-         *  0   0   0    PAT0 -> WB
-         *  0   0   1    PAT1 -> WT
-         *  0   1   0    PAT2 -> UC-
-         *  0   1   1    PAT3 -> UC
-         *  1   0   0    PAT4 -> WC
-         *  1   0   1    PAT5 -> WT
-         *  1   1   0    PAT6 -> UC-
-         *  1   1   1    PAT7 -> UC
-         * 
-         *  just to have a picture here
-         * 
-         * pat.fields.pa0 = PAT_WRITE_BACK;
-         * pat.fields.pa1 = PAT_WRITE_THROUGH;
-         * pat.fields.pa2 = PAT_UNCACHED;
-         * pat.fields.pa3 = PAT_UNCACHEABLE;
-         * pat.fields.pa4 = PAT_WRITE_COMBINING;
-         * pat.fields.pa5 = PAT_WRITE_PROTECT;
-         * pat.fields.pa6 = PAT_UNCACHED;
-         * pat.fields.pa7 = PAT_UNCACHEABLE;
-         */
+    
+    /* Translate caching attributes */
+    /*
+        * PAT PCD PWT PAT Entry
+        *  0   0   0    PAT0 -> WB
+        *  0   0   1    PAT1 -> WT
+        *  0   1   0    PAT2 -> UC-
+        *  0   1   1    PAT3 -> UC
+        *  1   0   0    PAT4 -> WC
+        *  1   0   1    PAT5 -> WT
+        *  1   1   0    PAT6 -> UC-
+        *  1   1   1    PAT7 -> UC
+        * 
+        *  just to have a picture here
+        * 
+        * pat.fields.pa0 = PAT_WRITE_BACK;
+        * pat.fields.pa1 = PAT_WRITE_THROUGH;
+        * pat.fields.pa2 = PAT_UNCACHED;
+        * pat.fields.pa3 = PAT_UNCACHEABLE;
+        * pat.fields.pa4 = PAT_WRITE_COMBINING;
+        * pat.fields.pa5 = PAT_WRITE_PROTECT;
+        * pat.fields.pa6 = PAT_UNCACHED;
+        * pat.fields.pa7 = PAT_UNCACHEABLE;
+        */
 
-        /* PAT 0 */
-        if(attr & PAGE_WRITE_BACK)
-        {
-            pte->fields.write_through = 0;
-            pte->fields.cache_disable = 0;
-            pte->fields.pat           = 0;
-        }
-        /* PAT 1 */
-        else if(attr & PAGE_WRITE_THROUGH)
-        {
-            pte->fields.write_through = 1;
-            pte->fields.cache_disable = 0;
-            pte->fields.pat           = 0;
-        }
-        /* PAT 2 */
-        else if(attr & PAGE_UNCACHEABLE)
-        {
-            pte->fields.write_through = 0;
-            pte->fields.cache_disable = 1;
-            pte->fields.pat           = 0;
-        }
-        /* PAT 3 */
-        else if(attr & PAGE_STRONG_UNCACHED)
-        {
-            pte->fields.write_through = 1;
-            pte->fields.cache_disable = 1;
-            pte->fields.pat           = 0;
-        }
-        /* PAT4 */
-        else if(attr & PAGE_WRITE_COMBINE)
-        {
-            pte->fields.write_through = 0;
-            pte->fields.cache_disable = 0;
-            pte->fields.pat           = 1;
-        }
-        else if(attr & PAGE_WRITE_PROTECT)
-        {
-            pte->fields.write_through = 1;
-            pte->fields.cache_disable = 0;
-            pte->fields.pat           = 1;
-        }
-        /* By default do write-back */
-        else
-        {
-            pte->fields.write_through = 0;
-            pte->fields.cache_disable = 0;
-            pte->fields.pat           = 0;
-        }
-
-
-        return(0);
+    /* PAT 0 */
+    if(attr & PAGE_WRITE_BACK)
+    {
+        pte->fields.write_through = 0;
+        pte->fields.cache_disable = 0;
+        pte->fields.pat           = 0;
+    }
+    /* PAT 1 */
+    else if(attr & PAGE_WRITE_THROUGH)
+    {
+        pte->fields.write_through = 1;
+        pte->fields.cache_disable = 0;
+        pte->fields.pat           = 0;
+    }
+    /* PAT 2 */
+    else if(attr & PAGE_UNCACHEABLE)
+    {
+        pte->fields.write_through = 0;
+        pte->fields.cache_disable = 1;
+        pte->fields.pat           = 0;
+    }
+    /* PAT 3 */
+    else if(attr & PAGE_STRONG_UNCACHED)
+    {
+        pte->fields.write_through = 1;
+        pte->fields.cache_disable = 1;
+        pte->fields.pat           = 0;
+    }
+    /* PAT4 */
+    else if(attr & PAGE_WRITE_COMBINE)
+    {
+        pte->fields.write_through = 0;
+        pte->fields.cache_disable = 0;
+        pte->fields.pat           = 1;
+    }
+    else if(attr & PAGE_WRITE_PROTECT)
+    {
+        pte->fields.write_through = 1;
+        pte->fields.cache_disable = 0;
+        pte->fields.pat           = 1;
+    }
+    /* By default do write-back */
+    else
+    {
+        pte->fields.write_through = 0;
+        pte->fields.cache_disable = 0;
+        pte->fields.pat           = 0;
     }
 
-    return(-1);
+
+    return(0);
+}
+
+typedef struct page_lvl_t
+{
+    phys_addr_t phys;
+    virt_size_t level_map_step;
+}page_lvl_t;
+
+static int pagemgr_ensure_pg_lvl
+(
+    pagemgr_ctx_t *ctx,
+    virt_addr_t vbase,
+    virt_size_t len
+)
+{
+    virt_size_t pos = 0;
+    virt_addr_t vpos = 0;
+    virt_addr_t vlimit = 0;
+    virt_addr_t *pt = 0;
+    uint8_t     level = 0;
+
+    page_lvl_t  stack[PAGEMGR_LEVEL_STACK];
+
+    if(len < PAGE_SIZE)
+        return(-1);
+
+    if(ctx->max_level > PAGEMGR_LEVEL_STACK)
+    {
+        kprintf("Context level is %d\n", ctx->max_level);
+        return(-1);
+    }
+    memset(stack, 0, sizeof(stack));
+
+    vlimit = vbase + len - 1;
+
+    /* Map the last level */
+    pt = pagemgr_temp_map(ctx->pg_phys, 1);
+
+    level = ctx->max_level;
+
+
+    while(1)
+    {
+        
+        
+    }
+
 }
 
 static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
@@ -461,11 +364,11 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
     uint16_t     pte_ix       = -1;
     uint8_t      krnl_tbl_ok  = 0;
     uint8_t      pml5_support = 0;
-    
+    #if 0
     paddr = (uint64_t)&BOOTSTRAP_END;
     pml5_support = page_manager.pml5_support;
 
-    /* setup the top most page table */    
+    /* setup the top most page table */
     work_ptr = (virt_addr_t*)pagemgr_boot_temp_map(ctx->page_phys_base);
     memset(work_ptr, 0, PAGE_SIZE);
 
@@ -644,7 +547,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
     }
 
     page_manager.remap_table_vaddr = REMAP_TABLE_VADDR;
- 
+ #endif
     return(0);
 }
 
@@ -760,9 +663,9 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     return(0);
 }
 
-static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
+virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
 {
-    virt_addr_t *remap_tbl = (virt_addr_t*)REMAP_TABLE_VADDR;
+    virt_addr_t *remap_tbl = (virt_addr_t*)page_manager.remap_tbl;
     virt_addr_t remap_value = 0;
     pte_bits_t pte = {0};
 
@@ -790,14 +693,16 @@ static virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix)
 
     remap_tbl[ix] = pte.bits;
     
-    remap_value = REMAP_TABLE_VADDR + (PAGE_SIZE * ix);
+    remap_value = page_manager.remap_tbl + (PAGE_SIZE * ix);
 
     __invlpg(remap_value);
 
     return(remap_value);
 }
 
-static int pagemgr_temp_unmap(virt_addr_t vaddr)
+
+
+ int pagemgr_temp_unmap(virt_addr_t vaddr)
 {
     uint16_t ix = 0;
     virt_addr_t *remap_tbl = (virt_addr_t*)REMAP_TABLE_VADDR;

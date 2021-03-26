@@ -490,11 +490,11 @@ static int apic_drv_init(driver_t *drv)
     {
         apic_drv->paddr  = apic_phys_addr();
 
-        apic_drv->vaddr  = vmmgr_map(NULL, apic_drv->paddr, 
+        apic_drv->vaddr  = vm_map(NULL, apic_drv->paddr, 
                                 0x0, 
                                 PAGE_SIZE, 
-                                VMM_ATTR_WRITABLE |
-                                VMM_ATTR_STRONG_UNCACHED);
+                                VM_ATTR_WRITABLE |
+                                VM_ATTR_STRONG_UNCACHED);
         
         if(apic_drv->vaddr == 0)
         {

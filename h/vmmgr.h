@@ -28,18 +28,6 @@
 #define VM_ATTR_EXECUTABLE        PAGE_EXECUTABLE
 
 
-#define VM_FREE_LOW        (1 << 0)
-#define VM_FREE_HI         (1 << 1)
-
-#define VM_PERMANENT       (1 << 0) /* this entry cannot be freed */
-#define VM_ALLOC           (1 << 1) /* extent represents allocated memory */
-#define VM_MAPPED          (1 << 2) /* extent represents mapped memory */
-#define VM_MAP_LOW         (1 << 3) /* mapped - low memory */
-#define VM_MAP_HI          (1 << 4) /* mapped high memory */
-#define VM_ALLOC_HI        (1 << 5) /* allocated from hi memory */
-#define VM_ALLOC_LO        (1 << 6) /* allocated from lo memory */
-
-
 
 #define VM_FREE_HDR  (1 << 0)
 #define VM_ALLOC_HDR (1 << 1)
@@ -52,7 +40,13 @@
 #define VM_PERMANENT (1 << 4)
 
 #define VM_REGION_MASK (VM_LOW_MEM | VM_HIGH_MEM)
-#define VM_MEM_TYPE_MASK (VM_ALLOC | VM_MAPPED)
+#define VM_MEM_TYPE_MASK (VM_ALLOCED | VM_MAPPED)
+
+#define VM_OK (0x0)
+#define VM_FAIL (-1)
+#define VM_NOMEM (-2)
+#define VM_NOENT (-3)
+
 typedef struct vm_ctx_t
 {
     list_head_t free_mem;  /* free memory ranges */

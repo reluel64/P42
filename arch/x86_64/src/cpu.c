@@ -265,12 +265,12 @@ static virt_addr_t cpu_prepare_trampoline(void)
 
     tr_size = _TRAMPOLINE_END - _TRAMPOLINE_BEGIN;
 
-    tr_code = (uint8_t*)vmmgr_map(NULL,
+    tr_code = (uint8_t*)vm_map(NULL,
                                  CPU_TRAMPOLINE_LOCATION_START,
                                  0x0,
                                  tr_size,
-                                 VMM_ATTR_EXECUTABLE |
-                                 VMM_ATTR_WRITABLE);
+                                 VM_ATTR_EXECUTABLE |
+                                 VM_ATTR_WRITABLE);
 
     if(tr_code == 0)
         return(0);
@@ -433,11 +433,11 @@ int cpu_ap_start
     }
 
     /* create identity mapping for the trampoline code */
-    vmmgr_temp_identity_map(NULL, CPU_TRAMPOLINE_LOCATION_START,
+    vm_temp_identity_map(NULL, CPU_TRAMPOLINE_LOCATION_START,
                                   CPU_TRAMPOLINE_LOCATION_START,
                                   PAGE_SIZE,
-                                  VMM_ATTR_EXECUTABLE |
-                                  VMM_ATTR_WRITABLE);
+                                  VM_ATTR_EXECUTABLE |
+                                  VM_ATTR_WRITABLE);
 
     /* check if are going to use x2APIC */
     for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
@@ -506,13 +506,13 @@ int cpu_ap_start
     }
 
     /* unmap the 1:1 trampoline */
-    vmmgr_temp_identity_unmap(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);
+    vm_temp_identity_unmap(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);
 
     /* clear the trampoline from the area */
     memset((void*)trampoline, 0, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
 
     /* unmap the trampoline */
-    vmmgr_unmap(NULL, trampoline, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
+    vm_unmap(NULL, trampoline, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
 
     AcpiPutTable((ACPI_TABLE_HEADER*)madt);
 
@@ -722,9 +722,9 @@ void *cpu_ctx_init
 
     th = thread;
 
-    ctx = (pcpu_context_t*)vmmgr_alloc(NULL, 0x0,
+    ctx = (pcpu_context_t*)vm_alloc(NULL, 0x0,
                                        PAGE_SIZE,
-                                       VMM_ATTR_WRITABLE);
+                                       VM_ATTR_WRITABLE);
 
     if(ctx == NULL)
         return(NULL);
@@ -744,11 +744,11 @@ void *cpu_ctx_init
     ctx->addr_spc = __read_cr3();
     ctx->dseg = seg;
 
-    ctx->esp0 = vmmgr_alloc(NULL, 0, PAGE_SIZE, VMM_ATTR_WRITABLE);
+    ctx->esp0 = vm_alloc(NULL, 0, PAGE_SIZE, VM_ATTR_WRITABLE);
 
     if(ctx->esp0 == 0)
     {
-        vmmgr_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
+        vm_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
         return(NULL);
     }
 
@@ -772,11 +772,11 @@ int cpu_ctx_destroy(void *thread)
 
     /* Sanitize and free ESP0 */
     memset(&ctx->esp0, 0, PAGE_SIZE);
-    vmmgr_free(NULL, ctx->esp0, PAGE_SIZE);
+    vm_free(NULL, ctx->esp0, PAGE_SIZE);
 
     /* Sanitize and free context */
     memset(ctx, 0, PAGE_SIZE);
-    vmmgr_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
+    vm_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
 
     return(0);
 }
@@ -888,17 +888,17 @@ static int pcpu_drv_init(driver_t *drv)
 
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
 
-    cpu_drv->idt = (idt64_entry_t*)vmmgr_alloc(NULL, 0x0,
+    cpu_drv->idt = (idt64_entry_t*)vm_alloc(NULL, 0x0,
                                                IDT_TABLE_SIZE,
-                                               VMM_ATTR_WRITABLE);
+                                               VM_ATTR_WRITABLE);
 
     /* Setup the IDT */
     cpu_idt_setup(cpu_drv);
 
     /* make IDT read-only */
-    vmmgr_change_attrib(NULL, (virt_addr_t)cpu_drv->idt,
+    vm_change_attrib(NULL, (virt_addr_t)cpu_drv->idt,
                         IDT_TABLE_SIZE,
-                        ~VMM_ATTR_WRITABLE);
+                        ~VM_ATTR_WRITABLE);
 
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);
