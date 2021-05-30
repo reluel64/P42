@@ -106,15 +106,19 @@ static virt_addr_t pfmgr_early_map
     pad = addr % PAGE_SIZE;
   
     /* map 8K */
-    vaddr = pagemgr_temp_map(addr - pad, 1);
-    pagemgr_temp_map(addr - pad + PAGE_SIZE, 2);
+    vaddr = pagemgr_temp_map(addr - pad, 510);
+    pagemgr_temp_map(addr - pad + PAGE_SIZE, 511);
 
     return(vaddr + pad);
 }
 
 /* pfmgr_early_clear_bitmap - clear bitmap area using early page tables */
 
-static void pfmgr_early_clear_bitmap(pfmgr_free_range_t *fmem, phys_addr_t bmp_phys)
+static void pfmgr_early_clear_bitmap
+(
+    pfmgr_free_range_t *fmem, 
+    phys_addr_t bmp_phys
+)
 {
     virt_addr_t *bmp = NULL;
     phys_size_t zlen = 0;
@@ -144,7 +148,6 @@ static void pfmgr_early_mark_bitmap
 )
 {
     virt_addr_t *bmp    = NULL;
-    virt_addr_t padding = 0;
     phys_size_t bmp_off = 0;
     phys_size_t pf_ix   = 0;
     phys_size_t pf_pos  = 0;
@@ -152,30 +155,31 @@ static void pfmgr_early_mark_bitmap
     
     kprintf("bmp_phys %x\n",bmp_phys);
 
-    
-
     while(pos < len)
     {
         pf_pos = ((addr + pos) - fmem->hdr.base) / PAGE_SIZE;
         pf_ix = pf_pos % PF_PER_ITEM;
         bmp_off = (pf_pos / PF_PER_ITEM) * sizeof(virt_addr_t);
-        
-        padding = (bmp_phys + bmp_off) % PAGE_SIZE;
 
         if(pf_ix == 0 || bmp == NULL)
             bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + bmp_off);
 
-        bmp = (virt_addr_t*)((uint8_t*)bmp + padding);
+        bmp = (virt_addr_t*)((uint8_t*)bmp );
 
         bmp[0] |= ((virt_addr_t)1 << pf_ix);
         pos += PAGE_SIZE;
         fmem->avail_pf--;
+
     }
 }
 
 /* pfmgr_early_init_free_callback - initialize free ranges using boot page tables */
 
-static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
+static void pfmgr_init_free_callback
+(
+    memory_map_entry_t *e, 
+    void *pv
+)
 {
     pfmgr_init_t *init = pv;
     pfmgr_free_range_t *freer = NULL;
@@ -225,6 +229,7 @@ static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
                            track_addr + offsetof(pfmgr_free_range_t, bmp),
                            _KERNEL_LMA, 
                            _KERNEL_IMAGE_LEN);
+                           kprintf("MARKED KERNEL\n");
     }
 
     if(pfmgr_in_range(e->base, e->length, base.physb_start, 
@@ -234,12 +239,15 @@ static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
                            track_addr + offsetof(pfmgr_free_range_t, bmp),
                            base.physb_start, 
                            base.busyr.count * sizeof(pfmgr_busy_range_t));
+                           kprintf("MARKED BUSY RANGE\n");
     }
 
     pfmgr_early_mark_bitmap(&local_freer,
                        track_addr + offsetof(pfmgr_free_range_t, bmp),
                        track_addr, 
                        track_len);
+
+    kprintf("MARKED FREE_RANGE\n");
 
     /* Commit to memory */
     freer = (pfmgr_free_range_t*)pfmgr_early_map(track_addr);
@@ -251,7 +259,11 @@ static void pfmgr_init_free_callback(memory_map_entry_t *e, void *pv)
 }
 /* pfmgr_early_init_busy_callback - initialize busy ranges using boot page tables */
 
-static void pfmgr_init_busy_callback(memory_map_entry_t *e, void *pv)
+static void pfmgr_init_busy_callback
+(
+    memory_map_entry_t *e, 
+    void *pv
+)
 {
     pfmgr_init_t *init = pv;    
     pfmgr_busy_range_t *busy = NULL;
@@ -297,7 +309,13 @@ static void pfmgr_init_busy_callback(memory_map_entry_t *e, void *pv)
 
 /* pfmgr_early_alloc_pf - early allocator for page frame using boot page tables */
 
-int pfmgr_early_alloc_pf(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
+int pfmgr_early_alloc_pf
+(
+    phys_size_t pf, 
+    uint8_t flags, 
+    alloc_cb cb, 
+    void *pv
+)
 {
     pfmgr_free_range_t *freer     = NULL;
     phys_addr_t freer_phys  = 0;
@@ -637,7 +655,13 @@ static int pfmgr_clear_bmp
 
 /* pfmgr_alloc - allocates page frames */
 
-static int pfmgr_alloc(phys_size_t pf, uint8_t flags, alloc_cb cb, void *pv)
+static int pfmgr_alloc
+(
+    phys_size_t pf, 
+    uint8_t flags, 
+    alloc_cb cb, 
+    void *pv
+)
 {
     pfmgr_free_range_t *freer      = NULL;
     pfmgr_free_range_t *next_freer = NULL;
@@ -769,7 +793,11 @@ static int pfmgr_addr_to_free_range
 
 /* pfmgr_free - frees page frames */
 
-static int pfmgr_free(free_cb cb, void *pv)
+static int pfmgr_free
+(
+    free_cb cb, 
+    void *pv
+)
 {
     pfmgr_free_range_t *freer      = NULL;
     phys_addr_t addr               = 0;
@@ -808,6 +836,7 @@ static int pfmgr_free(free_cb cb, void *pv)
     
     return(err);
 }
+
 /* pfmgr_early_init - initializes tracking information */
 void pfmgr_early_init(void)
 {
@@ -823,7 +852,7 @@ void pfmgr_early_init(void)
     pfmgr_interface.alloc = pfmgr_early_alloc_pf;
 
     kprintf("KERNEL_BEGIN 0x%x KERNEL_END 0x%x\n",_KERNEL_LMA, _KERNEL_LMA_END);
-    while(1);
+
    
 }
 

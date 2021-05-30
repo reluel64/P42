@@ -323,12 +323,14 @@ static int apic_send_ipi
                          data, 
                          2);
 
+    /* Poll for IPI delivery status */
     do
     {
         apic_drv->apic_read(apic_drv->vaddr, 
                             INTERRUPT_COMMAND_REGISTER, 
                             data, 
                             2);
+
     }while(data[0] & APIC_ICR_DELIVERY_STATUS_MASK);
 
 

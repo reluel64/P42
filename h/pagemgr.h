@@ -26,10 +26,10 @@
 typedef struct pagemgr_ctx_t
 {
      phys_addr_t pg_phys; /* physical location of the first
-                                  * level of paging
-                                  */ 
+                           * level of paging
+                           */ 
     spinlock_t  lock;
-    uint8_t max_level;                /* paging level */
+    uint8_t max_level;     /* paging level */
 }pagemgr_ctx_t;
 
 

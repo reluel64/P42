@@ -4,6 +4,17 @@
 
 #include <stdint.h>
 
+#define PAGE_PRESENT          (1 << 0)
+#define PAGE_WRITABLE         (1 << 1)
+#define PAGE_USER             (1 << 2)
+#define PAGE_WRITE_THROUGH    (1 << 3)
+#define PAGE_CACHE_DISABLE    (1 << 4)
+#define PAGE_ACCESSED         (1 << 5)
+#define PAGE_DIRTY            (1 << 6)
+#define PAGE_PAT              (1 << 7)
+#define PAGE_GLOBAL           (1 << 8)
+#define PAGE_EXECUTE_DIABLE   (1 << 63)
+
 typedef struct _cr3
 {
     uint64_t ignored:3;
@@ -161,9 +172,9 @@ typedef union pat_t
     pat_bits_t fields;
 }__attribute__ ((packed)) pat_t;
 
-#define PML5_SHIFT 48
-#define PML4_SHIFT 39
-#define PDPT_SHIFT 30
+#define PML5_SHIFT  48
+#define PML4_SHIFT  39
+#define PDPT_SHIFT  30
 #define PDT_SHIFT   21
 #define PT_SHIFT    12
 
@@ -175,16 +186,16 @@ typedef union pat_t
 
 #define VIRT_TO_PML5_INDEX(x)  (((x) >> 48) & 0x1FF)
 #define VIRT_TO_PML4_INDEX(x)  (((x) >> 39) & 0x1FF)
-#define VIRT_TO_PDPT_INDEX(x) (((x) >> 30) & 0x1FF)
+#define VIRT_TO_PDPT_INDEX(x)  (((x) >> 30) & 0x1FF)
 #define VIRT_TO_PDT_INDEX(x)   (((x) >> 21) & 0x1FF)
-#define VIRT_TO_PT_INDEX(x)   (((x) >> 12) & 0x1FF)
+#define VIRT_TO_PT_INDEX(x)    (((x) >> 12) & 0x1FF)
 #define VIRT_TO_OFFSET(x)      ((x)         & 0x1FFF)
 
 #define PML5_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 48)
-#define PML4_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 39 )
-#define PDPT_INDEX_TO_VIRT(x) (((x) & 0x1FF) << 30 )
+#define PML4_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 39)
+#define PDPT_INDEX_TO_VIRT(x)  (((x) & 0x1FF) << 30)
 #define PDT_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 21)
-#define PT_INDEX_TO_VIRT(x)   (((x) & 0x1FF) << 12)
+#define PT_INDEX_TO_VIRT(x)    (((x) & 0x1FF) << 12)
 #define OFFSET_TO_VIRT(x)      ((x)  & 0x1FFF)
 
 #define ATTRIBUTE_MASK (0x8000000000000FFF)

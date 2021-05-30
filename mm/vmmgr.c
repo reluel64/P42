@@ -1024,7 +1024,7 @@ int vm_space_free
                                 ctx->alloc_per_slot,
                                 &req_ext);
     
-    /* If the extent does not exist, the there is no memory allocated 
+    /* If the extent does not exist, then there is no memory allocated 
      * at that address
      */ 
     if(status < 0)
