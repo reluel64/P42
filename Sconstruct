@@ -6,7 +6,7 @@ linker_script = 'arch/x86_64/linker.ld'
 
 env=Environment(
                 ENV       = {'PATH' : os.environ['PATH'] + ':/home/alex/opt/cross/bin'},
-                CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=large',
+                CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=large -Og',
                 LINKFLAGS = '-T ' + linker_script + ' -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
                 CC        = 'x86_64-elf-gcc',
                 CPPPATH   = [Dir("h"), Dir('acpica-unix2-20200326/include'),Dir('arch/x86_64/h')] ,
@@ -39,6 +39,6 @@ kernel = env.Program(
                     )
 
 #print Dir("h").path()
-env.Install('/run/media/alex/4D7E-2E98', kernel)
-env.Alias('install','/run/media/alex/4D7E-2E98')
+env.Install('/run/media/alex/3B35-899C', kernel)
+env.Alias('install','/run/media/alex/3B35-899C')
 env.Execute('sync')
