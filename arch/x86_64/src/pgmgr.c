@@ -25,17 +25,20 @@ typedef struct pagemgr_root_t
     pat_t pat;
 }pagemgr_root_t;
 
-const uint8_t pg_shift[] = 
-{   
-    0,
-    PT_SHIFT,
-    PDT_SHIFT,
-    PDPT_SHIFT,
-    PML4_SHIFT,
-    PML5_SHIFT
-};
 
+#define PGMGR_LEVEL_TO_SHIFT(x) (PT_SHIFT + (((x) - 1) << 3) + ((x) - 1))
 
+#define PGMGR_FILL_LEVEL(level_data, context, vbase, vlength, vmin_level)   \
+                        (level_data)->ctx = (context);                      \
+                        (level_data)->base = (vbase);                       \
+                        (level_data)->length = (vlength);                   \
+                        (level_data)->min_level = (vmin_level);             \
+                        (level_data)->level = NULL;                         \
+                        (level_data)->pos = 0;                              \
+                        (level_data)->current_level = (context)->max_level; \
+                        (level_data)->error = 0;                            \
+                        (level_data)->addr = (context)->pg_phys
+                        
 
 /* TODO: SUPPORT GUARD PAGES */
 
@@ -57,6 +60,20 @@ typedef struct pagemgr_path_t
     uint32_t      attr;
     uint8_t check;
 }pagemgr_path_t;
+
+typedef struct pgmgr_level_data
+{
+    pagemgr_ctx_t *ctx;
+    virt_addr_t base;
+    virt_addr_t length;
+    uint8_t min_level;
+    virt_addr_t *level;
+    virt_size_t pos;
+    uint8_t current_level;
+    uint8_t error;
+    phys_addr_t addr;
+}pgmgr_level_data_t;
+
 
 
 /* defines */
@@ -95,6 +112,7 @@ static int         pagemgr_per_cpu_invl_handler
     void *pv, 
     isr_info_t *inf
 );
+
 
 /* This piece code is the intermediate layer
  * between the physical memory manager and
@@ -294,141 +312,156 @@ static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
     return(0);
 }
 
-typedef struct page_lvl_t
-{
-    phys_addr_t phys;
-    virt_size_t step;
-    virt_addr_t map_virt;
-    uint8_t done;
-    uint16_t ix;
-    
-
-}page_lvl_t;
-
-
-static int pagemgr_ensure_levels
+static phys_size_t pagemgr_ensure_levels
 (
-    pagemgr_ctx_t *ctx,
-    virt_addr_t   base,
-    virt_size_t   length,
-    uint8_t       min_level
+    phys_addr_t base,
+    phys_size_t pf_count,
+    void *pv
     
 )
 {
-    virt_addr_t *level        = NULL;
-    virt_size_t pos           = 0;
-    virt_addr_t next_pos      = 0;
-    uint8_t     current_level = 0;
-    phys_addr_t addr          = 0;
-    uint8_t     entry         = 0;
-    uint8_t     shift         = 0;
+    pgmgr_level_data_t *lvl_data  = NULL;
+    pagemgr_ctx_t      *ctx       = NULL;
+    virt_addr_t        next_pos   = 0;
+    uint8_t            entry      = 0;
+    uint8_t            shift      = 0;
+    phys_size_t        used_bytes = 0;
+    phys_size_t        total_bytes   = 0;
 
-    kprintf("MAX_LEVEL %d\n",ctx->max_level);
+    lvl_data = pv;
+    ctx = lvl_data->ctx;
 
-    addr          = ctx->pg_phys;
-    current_level = ctx->max_level - 1;
+    total_bytes = pf_count << PAGE_SIZE_SHIFT;
 
-    /* Make sure that the min_level is not 0 */
-    if(min_level == 0 || min_level >= ctx->max_level)
-        min_level = 1;
+   /* kprintf("MAX_LEVEL %d\n",ctx->max_level);*/
 
-    while(pos < length)
+    if(!lvl_data->addr)
+        lvl_data->addr = ctx->pg_phys;
+
+    if(!lvl_data->current_level)
     {
-        level = (virt_addr_t*)pagemgr_temp_map(addr, current_level + 1);
-        shift = PT_SHIFT + (current_level << 3) + current_level;
-        entry = (pos >> shift) & 0x1FF;
+        kprintf("CURRENT_LEVEL_IS_ZERO\n");
+        lvl_data->current_level = ctx->max_level;
+    }
+    /* Make sure that the min_level is not 0 */
+    if((lvl_data->min_level == 0) || 
+       (lvl_data->min_level >= ctx->max_level))
+    {
+        lvl_data->min_level = 1;
+    }
 
-        addr = level[entry];
+    next_pos = lvl_data->pos;
 
-        kprintf("Current_level %d -> %x - PHYS %x\n",current_level + 1, level, addr);
+    while((lvl_data->pos < lvl_data->length) && 
+          (used_bytes    < total_bytes))
+    {
+        lvl_data->level = (virt_addr_t*)pagemgr_temp_map(lvl_data->addr, 
+                                                        lvl_data->current_level);
 
+        shift = PGMGR_LEVEL_TO_SHIFT(lvl_data->current_level );
+        entry = (lvl_data->pos >> shift) & 0x1FF;
+
+        lvl_data->addr = lvl_data->level[entry];
+#if 0
+        kprintf("Current_level %d -> %x - PHYS %x Increment %x\n",
+                lvl_data->current_level, 
+                lvl_data->level, 
+                lvl_data->addr, 
+                (virt_size_t)1 << shift);
+#endif
         /* In case we don't have a page frame allocated,
          * then allocate it and go DEEEPAH
          */
 
-        if(!PAGE_MASK_ADDRESS(addr))
+        if(!PAGE_MASK_ADDRESS(lvl_data->addr))
         {
-            if(pagemgr_alloc_pf(&addr) != 0)
-            {
-                kprintf("NO PF\n");
-                return(-1);
-            }
+            lvl_data->addr = base + used_bytes;
+            lvl_data->addr |= (PAGE_PRESENT | PAGE_WRITABLE);
 
-            addr |= (PAGE_PRESENT | PAGE_WRITABLE);
-
-            level[entry] = addr;
+            lvl_data->level[entry] = lvl_data->addr;
+            used_bytes += PAGE_SIZE;
         }
 
         /* If we are not at the bottom level, go DEEEPAH */
-        if(current_level > min_level)
+        if(lvl_data->current_level > lvl_data->min_level)
         {  
-            current_level--;
+            lvl_data->current_level--;
+            continue;
         }
-        else
+
+        next_pos += (virt_size_t)1 << shift;
+        
+        if(((next_pos >> shift) & 0x1FF) < entry)
         {
-            next_pos += (virt_size_t)1 << shift;
-
-            if(((next_pos >> shift) & 0x1FF) < entry)
+            /* Calcuate how much we need to go up */
+            while(lvl_data->current_level < ctx->max_level)
             {
-                /* Calcuate how much we need to go up */
-                while(current_level < ctx->max_level - 1)
-                {
-                    shift = PT_SHIFT + (current_level << 3) + current_level;
-                    
-                    if(((next_pos >> shift) & 0x1FF) > 
-                       ((pos >> shift) & 0x1FF))
-                    {
-                        break;
-                    }
-
-                    current_level++;
-                }
-
-                /* the upper levels should be the same so just calculate
-                 * the address from the base remapping table 
-                 */
-                kprintf("GOING TO LEVEL %x\n",current_level);
-                if(current_level < ctx->max_level)
-                {
-                    level = (virt_addr_t*) (page_manager.remap_tbl + 
-                                          PAGE_SIZE * (current_level + 1));
-                    
-                    entry = (next_pos >> shift) & 0x1FF;
-
-                    addr = level[entry];
-
-                    /* check if the upper level is allocated */
-                    if(!PAGE_MASK_ADDRESS(addr))
-                    {
-                        if(pagemgr_alloc_pf(&addr) != 0)
-                        {
-                            kprintf("NO PF\n");
-                            return(-1);
-                        }
-
-                        addr |= (PAGE_PRESENT | PAGE_WRITABLE);
-
-                        level[entry] = addr;
-                    }
-                }
+                shift = PGMGR_LEVEL_TO_SHIFT(lvl_data->current_level);
                 
-                else
+                if(((next_pos >> shift) & 0x1FF) > 
+                    ((lvl_data->pos >> shift) & 0x1FF))
                 {
-                    /* For the topmost level, use the 
-                     * page base address
-                     */
-                    kprintf("GO TO BASE\n");
-                    addr = ctx->pg_phys;
+                    break;
                 }
-                
+
+                lvl_data->current_level ++;
             }
-            pos = next_pos;
+
+
+            /*kprintf("GOING TO LEVEL %x\n",lvl_data->current_level);*/
+
+            if(lvl_data->current_level  < ctx->max_level)
+            {
+               /* the upper levels should be the same so just calculate
+                * the address from the base remapping table 
+                */
+                lvl_data->level = (virt_addr_t*) (page_manager.remap_tbl + 
+                                        (lvl_data->current_level  << PAGE_SIZE_SHIFT));
+                
+                entry = (next_pos >> shift) & 0x1FF;
+
+                lvl_data->addr = lvl_data->level[entry];
+
+                /* check if the upper level is allocated */
+                if(!PAGE_MASK_ADDRESS(lvl_data->addr))
+                {
+                    lvl_data->addr = base + used_bytes;
+                    lvl_data->addr |= (PAGE_PRESENT | PAGE_WRITABLE);
+
+                    lvl_data->level[entry] = lvl_data->addr;
+                    used_bytes += PAGE_SIZE;
+                }
+            }
+            
+            else
+            {
+                /* For the topmost level, use the 
+                 * page base address
+                 */
+               
+                lvl_data->addr = ctx->pg_phys;
+            }
+            
         }
+
+        lvl_data->pos = next_pos;
     }
-    kprintf("EXIT SUCCESSFULLY\n");
-    return(0);
+
+    /*kprintf("EXIT SUCCESSFULLY %x\n", used_bytes);*/
+    return(used_bytes >> PAGE_SIZE_SHIFT);
 
 }
+
+static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
+{
+    pgmgr_level_data_t lvl_dat;
+    uint8_t current_level = 0;
+    
+    PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, REMAP_TABLE_SIZE, 2);
+
+    pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels, &lvl_dat);
+}
+
 
 static int pgmgr_init_pt(pagemgr_ctx_t *ctx)
 {
@@ -646,7 +679,7 @@ static int pagemgr_build_init_pagetable(pagemgr_ctx_t *ctx)
     return(0);
 }
 
-static int pagemgr_check_nx(void)
+static int pgmgr_check_nx(void)
 {
     uint32_t eax = 0;
     uint32_t ebx = 0;
@@ -660,7 +693,7 @@ static int pagemgr_check_nx(void)
     return(!!(edx & (1 << 20)));
 }
 
-static void pagemgr_enable_nx(void)
+static void pgmgr_enable_nx(void)
 {
     uint64_t reg_val = 0;
 
@@ -671,7 +704,7 @@ static void pagemgr_enable_nx(void)
     __wrmsr(0xC0000080, reg_val);
 }
 
-static int pagemgr_pml5_is_enabled(void)
+static int pgemgr_pml5_is_enabled(void)
 {
     uint32_t eax = 0;
     uint32_t ebx = 0;
@@ -699,9 +732,13 @@ static int pagemgr_pml5_is_enabled(void)
 int pagemgr_init(pagemgr_ctx_t *ctx)
 {
     pat_t *pat = NULL;
+    pgmgr_level_data_t lvl_dat;
+
+
 
     memset(&page_manager.pat, 0, sizeof(pat_t));
-    
+
+
     pat = &page_manager.pat;
 
     pfmgr = pfmgr_get();
@@ -712,8 +749,11 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
 
     kprintf("Setting page manager\n");
 
-    page_manager.pml5_support = pagemgr_pml5_is_enabled();
-    page_manager.nx_support   = pagemgr_check_nx();
+    page_manager.pml5_support = pgemgr_pml5_is_enabled();
+    page_manager.nx_support   = pgmgr_check_nx();
+
+
+    kprintf("PML5 %d\n", page_manager.pml5_support);
 
     if(page_manager.pml5_support)
         ctx->max_level = 5;
@@ -721,10 +761,34 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
         ctx->max_level = 4;
 
 
+  
+
     pagemgr_alloc_pf(&ctx->pg_phys);
-    pagemgr_ensure_levels(ctx,0xffff800000000000, 0x80000000, 1);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x80000000, 1);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x80000000, 1);
+    for(int i = 0; i <40; i++)
+    {
+        kprintf("ITER %d\n",i);
+    PGMGR_FILL_LEVEL(&lvl_dat,
+                     ctx,
+                     0xffff800000000000, 
+                     1024ull*1024ull*1024ull*32ull,
+                     2);
+
+    pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels, &lvl_dat);
+    }
+
+
+
+   #if 0 
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
+#endif
 kprintf("OK\n");
     while(1);
 
@@ -743,7 +807,7 @@ kprintf("OK\n");
 
     /* If we support NX, enable it */
     if(page_manager.nx_support)
-        pagemgr_enable_nx();
+        pgmgr_enable_nx();
 
 
     /* Prepare PAT */

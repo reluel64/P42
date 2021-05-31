@@ -7,7 +7,7 @@ extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
 #define PAGE_SIZE (0x1000)
-
+#define PAGE_SIZE_SHIFT (12)
 #define _BSP_STACK_TOP ((virt_addr_t)&kstack_top)
 #define _BSP_STACK_BASE ((virt_addr_t)&kstack_base)
 
