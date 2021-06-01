@@ -15,7 +15,7 @@
 #define PAGE_DIRTY            (1 << 6)
 #define PAGE_PAT              (1 << 7)
 #define PAGE_GLOBAL           (1 << 8)
-#define PAGE_EXECUTE_DIABLE   (1 << 63)
+#define PAGE_EXECUTE_DISABLE   (1 << 63)
 
 typedef struct _cr3
 {

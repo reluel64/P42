@@ -223,17 +223,18 @@ static int pagemgr_free_pf
 }
 
 
-static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
+static int pagemgr_attr_translate(phys_addr_t *pte_mask, uint32_t attr)
 {
-    if(!pte->fields.present)
-    {
-        return(-1);
-    }
-    pte->fields.read_write      = !!(attr & PGMGR_WRITABLE);
-    pte->fields.user_supervisor = !!(attr & PGMGR_USER);
-    pte->fields.xd              =  !(attr & PGMGR_EXECUTABLE) && 
-                                    page_manager.nx_support;
+    phys_addr_t pte = 0;
 
+    if(attr & PGMGR_WRITABLE)
+        pte |= PAGE_WRITABLE;
+    
+    if(attr & PGMGR_USER)
+        pte |= PAGE_USER;
+    
+    if((attr & PGMGR_EXECUTABLE) && page_manager.nx_support)
+        pte |= PAGE_EXECUTE_DISABLE;
     
     /* Translate caching attributes */
     /*
@@ -262,52 +263,53 @@ static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
     /* PAT 0 */
     if(attr & PGMGR_WRITE_BACK)
     {
-        pte->fields.write_through = 0;
-        pte->fields.cache_disable = 0;
-        pte->fields.pat           = 0;
+        pte &= ~(PAGE_WRITE_THROUGH | 
+                 PAGE_CACHE_DISABLE | 
+                 PAGE_PAT);
     }
     /* PAT 1 */
     else if(attr & PGMGR_WRITE_THROUGH)
     {
-        pte->fields.write_through = 1;
-        pte->fields.cache_disable = 0;
-        pte->fields.pat           = 0;
+        pte &= ~(PAGE_CACHE_DISABLE | 
+                 PAGE_PAT);
+
+        pte |= PAGE_WRITE_THROUGH;
     }
     /* PAT 2 */
     else if(attr & PGMGR_UNCACHEABLE)
     {
-        pte->fields.write_through = 0;
-        pte->fields.cache_disable = 1;
-        pte->fields.pat           = 0;
+        pte &= ~(PAGE_WRITE_THROUGH |
+                 PAGE_PAT);
+        pte |= PAGE_CACHE_DISABLE;
     }
     /* PAT 3 */
     else if(attr & PGMGR_STRONG_UNCACHED)
     {
-        pte->fields.write_through = 1;
-        pte->fields.cache_disable = 1;
-        pte->fields.pat           = 0;
+        pte |= (PAGE_WRITE_THROUGH | 
+                PAGE_CACHE_DISABLE);
+        pte &= ~PAGE_PAT;
     }
     /* PAT4 */
     else if(attr & PGMGR_WRITE_COMBINE)
     {
-        pte->fields.write_through = 0;
-        pte->fields.cache_disable = 0;
-        pte->fields.pat           = 1;
+        pte |= PAGE_PAT;
+        pte &= ~(PAGE_CACHE_DISABLE | 
+                 PAGE_WRITE_THROUGH);
     }
     else if(attr & PGMGR_WRITE_PROTECT)
     {
-        pte->fields.write_through = 1;
-        pte->fields.cache_disable = 0;
-        pte->fields.pat           = 1;
+        pte |= (PAGE_WRITE_THROUGH | PAGE_PAT);
+        pte &= ~PAGE_CACHE_DISABLE;
     }
     /* By default do write-back */
     else
     {
-        pte->fields.write_through = 0;
-        pte->fields.cache_disable = 0;
-        pte->fields.pat           = 0;
+        pte &= ~(PAGE_WRITE_THROUGH | 
+                 PAGE_CACHE_DISABLE | 
+                 PAGE_PAT);
     }
 
+    *pte_mask = pte;
 
     return(0);
 }
@@ -358,8 +360,8 @@ static phys_size_t pagemgr_ensure_levels
     next_pos = ld->pos;
 
 
-    while((ld->pos < vend) && 
-          (used_bytes    < total_bytes))
+    while((ld->pos    < vend) && 
+          (used_bytes < total_bytes))
     {
         ld->level = (virt_addr_t*)
                           pagemgr_temp_map(ld->addr, 
@@ -406,6 +408,7 @@ static phys_size_t pagemgr_ensure_levels
             kprintf("OVERFLOWED\n");
             break;
         }
+        
         if(((next_pos >> shift) & 0x1FF) < entry)
         {
             /* Calcuate how much we need to go up */
@@ -450,7 +453,6 @@ static phys_size_t pagemgr_ensure_levels
                
                 ld->addr = ctx->pg_phys;
             }
-            
         }
 
         ld->pos = next_pos;
