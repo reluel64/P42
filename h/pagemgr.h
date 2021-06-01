@@ -11,16 +11,16 @@
 #define BOOT_REMAP_TABLE_VADDR (0xFFFFFFFFBFE00000)
 
 
-#define PAGE_WRITABLE        (1 << 0)
-#define PAGE_USER            (1 << 1)
-#define PAGE_EXECUTABLE      (1 << 4)
-#define PAGE_GUARD           (1 << 5)
-#define PAGE_STRONG_UNCACHED (1 << 6)
-#define PAGE_UNCACHEABLE     (1 << 7)
-#define PAGE_WRITE_COMBINE   (1 << 8)
-#define PAGE_WRITE_THROUGH   (1 << 9)
-#define PAGE_WRITE_BACK      (1 << 10)
-#define PAGE_WRITE_PROTECT   (1 << 11)
+#define PGMGR_WRITABLE        (1 << 0)
+#define PGMGR_USER            (1 << 1)
+#define PGMGR_EXECUTABLE      (1 << 4)
+#define PGMGR_GUARD           (1 << 5)
+#define PGMGR_STRONG_UNCACHED (1 << 6)
+#define PGMGR_UNCACHEABLE     (1 << 7)
+#define PGMGR_WRITE_COMBINE   (1 << 8)
+#define PGMGR_WRITE_THROUGH   (1 << 9)
+#define PGMGR_WRITE_BACK      (1 << 10)
+#define PGMGR_WRITE_PROTECT   (1 << 11)
 
 
 typedef struct pagemgr_ctx_t

@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+/* Page flags */
+
 #define PAGE_PRESENT          (1 << 0)
 #define PAGE_WRITABLE         (1 << 1)
 #define PAGE_USER             (1 << 2)

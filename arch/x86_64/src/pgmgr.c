@@ -31,7 +31,7 @@ typedef struct pagemgr_root_t
 #define PGMGR_FILL_LEVEL(level_data, context, vbase, vlength, vmin_level)   \
                         (level_data)->ctx = (context);                      \
                         (level_data)->base = (vbase);                       \
-                        (level_data)->length = (vlength);                   \
+                        (level_data)->length = (vlength);                \
                         (level_data)->min_level = (vmin_level);             \
                         (level_data)->level = NULL;                         \
                         (level_data)->pos = vbase;                          \
@@ -229,9 +229,9 @@ static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
     {
         return(-1);
     }
-    pte->fields.read_write      = !!(attr & PAGE_WRITABLE);
-    pte->fields.user_supervisor = !!(attr & PAGE_USER);
-    pte->fields.xd              =  !(attr & PAGE_EXECUTABLE) && 
+    pte->fields.read_write      = !!(attr & PGMGR_WRITABLE);
+    pte->fields.user_supervisor = !!(attr & PGMGR_USER);
+    pte->fields.xd              =  !(attr & PGMGR_EXECUTABLE) && 
                                     page_manager.nx_support;
 
     
@@ -260,41 +260,41 @@ static int pagemgr_attr_translate(pte_bits_t *pte, uint32_t attr)
         */
 
     /* PAT 0 */
-    if(attr & PAGE_WRITE_BACK)
+    if(attr & PGMGR_WRITE_BACK)
     {
         pte->fields.write_through = 0;
         pte->fields.cache_disable = 0;
         pte->fields.pat           = 0;
     }
     /* PAT 1 */
-    else if(attr & PAGE_WRITE_THROUGH)
+    else if(attr & PGMGR_WRITE_THROUGH)
     {
         pte->fields.write_through = 1;
         pte->fields.cache_disable = 0;
         pte->fields.pat           = 0;
     }
     /* PAT 2 */
-    else if(attr & PAGE_UNCACHEABLE)
+    else if(attr & PGMGR_UNCACHEABLE)
     {
         pte->fields.write_through = 0;
         pte->fields.cache_disable = 1;
         pte->fields.pat           = 0;
     }
     /* PAT 3 */
-    else if(attr & PAGE_STRONG_UNCACHED)
+    else if(attr & PGMGR_STRONG_UNCACHED)
     {
         pte->fields.write_through = 1;
         pte->fields.cache_disable = 1;
         pte->fields.pat           = 0;
     }
     /* PAT4 */
-    else if(attr & PAGE_WRITE_COMBINE)
+    else if(attr & PGMGR_WRITE_COMBINE)
     {
         pte->fields.write_through = 0;
         pte->fields.cache_disable = 0;
         pte->fields.pat           = 1;
     }
-    else if(attr & PAGE_WRITE_PROTECT)
+    else if(attr & PGMGR_WRITE_PROTECT)
     {
         pte->fields.write_through = 1;
         pte->fields.cache_disable = 0;
@@ -323,7 +323,7 @@ static phys_size_t pagemgr_ensure_levels
     pgmgr_level_data_t *ld  = NULL;
     pagemgr_ctx_t      *ctx       = NULL;
     virt_addr_t        next_pos   = 0;
-    uint16_t            entry      = 0;
+    uint16_t           entry      = 0;
     uint8_t            shift      = 0;
     phys_size_t        used_bytes = 0;
     phys_size_t        total_bytes   = 0;
@@ -400,6 +400,12 @@ static phys_size_t pagemgr_ensure_levels
 
         next_pos += (virt_size_t)1 << shift;
  
+        /* In case we overflow, detect this and break out */
+        if(next_pos < ld->pos)
+        {
+            kprintf("OVERFLOWED\n");
+            break;
+        }
         if(((next_pos >> shift) & 0x1FF) < entry)
         {
             /* Calcuate how much we need to go up */
@@ -447,11 +453,6 @@ static phys_size_t pagemgr_ensure_levels
             
         }
 
-        /* Check if we are overlapping */
-        if(ld->pos > next_pos)
-        {
-            break;
-        }
         ld->pos = next_pos;
     }
    
@@ -468,7 +469,7 @@ static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
     uint16_t entry = 0;
     uint8_t shift = 0;
 
-    PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, PAGE_SIZE, 2);
+    PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, REMAP_TABLE_SIZE, 2);
 
     pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels, &lvl_dat);
 
@@ -482,7 +483,9 @@ static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
         level = (virt_addr_t*)pagemgr_temp_map(addr, current_level);
         kprintf("ADDR %x - LEVEL %x - %x\n", addr, level, level[entry]);
 
-        /* If we reach level 1, map the first page to the page table */
+        /* If we reach the bottom level, map the first page from the level 
+         * to the to the table from it belongs 
+         */
         if(current_level == 1)
         {
             level[entry] = addr;
@@ -951,7 +954,7 @@ static inline void pagemgr_invalidate_all(void)
     __write_cr3(__read_cr3());
     cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
 }
-
+#if 0
 static phys_size_t pagemgr_alloc_pages_cb(phys_addr_t phys, phys_size_t count, void *pv)
 {
     phys_size_t     used_pf = 0;
@@ -1379,7 +1382,7 @@ static int pagemgr_build_page_path(pagemgr_path_t *path)
 
     return(0);
 }
-
+#endif
 virt_addr_t pagemgr_map
 (
     pagemgr_ctx_t *ctx,
