@@ -6,16 +6,17 @@
 
 /* Page flags */
 
-#define PAGE_PRESENT          (1 << 0)
-#define PAGE_WRITABLE         (1 << 1)
-#define PAGE_USER             (1 << 2)
-#define PAGE_WRITE_THROUGH    (1 << 3)
-#define PAGE_CACHE_DISABLE    (1 << 4)
-#define PAGE_ACCESSED         (1 << 5)
-#define PAGE_DIRTY            (1 << 6)
-#define PAGE_PAT              (1 << 7)
-#define PAGE_GLOBAL           (1 << 8)
-#define PAGE_EXECUTE_DISABLE   (1 << 63)
+#define PAGE_PRESENT          (1ull << 0)
+#define PAGE_WRITABLE         (1ull << 1)
+#define PAGE_USER             (1ull << 2)
+#define PAGE_WRITE_THROUGH    (1ull << 3)
+#define PAGE_CACHE_DISABLE    (1ull << 4)
+#define PAGE_ACCESSED         (1ull << 5)
+#define PAGE_DIRTY            (1ull << 6)
+#define PAGE_PAT              (1ull << 7)
+#define PAGE_TABLE_SIZE       (1ull << 7)
+#define PAGE_GLOBAL           (1ull << 8)
+#define PAGE_EXECUTE_DISABLE  (1ull << 63)
 
 typedef struct _cr3
 {
