@@ -418,15 +418,16 @@ static phys_size_t pagemgr_ensure_levels_cb
                     ld->level[entry] |= (PAGE_PRESENT | PAGE_WRITABLE);
                     used_bytes += PAGE_SIZE;
                 }
-
+                
+                /* Store the level and go down again */
                 ld->addr = ld->level[entry];
+                ld->current_level--;
             }
             else
             {
                 /* For the topmost level, use the 
                  * page base address
                  */
-               
                 ld->addr = ctx->pg_phys;
             }
         }
@@ -481,6 +482,7 @@ static phys_size_t pagemgr_fill_tables_cb
      * A level of 2 means that it will only create the page tables but will
      * not try to allocate page frames
      */
+
     if((ld->min_level < 1) || 
        (ld->min_level >= ctx->max_level))
     {
@@ -499,7 +501,7 @@ static phys_size_t pagemgr_fill_tables_cb
         shift = PGMGR_LEVEL_TO_SHIFT(ld->current_level);
         entry = (ld->pos >> shift) & 0x1FF;
 
-#if 1
+#if 0
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->current_level, 
@@ -541,10 +543,10 @@ static phys_size_t pagemgr_fill_tables_cb
 
         ld->level[entry] = base + used_bytes;
         used_bytes += (virt_size_t)1 << shift;
-        
+
         /* Calculate the next position */
         next_pos += (virt_size_t)1 << shift;
- 
+
         /* In case we overflow, detect this and break out 
          * This is a special case when we are dealing with the last
          * bits of the address space
@@ -580,10 +582,9 @@ static phys_size_t pagemgr_fill_tables_cb
                 */
                 ld->level = (virt_addr_t*) (page_manager.remap_tbl + 
                                         (ld->current_level  << PAGE_SIZE_SHIFT));
-
+               
                 entry = (next_pos >> shift) & 0x1FF;
-
-              
+               
                 if((ld->current_level >= PGMGR_MIN_PAGE_TABLE_LEVEL) && 
                     !PAGE_MASK_ADDRESS(ld->level[entry]) && 
                     !(ld->level[entry] & PAGE_TABLE_SIZE))
@@ -592,7 +593,9 @@ static phys_size_t pagemgr_fill_tables_cb
                     return(0);
                 }
 
+                /* Store the level and go down again */
                 ld->addr = ld->level[entry];
+                ld->current_level--;
             }
             else
             {
@@ -730,20 +733,17 @@ static int pgmgr_map
     PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2);
 
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
-  PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2);
+
+ PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2);
 
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
+
     if(status || ld.error)
         return(-1);
 
-
     PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1);
 
-    pagemgr_fill_tables_cb(phys, length >> PAGE_SIZE_SHIFT, &ld);
-
-    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1);
-
-    pagemgr_fill_tables_cb(phys, length >> PAGE_SIZE_SHIFT, &ld);
+   /* pagemgr_fill_tables_cb(phys, length >> PAGE_SIZE_SHIFT, &ld);*/
 
     return(0);
 }
@@ -896,7 +896,7 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
 #endif
     pgmgr_setup_remap_table(ctx);
     
-   pgmgr_map(ctx, 0xffff800000000000, 0x2000000, 0x2000000, 0);
+   pgmgr_map(ctx, 0xffff800000000000, 0x400000000,0x2000000 , 0);
 
  /*pgmgr_map(ctx, 0xffff800000000000, 0x2000000, 0x2000000, 0);*/
    #if 0 
