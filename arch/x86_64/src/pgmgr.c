@@ -25,20 +25,23 @@ typedef struct pagemgr_root_t
     pat_t pat;
 }pagemgr_root_t;
 
-
+#define PGMGR_CHANGE_ATTRIBUTES 0x1
 #define PGMGR_LEVEL_TO_SHIFT(x) (PT_SHIFT + (((x) - 1) << 3) + ((x) - 1))
 
-#define PGMGR_FILL_LEVEL(level_data, context, vbase, vlength, vmin_level)   \
-                        (level_data)->ctx = (context);                      \
-                        (level_data)->base = (vbase);                       \
-                        (level_data)->length = (vlength);                   \
-                        (level_data)->min_level = (vmin_level);             \
-                        (level_data)->level = NULL;                         \
-                        (level_data)->pos = vbase;                          \
-                        (level_data)->current_level = (context)->max_level; \
-                        (level_data)->error = 1;                            \
-                        (level_data)->addr = (context)->pg_phys;            \
-                        (level_data)->do_map = 1
+#define PGMGR_FILL_LEVEL(ld, context, _base,                        \
+                        _length, _min_level, _attr)                 \
+                        (ld)->ctx = (context);                      \
+                        (ld)->base = (_base);                       \
+                        (ld)->level = NULL;                         \
+                        (ld)->length = (_length);                   \
+                        (ld)->pos = (_base);                        \
+                        (ld)->addr = (context)->pg_phys;            \
+                        (ld)->min_level = (_min_level);             \
+                        (ld)->current_level = (context)->max_level; \
+                        (ld)->error = 1;                            \
+                        (ld)->do_map = 1;                           \
+                        (ld)->attr_mask = (_attr)
+
 
 typedef struct pgmgr_contig_find_t
 {
@@ -47,7 +50,7 @@ typedef struct pgmgr_contig_find_t
     phys_size_t pf_req;
 }pgmgr_contig_find_t;
 
-typedef struct pgmgr_level_data
+typedef struct pgmgr_level_data_t
 {
     pagemgr_ctx_t *ctx;
     virt_addr_t base;
@@ -59,6 +62,7 @@ typedef struct pgmgr_level_data
     uint8_t current_level;
     uint8_t error;
     uint8_t do_map;
+    uint8_t flags;
     phys_size_t attr_mask;
 }pgmgr_level_data_t;
 
@@ -175,7 +179,7 @@ static phys_addr_t pagemgr_alloc_pf(phys_addr_t *pf)
     return(pfmgr->alloc(1, 0, pagemgr_alloc_pf_cb, pf));
 }
 
-static phys_addr_t pagemgr_free_pf_cb
+static int pagemgr_free_pf_cb
 (
     phys_addr_t *paddr, 
     phys_size_t *count, 
@@ -309,8 +313,16 @@ static phys_size_t pagemgr_ensure_levels_cb
     ctx = ld->ctx;
 
     total_bytes = pf_count << PAGE_SIZE_SHIFT;
+    vend        = ld->base + (ld->length - 1);
+    next_pos    = ld->pos;
 
-   /* kprintf("MAX_LEVEL %d\n",ctx->max_level);*/
+    /* We're done here */
+    if(ld->pos > vend)
+    {
+        return(0);
+    }
+    
+    ld->error = PGMGR_TBL_CREATE_FAIL;
 
     if(!ld->addr)
     {
@@ -332,11 +344,6 @@ static phys_size_t pagemgr_ensure_levels_cb
     {
         ld->min_level = PGMGR_MIN_PAGE_TABLE_LEVEL;
     }
-
-    vend = ld->base + (ld->length - 1);
-    next_pos = ld->pos;
-    
-    ld->error = PGMGR_TBL_CREATE_FAIL;
 
     while((ld->pos    < vend) && 
           (used_bytes < total_bytes))
@@ -442,8 +449,6 @@ static phys_size_t pagemgr_ensure_levels_cb
                  */
                 ld->addr = ctx->pg_phys;
             }
-
-
         }
 
         ld->pos = next_pos;
@@ -478,12 +483,18 @@ static phys_size_t pagemgr_fill_tables_cb
     ctx = ld->ctx;
 
     total_bytes = pf_count << PAGE_SIZE_SHIFT;
-    kprintf("%s\n",__FUNCTION__);
-   /* kprintf("MAX_LEVEL %d\n",ctx->max_level);*/
+    vend        = ld->base + (ld->length - 1);
+    next_pos    = ld->pos;
+
+    if(ld->pos > vend)
+    {
+        return(0);
+    }
+
 
     if(!ld->addr)
     {
-        kprintf("THIS IS AN ERROR\n");
+        kprintf("This is an error\n");
         while(1);
     }
 
@@ -503,9 +514,6 @@ static phys_size_t pagemgr_fill_tables_cb
         ld->min_level = 1;
     }
 
-    vend = ld->base + (ld->length - 1);
-    next_pos = ld->pos;
-
     while((ld->pos    < vend) && 
           (used_bytes < total_bytes))
     {
@@ -520,7 +528,7 @@ static phys_size_t pagemgr_fill_tables_cb
         shift = PGMGR_LEVEL_TO_SHIFT(ld->current_level);
         entry = (ld->pos >> shift) & 0x1FF;
 
-#if 1
+#if 0
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->current_level, 
@@ -642,7 +650,7 @@ static phys_size_t pagemgr_fill_tables_cb
 
         ld->pos = next_pos;
     }
-   
+  
     if(ld->pos == next_pos)
         ld->error = 0;
 
@@ -660,7 +668,7 @@ static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
     uint8_t shift         = 0;
     int status            = 0;
 
-    PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, REMAP_TABLE_SIZE, 2);
+    PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, REMAP_TABLE_SIZE, 2, 0);
 
     /* Allocate pages */
     status = pfmgr->alloc(0, 
@@ -753,32 +761,77 @@ static int pgmgr_map
 )
 {
     pgmgr_level_data_t ld;
-    virt_addr_t pos = 0;
-    virt_addr_t next_pos = 0;
-    virt_addr_t vlimit = 0;
-    uint8_t current_level = 0;
-    uint16_t entry = 0;
+    phys_addr_t attr_mask = 0;
     int status = 0;
 
     kprintf("virt %x Len %x phys %x\n",virt, length, phys);
 
     /* Create the tables */
-    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2);
-    pagemgr_attr_translate(&ld.attr_mask, attr);
+    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2, 0);
+
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
 
     if(status || ld.error)
         return(-1);
 
-    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1);
+    /* Setup attribute mask */
+    pagemgr_attr_translate(&attr_mask, attr);
+
+    /* Do mapping */
+    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1, attr_mask);
 
     pagemgr_fill_tables_cb(phys, length >> PAGE_SIZE_SHIFT, &ld);
+
+    if(ld.error)
+    {
+        kprintf("Failed tomap\n");
+        return(-1);
+    }
 
     return(0);
 }
 
+static int pgmgr_alloc
+(
+    pagemgr_ctx_t *ctx,
+    virt_addr_t    virt,
+    virt_size_t    length,
+    uint32_t       attr
+)
+{
+    pgmgr_level_data_t ld;
+    phys_addr_t attr_mask = 0;
+    int status = 0;
 
-static int pgmgr_init_kernel_pgtable(pagemgr_ctx_t *ctx)
+    /* Create the tables */
+    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2, 0);
+
+    status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
+
+    if(status || ld.error)
+        return(-1);
+
+    /* Setup attribute mask */
+    pagemgr_attr_translate(&attr_mask, attr);
+
+    /* Do allocation */
+    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1, attr_mask);
+
+    status = pfmgr->alloc(length >> PAGE_SIZE_SHIFT, 
+                          ALLOC_CB_STOP, 
+                          pagemgr_fill_tables_cb, 
+                          &ld);
+
+    if(ld.error || status)
+    {
+        kprintf("Failed tomap\n");
+        return(-1);
+    }
+
+    return(0);
+}
+
+static int pgmgr_map_kernel(pagemgr_ctx_t *ctx)
 {
     
     /* Map code section */
@@ -890,35 +943,11 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
         ctx->max_level = 4;
 
     pagemgr_alloc_pf(&ctx->pg_phys);
- 
- #if 0
-    for(int i = 0; i <1; i++)
-    {
-        kprintf("ITER %d\n",i);
-    PGMGR_FILL_LEVEL(&lvl_dat,
-                     ctx,
-                     0xffff800000000000, 
-                     1024ull*1024ull*1024ull,
-                     2);
 
-    pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels, &lvl_dat);
-    }
-#endif
     pgmgr_setup_remap_table(ctx);
-    pgmgr_init_kernel_pgtable(ctx);
+    pgmgr_map_kernel(ctx);
 
- /*pgmgr_map(ctx, 0xffff800000000000, 0x2000000, 0x2000000, 0);*/
-   #if 0 
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-pagemgr_ensure_levels(ctx,0xffff800000000000, 0x400000000, 2);
-#endif
+    pgmgr_alloc(ctx,0x1000,0x40000000,0);
 kprintf("OK\n");
    
 
