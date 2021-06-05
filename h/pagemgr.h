@@ -33,17 +33,11 @@ typedef struct pagemgr_ctx_t
 }pagemgr_ctx_t;
 
 
-
-
 int         pagemgr_init(pagemgr_ctx_t *ctx);
-virt_addr_t pagemgr_temp_map(phys_addr_t phys, uint16_t ix);
-int         pagemgr_temp_unmap(virt_addr_t vaddr);
 void        pagemgr_boot_temp_map_init(void);
 int         pagemgr_install_handler(void);
 uint64_t    page_manager_get_base(void);
 
-virt_addr_t pagemgr_alloc(pagemgr_ctx_t *ctx, virt_addr_t virt, virt_size_t length, uint32_t attr);
-virt_addr_t pagemgr_map(pagemgr_ctx_t *ctx, virt_addr_t virt, phys_addr_t phys, virt_size_t length, uint32_t attr);
 int         pagemgr_attr_change(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len, uint32_t attr);
 int         pagemgr_free(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
 int         pagemgr_unmap(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
@@ -51,4 +45,32 @@ uint8_t     pagemgr_nx_support(void);
 uint8_t     pagemgr_pml5_support(void);
 int         pagemgr_per_cpu_init(void);
 
+
+int pgmgr_alloc
+(
+    pagemgr_ctx_t *ctx,
+    virt_addr_t    virt,
+    virt_size_t    length,
+    uint32_t       attr
+);
+
+int pgmgr_map
+(
+    pagemgr_ctx_t *ctx,
+    virt_addr_t    virt,
+    virt_size_t    length,
+    phys_addr_t    phys, 
+    uint32_t       attr
+);
+
+int pgmgr_temp_unmap
+(
+    virt_addr_t vaddr
+);
+
+virt_addr_t pgmgr_temp_map
+(
+    phys_addr_t phys, 
+    uint16_t ix
+);
 #endif

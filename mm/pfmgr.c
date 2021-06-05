@@ -106,8 +106,8 @@ static virt_addr_t pfmgr_early_map
     pad = addr % PAGE_SIZE;
   
     /* map 8K */
-    vaddr = pagemgr_temp_map(addr - pad, 510);
-    pagemgr_temp_map(addr - pad + PAGE_SIZE, 511);
+    vaddr = pgmgr_temp_map(addr - pad, 510);
+    pgmgr_temp_map(addr - pad + PAGE_SIZE, 511);
 
     return(vaddr + pad);
 }
@@ -934,16 +934,15 @@ int pfmgr_show_free_memory(void)
     pfmgr_free_range_t *freer = NULL;
     phys_size_t free_mem = 0;
     phys_size_t total_mem = 0;
-    freer = linked_list_first(&base.freer);
+
+    freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
     
     while(freer)
     {
-
-
         free_mem += freer->avail_pf;
-        total_mem+=freer->total_pf;
+        total_mem += freer->total_pf;
 
-        freer = linked_list_next(&freer->hdr.node);
+        freer = (pfmgr_free_range_t*)linked_list_next(&freer->hdr.node);
     }
 
     free_mem *= PAGE_SIZE;

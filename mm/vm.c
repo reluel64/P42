@@ -140,7 +140,7 @@ static int vm_setup_protected_regions
         /* Reserve kernel image - only the higher half */
         {
             .base   =  _KERNEL_VMA     + _BOOTSTRAP_END,
-            .length =  _KERNEL_VMA_END - _KERNEL_VMA,
+            .length =  _KERNEL_VMA_END - (_KERNEL_VMA + _BOOTSTRAP_END),
             .flags   = VM_PERMANENT,
         },
         /* Reserve remapping table */
@@ -167,8 +167,14 @@ static int vm_setup_protected_regions
 
     for(uint32_t i = 0; i < rsrvd_count; i++)
     {
-        vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags);
+        kprintf("Reserving %x - %x\n", re[i].base, re[i].length);
+        if(vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags) == 0)
+        {
+            kprintf("FAILED\n");
+        }
     }
+
+    vm_space_alloc(ctx, 0, 0x1000,VM_LOW_MEM);
 }
  
 int vm_init(void)
@@ -180,6 +186,7 @@ int vm_init(void)
     uint32_t              offset  = 0;
     vm_slot_hdr_t         *hdr = NULL;
     vm_extent_t           ext;
+    int status            = 0;
 
     vm_max = cpu_virt_max();
 
@@ -196,19 +203,22 @@ int vm_init(void)
 
     linked_list_init(&kernel_ctx.free_mem);
     linked_list_init(&kernel_ctx.alloc_mem);
+      
     spinlock_init(&kernel_ctx.lock);
 
-    hdr = (vm_slot_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
-                                        kernel_ctx.vm_base,
-                                        VM_SLOT_SIZE,
-                                        PAGE_WRITABLE | 
-                                        PAGE_WRITE_THROUGH);
+   status = pgmgr_alloc(&kernel_ctx.pagemgr,
+                        kernel_ctx.vm_base,
+                        VM_SLOT_SIZE,
+                        PAGE_WRITABLE | 
+                        PAGE_WRITE_THROUGH);
 
-    if(hdr == NULL)
+    if(status)
     {
         kprintf("Failed to initialize VMM\n");
         while(1);
     }
+
+     hdr = (vm_slot_hdr_t*) kernel_ctx.vm_base;
 
     /* Clear the memory */
     memset(hdr,    0, VM_SLOT_SIZE);
@@ -226,7 +236,7 @@ int vm_init(void)
     hdr->avail = kernel_ctx.free_per_slot;
 
     memset(&ext, 0, sizeof(vm_extent_t));
-
+ 
     /* Insert higher memory */
     ext.base   = kernel_ctx.vm_base;
     ext.length = (((uintptr_t)-1) - kernel_ctx.vm_base)+1;
@@ -245,18 +255,21 @@ int vm_init(void)
                       kernel_ctx.free_per_slot, 
                       &ext);
 
-    hdr = (vm_slot_hdr_t*)pagemgr_alloc(&kernel_ctx.pagemgr,
-                                        kernel_ctx.vm_base + VM_SLOT_SIZE,
-                                        VM_SLOT_SIZE,
-                                        PAGE_WRITABLE | 
-                                        PAGE_WRITE_THROUGH);
-    
-    if(hdr == NULL)
+    status = pgmgr_alloc(&kernel_ctx.pagemgr,
+                        kernel_ctx.vm_base + VM_SLOT_SIZE,
+                        VM_SLOT_SIZE,
+                        PAGE_WRITABLE | 
+                        PAGE_WRITE_THROUGH);
+
+    if(status)
     {
         return(-1);
     }
 
+    hdr = (vm_slot_hdr_t*)(kernel_ctx.vm_base + VM_SLOT_SIZE);
+
     memset(hdr,    0, VM_SLOT_SIZE);
+
     linked_list_add_head(&kernel_ctx.alloc_mem, &hdr->node);
     hdr->avail = kernel_ctx.alloc_per_slot;
 
@@ -297,15 +310,19 @@ static int vm_alloc_slot
         return(-1);
     }
 
-    new_slot = (vm_slot_hdr_t*)pagemgr_alloc(&ctx->pagemgr,
-                                             fext.base, 
-                                             VM_SLOT_SIZE, 
-                                             PAGE_WRITABLE);
+    status = pgmgr_alloc(&ctx->pagemgr,
+                        fext.base, 
+                        VM_SLOT_SIZE, 
+                        PAGE_WRITABLE);
 
-    if(new_slot == NULL)
+    
+
+    if(status != 0)
     {
         return(-1);
     }
+
+    new_slot = (vm_slot_hdr_t*)fext.base;
 
     /* clear the slot memory */
     memset(new_slot, 0, VM_SLOT_SIZE);
@@ -581,7 +598,7 @@ static int vm_extent_extract
             if(best == NULL)
                 best = cext;
 
-            if(ext->base != 0)
+            if(ext->base != VM_BASE_AUTO)
             {
                 if(vm_is_in_range(cext->base, 
                                    cext->length, 
@@ -883,10 +900,20 @@ virt_addr_t vm_space_alloc
                               addr, 
                               len, 
                               &rem_ext);
+
     kprintf("AFTER SPLIT %x %x - %x %x - %x %x\n", req_ext.base,req_ext.length, rem_ext.base, rem_ext.length, addr, len);
     /* Insert the left side - this is guaranteed to work 
      * If it doesn't...well...we're fucked
      */
+
+    if(status < 0)
+    {
+        kprintf("Could not perform split\n");
+        vm_extent_insert(&ctx->free_mem,
+                        ctx->free_per_slot,
+                        &req_ext);
+        return(-1);
+    }
 
     vm_extent_insert(&ctx->free_mem,
                      ctx->free_per_slot,

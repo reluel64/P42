@@ -39,6 +39,10 @@
 #define VM_ALLOCED   (1 << 3)
 #define VM_PERMANENT (1 << 4)
 
+#define VM_BASE_AUTO (~0ull)
+
+
+
 #define VM_REGION_MASK (VM_LOW_MEM | VM_HIGH_MEM)
 #define VM_MEM_TYPE_MASK (VM_ALLOCED | VM_MAPPED)
 
