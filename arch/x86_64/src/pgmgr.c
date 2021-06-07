@@ -826,17 +826,21 @@ int pgmgr_map
     pgmgr_level_data_t ld;
     phys_addr_t attr_mask = 0;
     int status = 0;
-
+    int int_status = 0;
     kprintf("virt %x Len %x phys %x\n",virt, length, phys);
 
     /* Create the tables */
     PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2, 0);
 
+    spinlock_lock_int(&ctx->lock, &int_status);
+
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
 
     if(status || ld.error)
+    {
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
-
+    }
     /* Setup attribute mask */
     pagemgr_attr_translate(&attr_mask, attr);
 
@@ -847,9 +851,12 @@ int pgmgr_map
 
     if(ld.error)
     {
+        spinlock_unlock_int(&ctx->lock, int_status);
         kprintf("Failed tomap\n");
         return(-1);
     }
+
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(0);
 }
@@ -864,16 +871,23 @@ int pgmgr_alloc
 {
     pgmgr_level_data_t ld;
     phys_addr_t attr_mask = 0;
+    int int_status = 0;
     int status = 0;
+
 
     /* Create the tables */
     PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2, 0);
 
+    spinlock_lock_int(&ctx->lock, &int_status);
+
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
 
     if(status || ld.error)
+    {
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
-
+    }
+    
     /* Setup attribute mask */
     pagemgr_attr_translate(&attr_mask, attr);
 
@@ -888,8 +902,11 @@ int pgmgr_alloc
     if(ld.error || status)
     {
         kprintf("Failed to allocate\n");
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
+
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(0);
 }
