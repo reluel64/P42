@@ -57,7 +57,12 @@ typedef struct vm_extent_t
     virt_addr_t base;
     virt_size_t length;
     uint32_t flags;
-    void    *data;     /* extent specific data */
+
+    union 
+    {
+        void    *data;     /* extent specific data */
+        uint32_t eflags;    
+    };
 
 }vm_extent_t;
 
@@ -76,6 +81,15 @@ typedef int (*vm_lookup_cb)
     vm_ctx_t *ctx, 
     vm_slot_hdr_t *hdr, 
     void *pv
+);
+
+
+int vm_extent_split
+(
+    vm_extent_t *src,
+    const virt_addr_t virt,
+    const virt_size_t len,
+    vm_extent_t *dst
 );
 
 int vm_init(void);
