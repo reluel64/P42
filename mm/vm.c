@@ -959,6 +959,21 @@ virt_addr_t vm_space_alloc
                      ctx->free_per_slot,
                      &req_ext);
 
+    /* set the alloc_ext to what 
+     * we want to add to the 
+     * allocated list 
+     * We do this here as in case we need to vm_undo
+     * to have the alloc_ext ready
+     */
+
+    alloc_ext.base = addr;
+    alloc_ext.length = len;
+
+    /* Make sure that the region mask is appropiately set */
+    alloc_ext.flags = (flags & ~VM_REGION_MASK) | 
+                     (req_ext.flags & VM_REGION_MASK);
+
+
     /* If we have a right side, insert it */
     if(status > 0)
     {
@@ -996,18 +1011,6 @@ virt_addr_t vm_space_alloc
                                       &req_ext);
         }
     }
-
-    /* set the alloc_ext to what 
-     * we want to add to the 
-     * allocated list 
-     */
-
-    alloc_ext.base = addr;
-    alloc_ext.length = len;
-
-    /* Make sure that the region mask is appropiately set */
-    alloc_ext.flags = (flags & ~VM_REGION_MASK) | 
-                     (req_ext.flags & VM_REGION_MASK);
 
     status = vm_extent_insert(&ctx->alloc_mem, 
                                ctx->alloc_per_slot, 
