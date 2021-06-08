@@ -6,17 +6,6 @@
 #include <pagemgr.h>
 #include <defs.h>
 
-#define VIRTUAL_MEMORY_UNRESERVABLE (1 << 0)
-#define VM_RES_KERNEL_IMAGE        (1 << 1)
-#define VM_PHYS_MM                 (1 << 2)
-#define VM_REMAP_TABLE             (1 << 3)
-#define VM_RES_RSRVD               (1 << 4)
-#define VM_RES_FREE                (1 << 5)
-#define VM_ALLOW_SWAP              (1 << 6)
-#define VM_GUARD_MEMORY            (1 << 7)
-#define VM_RES_LOW                 (1 << 8)
-#define VM_RES_ALLOC               (1 << 9)
-
 #define VM_ATTR_WRITABLE          PGMGR_WRITABLE
 #define VM_ATTR_USER              PGMGR_USER
 #define VM_ATTR_WRITE_THROUGH     PGMGR_WRITE_THROUGH
@@ -27,28 +16,27 @@
 #define VM_ATTR_WRITE_COMBINE     PGMGR_WRITE_COMBINE
 #define VM_ATTR_EXECUTABLE        PGMGR_EXECUTABLE
 
-
-
-#define VM_FREE_HDR  (1 << 0)
-#define VM_ALLOC_HDR (1 << 1)
-#define VM_RSRVD_HDR (1 << 2)
-
 #define VM_LOW_MEM   (1 << 0)
 #define VM_HIGH_MEM  (1 << 1)
 #define VM_MAPPED    (1 << 2)
-#define VM_ALLOCED   (1 << 3)
+#define VM_ALLOCATED (1 << 3)
 #define VM_PERMANENT (1 << 4)
+#define VM_LOCKED    (1 << 5)
 
 #define VM_BASE_AUTO (~0ull)
 
 
+#define VM_CTX_PREFER_HIGH_MEMORY VM_HIGH_MEM
+#define VM_CTX_PREFER_LOW_MEMORY  VM_LOW_MEM
+
 #define VM_REGION_MASK (VM_LOW_MEM | VM_HIGH_MEM)
-#define VM_MEM_TYPE_MASK (VM_ALLOCED | VM_MAPPED)
+#define VM_MEM_TYPE_MASK (VM_ALLOCATED | VM_MAPPED)
 
 #define VM_OK (0x0)
 #define VM_FAIL (-1)
 #define VM_NOMEM (-2)
 #define VM_NOENT (-3)
+
 
 typedef struct vm_ctx_t
 {

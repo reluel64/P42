@@ -1,4 +1,4 @@
-/* Virtual Memory Manager
+/* Virtual Memory Space 
  * Part of P42 Kernel
  */
 
@@ -21,14 +21,6 @@ extern virt_size_t __max_linear_address(void);
 
 static vm_ctx_t kernel_ctx;
 
-static int vm_extent_acquire
-(
-    list_head_t *lh,
-    uint32_t    ext_per_slot,
-    virt_addr_t virt,
-    virt_size_t len,
-    vm_extent_t **out_ext
-);
 
 static int vm_virt_is_present
 (
@@ -142,24 +134,24 @@ static int vm_setup_protected_regions
         {
             .base   =  _KERNEL_VMA     + _BOOTSTRAP_END,
             .length =  _KERNEL_VMA_END - (_KERNEL_VMA + _BOOTSTRAP_END),
-            .flags   = VM_PERMANENT | VM_ALLOCED,
+            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
         },
         /* Reserve remapping table */
         {
             .base   =  REMAP_TABLE_VADDR,
             .length =  REMAP_TABLE_SIZE,
-            .flags   = VM_PERMANENT | VM_ALLOCED,
+            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
         },
         /* reserve head of tracking for free addresses */
         {
             .base   =  (virt_addr_t)linked_list_first(&ctx->free_mem),
             .length =  VM_SLOT_SIZE,
-            .flags   = VM_PERMANENT | VM_ALLOCED,
+            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
         },
         {
             .base   =  (virt_addr_t)linked_list_first(&ctx->alloc_mem),
             .length =  VM_SLOT_SIZE,
-            .flags   = VM_PERMANENT | VM_ALLOCED,
+            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
         },
         
     };
@@ -175,8 +167,7 @@ static int vm_setup_protected_regions
         }
     }
 
-    vm_space_alloc(ctx, VM_BASE_AUTO, 0x8000000, VM_LOW_MEM | VM_ALLOCED);
-
+    vm_space_free(ctx, re[0].base, re[0].length);
 }
  
 int vm_init(void)
@@ -195,13 +186,14 @@ int vm_init(void)
     memset(&kernel_ctx, 0, sizeof(vm_ctx_t));
     
     if(pagemgr_init(&kernel_ctx.pagemgr) == -1)
-        return(-1);
+        return(VM_FAIL);
 
     vm_base = (~vm_base) - (vm_max >> 1);
 
     kprintf("Initializing Virtual Memory Manager BASE - 0x%x\n",vm_base);
 
     kernel_ctx.vm_base = vm_base;
+    kernel_ctx.flags   = VM_CTX_PREFER_HIGH_MEMORY;
 
     linked_list_init(&kernel_ctx.free_mem);
     linked_list_init(&kernel_ctx.alloc_mem);
@@ -241,7 +233,7 @@ int vm_init(void)
  
     /* Insert higher memory */
     ext.base   = kernel_ctx.vm_base;
-    ext.length = (((uintptr_t)-1) - kernel_ctx.vm_base)+1;
+    ext.length = (((uintptr_t)-1) - kernel_ctx.vm_base) + 1;
     ext.flags  = VM_HIGH_MEM;
 
     vm_extent_insert(&kernel_ctx.free_mem, 
@@ -277,8 +269,8 @@ int vm_init(void)
 
     vm_setup_protected_regions(&kernel_ctx);
     vm_list_entries();
-while(1);
-    return(0);
+
+    return(VM_OK);
 }
 
 static int vm_alloc_slot
@@ -310,7 +302,7 @@ static int vm_alloc_slot
                 
     if(status < 0)
     {
-        return(-1);
+        return(VM_FAIL);
     }
 
     status = pgmgr_alloc(&ctx->pagemgr,
@@ -318,11 +310,9 @@ static int vm_alloc_slot
                         VM_SLOT_SIZE, 
                         PAGE_WRITABLE);
 
-    
-
     if(status != 0)
     {
-        return(-1);
+        return(VM_FAIL);
     }
 
     new_slot = (vm_slot_hdr_t*)fext.base;
@@ -352,10 +342,11 @@ static int vm_alloc_slot
     alloc_ext.base = (virt_addr_t)new_slot;
     alloc_ext.length = VM_SLOT_SIZE;
 
-    /* Memory is allocated and MUST NOT be swapped */
-    alloc_ext.flags = VM_ALLOCED   | 
+    /* Memory is allocated and MUST NOT be swapped and cannot be freed */
+    alloc_ext.flags = VM_ALLOCATED | 
                       VM_PERMANENT | 
-                      VM_HIGH_MEM;
+                      VM_HIGH_MEM  |
+                      VM_LOCKED;
     
     /* insert the allocated memory into the list */
 
@@ -391,7 +382,7 @@ static int vm_alloc_slot
         }
     }
 
-    return(0);
+    return(VM_OK);
 }
 
 /*
@@ -535,7 +526,7 @@ static int vm_extent_insert
     en = linked_list_first(lh);
 
     if(en == NULL)
-        return(-1);
+        return(VM_FAIL);
 
     /* Start finding a free slot */
 
@@ -554,7 +545,7 @@ static int vm_extent_insert
                 {
                     memcpy(c_ext, ext, sizeof(vm_extent_t));
                     hdr->avail--;
-                    return(0);
+                    return(VM_OK);
                 }
             }
         }
@@ -648,7 +639,7 @@ static int vm_extent_extract
 
     if(!best || (best->length < ext->length))
     {
-        return(-1);
+        return(VM_FAIL);
     }
 
     hdr = EXTENT_TO_HEADER(best);
@@ -674,7 +665,7 @@ static int vm_extent_extract
         linked_list_add_head(lh, &hdr->node);
     }
 
-    return(0);
+    return(VM_OK);
 
 }
 
@@ -852,17 +843,20 @@ virt_addr_t vm_space_alloc
     if(addr == VM_BASE_AUTO)
     {
     /* check if we're stupid or not */
-        if((flags & VM_REGION_MASK) == VM_REGION_MASK ||
-            (flags & VM_REGION_MASK) == 0)
+        if((flags & VM_REGION_MASK) == VM_REGION_MASK)
         {
-            return(-1);
+            return(0);
+        }
+        else if((flags & VM_REGION_MASK) == 0)
+        {
+            flags |= (ctx->flags & VM_REGION_MASK);
         }
     }
 
     if(((flags & VM_MEM_TYPE_MASK) == VM_MEM_TYPE_MASK) ||
         ((flags & VM_MEM_TYPE_MASK) == 0))
     {
-        return(-1);
+        return(0);
     }
     /* clear the extent */
     memset(&req_ext, 0, sizeof(vm_extent_t));
@@ -942,6 +936,7 @@ virt_addr_t vm_space_alloc
             rem_ext.length, 
             addr, 
             len);
+
     /* Insert the left side - this is guaranteed to work 
      * If it doesn't...well...we're fucked
      */
@@ -952,7 +947,7 @@ virt_addr_t vm_space_alloc
         vm_extent_insert(&ctx->free_mem,
                         ctx->free_per_slot,
                         &req_ext);
-        return(-1);
+        return(0);
     }
 
     vm_extent_insert(&ctx->free_mem,
@@ -1085,7 +1080,7 @@ int vm_space_free
     if(addr == VM_BASE_AUTO)
     {
         kprintf("Cannot use VM_BASE_AUTO while freeing\n");
-        return(-1);
+        return(VM_FAIL);
     }
 
     if(len % PAGE_SIZE)
@@ -1104,13 +1099,23 @@ int vm_space_free
     status = vm_extent_extract(&ctx->alloc_mem, 
                                 ctx->alloc_per_slot,
                                 &req_ext);
-    
+
     /* If the extent does not exist, then there is no memory allocated 
      * at that address
      */ 
     if(status < 0)
     {
-        return(-1);
+        return(VM_FAIL);
+    }
+
+
+    if(req_ext.flags & VM_LOCKED)
+    {
+        vm_extent_insert(&ctx->alloc_mem,
+                         ctx->alloc_per_slot,
+                         &req_ext);
+        kprintf("MEMORY is locked\n");
+        return(VM_FAIL);
     }
 
     status = vm_extent_split(&req_ext, 
