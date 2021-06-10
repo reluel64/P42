@@ -1,10 +1,11 @@
 #ifndef vm_h
 #define vm_h
 
+#include <defs.h>
 #include <stdint.h>
 #include <linked_list.h> 
 #include <pagemgr.h>
-#include <defs.h>
+
 
 #define VM_ATTR_WRITABLE          PGMGR_WRITABLE
 #define VM_ATTR_USER              PGMGR_USER
@@ -22,6 +23,8 @@
 #define VM_ALLOCATED (1 << 3)
 #define VM_PERMANENT (1 << 4)
 #define VM_LOCKED    (1 << 5)
+#define VM_ALLOC_NOW (1 << 6)
+
 
 #define VM_BASE_AUTO (~0ull)
 
@@ -76,39 +79,14 @@ typedef struct vm_slot_hdr_t
 }vm_slot_hdr_t;
 
 
-typedef int (*vm_lookup_cb)
-(
-    vm_ctx_t *ctx, 
-    vm_slot_hdr_t *hdr, 
-    void *pv
-);
-
-
-int vm_extent_split
-(
-    vm_extent_t *src,
-    const virt_addr_t virt,
-    const virt_size_t len,
-    vm_extent_t *dst
-);
-
-int vm_init(void);
-
-int vm_change_attrib
-(
-    vm_ctx_t *ctx, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t attr
-);
-
 virt_addr_t vm_map
 (
     vm_ctx_t *ctx, 
-    phys_addr_t phys, 
     virt_addr_t virt, 
     virt_size_t len, 
-    uint32_t attr
+    phys_addr_t phys, 
+    uint32_t alloc_flags,
+    uint32_t page_flags
 );
 
 virt_addr_t vm_alloc
@@ -116,46 +94,9 @@ virt_addr_t vm_alloc
     vm_ctx_t *ctx, 
     virt_addr_t virt, 
     virt_size_t len, 
-    uint32_t attr
+    uint32_t alloc_flags,
+    uint32_t page_flags
 );
 
-int vm_unmap
-(
-    vm_ctx_t *ctx, 
-    virt_addr_t vaddr, 
-    virt_size_t len
-);
-
-int vm_free
-(
-    vm_ctx_t *ctx, 
-    virt_addr_t vaddr, 
-    virt_size_t len
-);
-
-int vm_reserve
-(
-    vm_ctx_t *ctx, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t type
-);
-
-
-int vm_temp_identity_unmap
-(
-    vm_ctx_t *ctx,
-    virt_addr_t vaddr, 
-    virt_size_t len
-);
-
-virt_addr_t vm_temp_identity_map
-(
-    vm_ctx_t *ctx,
-    phys_addr_t phys, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t attr
-);
 
 #endif

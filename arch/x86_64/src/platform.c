@@ -1,7 +1,7 @@
 #include <cpu.h>
 #include <isr.h>
 #include <intc.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <apic.h>
 #include <pic8259.h>
 #include <devmgr.h>

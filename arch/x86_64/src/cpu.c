@@ -6,7 +6,7 @@
 #include <utils.h>
 #include <apic.h>
 #include <liballoc.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <gdt.h>
 #include <isr.h>
 #include <acpi.h>
@@ -266,9 +266,10 @@ static virt_addr_t cpu_prepare_trampoline(void)
     tr_size = _TRAMPOLINE_END - _TRAMPOLINE_BEGIN;
 
     tr_code = (uint8_t*)vm_map(NULL,
-                                 CPU_TRAMPOLINE_LOCATION_START,
-                                 0x0,
+                                 VM_BASE_AUTO,
                                  tr_size,
+                                 CPU_TRAMPOLINE_LOCATION_START,
+                                 VM_HIGH_MEM,
                                  VM_ATTR_EXECUTABLE |
                                  VM_ATTR_WRITABLE);
 
@@ -722,8 +723,8 @@ void *cpu_ctx_init
 
     th = thread;
 
-    ctx = (pcpu_context_t*)vm_alloc(NULL, 0x0,
-                                       PAGE_SIZE,
+    ctx = (pcpu_context_t*)vm_alloc(NULL, VM_BASE_AUTO,
+                                       PAGE_SIZE,VM_HIGH_MEM,
                                        VM_ATTR_WRITABLE);
 
     if(ctx == NULL)
@@ -744,7 +745,7 @@ void *cpu_ctx_init
     ctx->addr_spc = __read_cr3();
     ctx->dseg = seg;
 
-    ctx->esp0 = vm_alloc(NULL, 0, PAGE_SIZE, VM_ATTR_WRITABLE);
+    ctx->esp0 = vm_alloc(NULL, VM_BASE_AUTO, PAGE_SIZE, VM_HIGH_MEM, VM_ATTR_WRITABLE);
 
     if(ctx->esp0 == 0)
     {
@@ -888,8 +889,9 @@ static int pcpu_drv_init(driver_t *drv)
 
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
 
-    cpu_drv->idt = (idt64_entry_t*)vm_alloc(NULL, 0x0,
+    cpu_drv->idt = (idt64_entry_t*)vm_alloc(NULL, VM_BASE_AUTO,
                                                IDT_TABLE_SIZE,
+                                               VM_HIGH_MEM,
                                                VM_ATTR_WRITABLE);
 
     /* Setup the IDT */

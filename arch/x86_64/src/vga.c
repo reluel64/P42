@@ -2,7 +2,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <utils.h>
-#include <vmmgr.h>
+#include <vm.h>
 
 #define FB_PHYS_MEM (0xB8000)
 #define VGA_MAX_ROW (25)
@@ -23,10 +23,10 @@ static vga_t vga;
 
 void vga_init()
 {
-    vga.base = (uint16_t*)vm_map(NULL, 
-                                    FB_PHYS_MEM, 
-                                    0, 
+    vga.base = (uint16_t*)vm_map(NULL, VM_BASE_AUTO, 
                                     FB_LEN, 
+                                    FB_PHYS_MEM,
+                                    0,
                                     VM_ATTR_WRITABLE|
                                     VM_ATTR_STRONG_UNCACHED
                                     );

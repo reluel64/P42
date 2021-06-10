@@ -7,7 +7,7 @@
 #include <utils.h>
 #include <memory_map.h>
 #include <pagemgr.h>
-#include <vmmgr.h>
+#include <vm.h>
 
 typedef struct pfmgr_init_t
 {
@@ -339,14 +339,15 @@ int pfmgr_early_alloc_pf
         
         /* Get the physical address of the bitmap */
         bmp_phys = freer_phys + sizeof(pfmgr_free_range_t);
-
+        kprintf("freer->next %x", freer->hdr.node.next);
         /* save the structure locally */
         memcpy(&local_freer, freer, sizeof(pfmgr_free_range_t));
-
+        
         /* U Can't Touch This */
         if(freer->hdr.base < LOW_MEMORY)
         {
             freer_phys = (phys_addr_t)local_freer.hdr.node.next;
+            kprintf("LOW_MEMORY %x\n",freer_phys);
             continue;
         }
 
@@ -370,7 +371,7 @@ int pfmgr_early_alloc_pf
 
             if(pf_ix == 0 || bmp == NULL)
                 bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + bmp_off);
-            
+
             if((bmp[0] & ((virt_addr_t)1 << pf_ix)) == 0)
             {
                 stop = !cb(cb_phys, 1, pv);
@@ -862,29 +863,33 @@ int pfmgr_init(void)
     phys_addr_t     phys = 0;
     phys_addr_t     next = 0;
     pfmgr_range_header_t *hdr = NULL;
-
+    list_head_t temp_free;
+    pfmgr_range_header_t *temp_hdr = NULL;
     phys = base.physf_start;
-    linked_list_init(&base.freer);
+    linked_list_init(&temp_free);
     kprintf("Initializing Page Frame Manager\n");
 
     do
     {
         hdr = (pfmgr_range_header_t*)pfmgr_early_map(phys);
-        hdr = (pfmgr_range_header_t*)vm_map(NULL, 
-                                               phys, 
-                                               0, 
+        hdr = (pfmgr_range_header_t*)vm_map(NULL,  
+                                               VM_BASE_AUTO, 
                                                hdr->struct_len,
+                                               phys,
+                                               VM_HIGH_MEM,
                                                VM_ATTR_WRITE_THROUGH |
                                                VM_ATTR_WRITABLE);
         
         if(hdr == NULL)
             return(-1);
-
+        kprintf("HDR_NEXT %x\n",hdr->node.next);
         phys = (phys_addr_t)hdr->node.next;
 
-        linked_list_add_tail(&base.freer, &hdr->node);
+        linked_list_add_tail(&temp_free, &hdr->node);
 
     }while(phys != 0);
+
+    kprintf("FREE_DONE\n");
 
     phys = base.physb_start;
     hdr = NULL;
@@ -897,9 +902,10 @@ int pfmgr_init(void)
         {
             hdr = (pfmgr_range_header_t*)pfmgr_early_map(phys);
             hdr = (pfmgr_range_header_t*)vm_map(NULL, 
-                                                   phys, 
-                                                   0, 
+                                                   VM_BASE_AUTO, 
                                                    hdr->struct_len, 
+                                                   phys,
+                                                   0,
                                                    VM_ATTR_WRITE_THROUGH |
                                                    VM_ATTR_WRITABLE);
 

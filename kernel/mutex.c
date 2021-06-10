@@ -1,4 +1,4 @@
-#include <vmmgr.h>
+#include <vm.h>
 #include <liballoc.h>
 #include <linked_list.h>
 #include <scheduler.h>

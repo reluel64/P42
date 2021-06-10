@@ -1,4 +1,4 @@
-#include <vmmgr.h>
+#include <vm.h>
 #include <stddef.h>
 #include <linked_list.h>
 #include <isr.h>
@@ -492,9 +492,10 @@ static int apic_drv_init(driver_t *drv)
     {
         apic_drv->paddr  = apic_phys_addr();
 
-        apic_drv->vaddr  = vm_map(NULL, apic_drv->paddr, 
-                                0x0, 
-                                PAGE_SIZE, 
+        apic_drv->vaddr  = vm_map(NULL, VM_BASE_AUTO,  
+                                PAGE_SIZE,
+                                apic_drv->paddr, 
+                                0,
                                 VM_ATTR_WRITABLE |
                                 VM_ATTR_STRONG_UNCACHED);
         

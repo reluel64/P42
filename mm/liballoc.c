@@ -1,5 +1,5 @@
 #include <liballoc.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <pagemgr.h>
 #include <pfmgr.h>
 
@@ -875,7 +875,7 @@ void* liballoc_alloc(size_t pages)
 {
     void *v = NULL;
 
-    v = (void*)vm_alloc(NULL, 0, pages * PAGE_SIZE, VM_ATTR_WRITABLE);
+    v = (void*)vm_alloc(NULL, VM_BASE_AUTO, pages * PAGE_SIZE, VM_HIGH_MEM, VM_ATTR_WRITABLE);
 
     return(v);
 }

@@ -3,7 +3,7 @@
 #include <utils.h>
 #include <pfmgr.h>
 #include <pagemgr.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <gdt.h>
 #include <isr.h>
 #include <liballoc.h>

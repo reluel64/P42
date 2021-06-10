@@ -2,7 +2,7 @@
  * Part of P42 
  */ 
 
-#include <vmmgr.h>
+#include <vm.h>
 #include <isr.h>
 #include <utils.h>
 #include <gdt.h>

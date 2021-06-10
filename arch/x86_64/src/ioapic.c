@@ -5,7 +5,7 @@
 #include <devmgr.h>
 #include <ioapic.h>
 #include <liballoc.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <utils.h>
 #include <pic8259.h>
 
@@ -331,8 +331,10 @@ static int ioapic_device_init
     ioapic->id        = entry->ioapic_id;
     
     /* Map registers into virtual memory */
-    ioapic->virt_base = (virt_addr_t)vm_map(NULL, ioapic->phys_base,
-                                      0,    PAGE_SIZE, 
+    ioapic->virt_base = (virt_addr_t)vm_map(NULL, VM_BASE_AUTO,
+                                      PAGE_SIZE,
+                                      ioapic->phys_base,
+                                      0, 
                                       VM_ATTR_STRONG_UNCACHED |
                                       VM_ATTR_WRITABLE
                                       );

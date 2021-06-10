@@ -45,7 +45,7 @@
  * These interfaces are required in order to compile the ASL compiler and the
  * various ACPICA tools under Linux or other Unix-like system.
  */
-#include <vmmgr.h>
+#include <vm.h>
 #include <liballoc.h>
 #include <scheduler.h>
 #include <semaphore.h>
@@ -92,7 +92,7 @@ static void *acpi_map(phys_addr_t addr, phys_size_t size, uint32_t attr)
     if(size % PAGE_SIZE)
         size = ALIGN_UP(size, PAGE_SIZE);
 
-    ret_addr = (virt_addr_t) vm_map(NULL, align_addr, 0, size, attr);
+    ret_addr = (virt_addr_t) vm_map(NULL, VM_BASE_AUTO, size, align_addr, 0, attr);
     
     ret_addr += diff;
 

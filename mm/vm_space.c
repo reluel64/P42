@@ -1,5 +1,5 @@
 #include <utils.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <vm_extent.h>
 
 static int vm_space_undo

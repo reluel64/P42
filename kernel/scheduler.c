@@ -6,7 +6,7 @@
 #include <intc.h>
 #include <isr.h>
 #include <timer.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <intc.h>
 #include <platform.h>
 #include <scheduler.h>
@@ -61,7 +61,7 @@ int sched_init_thread
 
     memset(th, 0, sizeof(sched_thread_t));
 
-    th->stack = vm_alloc(NULL, 0, stack_sz, VM_ATTR_WRITABLE);
+    th->stack = vm_alloc(NULL, VM_BASE_AUTO, stack_sz, VM_HIGH_MEM, VM_ATTR_WRITABLE);
 
     if(!th->stack)
     {

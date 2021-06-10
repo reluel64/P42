@@ -11,7 +11,7 @@
 #include <pagemgr.h>
 #include <isr.h>
 #include <spinlock.h>
-#include <vmmgr.h>
+#include <vm.h>
 #include <platform.h>
 #include <intc.h>
 #include <pfmgr.h>
@@ -369,7 +369,7 @@ static phys_size_t pagemgr_ensure_levels_cb
     phys_size_t        used_bytes = 0;
     phys_size_t        total_bytes   = 0;
     virt_addr_t        vend =      0;
-
+    kprintf("ENTERED FUNCTION\n");
     ld = pv;
     ctx = ld->ctx;
 
@@ -419,7 +419,7 @@ static phys_size_t pagemgr_ensure_levels_cb
         shift = PGMGR_LEVEL_TO_SHIFT(ld->current_level);
         entry = (ld->pos >> shift) & 0x1FF;
 
-#if 0
+#if 1
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->current_level, 
@@ -589,7 +589,7 @@ static phys_size_t pagemgr_fill_tables_cb
         shift = PGMGR_LEVEL_TO_SHIFT(ld->current_level);
         entry = (ld->pos >> shift) & 0x1FF;
 
-#if 0
+#if 1
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->current_level, 
@@ -835,9 +835,10 @@ int pgmgr_map
     spinlock_lock_int(&ctx->lock, &int_status);
 
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
-
+kprintf("LEVEL OK\n");
     if(status || ld.error)
     {
+        kprintf("STATUS %x LD %x\n",status,ld.error);
         spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
@@ -846,7 +847,7 @@ int pgmgr_map
 
     /* Do mapping */
     PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1, attr_mask);
-
+  
     pagemgr_fill_tables_cb(phys, length >> PAGE_SIZE_SHIFT, &ld);
 
     if(ld.error)
@@ -971,10 +972,11 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     {
         kprintf("Failed to allocate page table root\n");
         while(1);
-    }
+    } 
 
     pgmgr_map_kernel(ctx);
     pgmgr_setup_remap_table(ctx);
+
 
 
     /* If we support NX, enable it */
@@ -1006,6 +1008,11 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     
     /* Flush again */
     __wbinvd();
+    
+    virt_addr_t *temp = _pgmgr_temp_map(0x7EFC8000, 16);
+
+    temp[0] = 8888;
+
 
     return(0);
 }
