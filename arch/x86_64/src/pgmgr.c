@@ -23,6 +23,8 @@ typedef struct pgmgr_t
     uint8_t     nx_support;
     
     pat_t pat;
+    isr_t fault_isr;
+    isr_t inv_isr;
 }pgmgr_t;
 
 #define PGMGR_CHANGE_ATTRIBUTES 0x1
@@ -62,6 +64,7 @@ typedef struct pgmgr_level_data_t
     uint8_t current_level;
     uint8_t error;
     uint8_t do_map;
+    uint8_t clear;
     uint8_t flags;
     phys_size_t attr_mask;
 }pgmgr_level_data_t;
@@ -77,10 +80,10 @@ typedef struct pgmgr_level_data_t
 #define PGMGR_NO_FRAMES (1 << 0)
 #define PGMGR_TABLE_NOT_ALLOCATED (1 << 1)
 #define PGMGR_TBL_CREATE_FAIL (1 << 2)
+
 /* locals */
 static pgmgr_t pgmgr;
-
-static pfmgr_t       *pfmgr        = NULL;
+static pfmgr_t *pfmgr        = NULL;
 
 static int         pagemgr_page_fault_handler(void *pv, isr_info_t *inf);
 static int         pagemgr_per_cpu_invl_handler
@@ -127,12 +130,17 @@ int pagemgr_install_handler(void)
     isr_install(pagemgr_page_fault_handler, 
                 &pgmgr, 
                 PLATFORM_PG_FAULT_VECTOR, 
-                0);
+                0,
+                &pgmgr.fault_isr);
 
     isr_install(pagemgr_per_cpu_invl_handler, 
                 NULL, 
                 PLATFORM_PG_INVALIDATE_VECTOR, 
-                0);
+                0,
+                &pgmgr.inv_isr);
+
+    return(0);
+
 }
 
 uint8_t pagemgr_pml5_support(void)
@@ -353,6 +361,19 @@ static int pagemgr_attr_translate
     return(0);
 }
 
+static void pgmgr_clear_pt(pagemgr_ctx_t *ctx, phys_addr_t addr)
+{
+    virt_addr_t vaddr = 0;
+
+    vaddr = _pgmgr_temp_map(addr, ctx->max_level + 1);
+
+    if(vaddr != 0)
+    {
+        memset((void*)vaddr, 0, PAGE_SIZE);
+        _pgmgr_temp_unmap(vaddr);
+    }
+}
+
 static phys_size_t pagemgr_ensure_levels_cb
 (
     phys_addr_t base,
@@ -369,7 +390,6 @@ static phys_size_t pagemgr_ensure_levels_cb
     phys_size_t        used_bytes = 0;
     phys_size_t        total_bytes   = 0;
     virt_addr_t        vend =      0;
-    kprintf("ENTERED FUNCTION\n");
     ld = pv;
     ctx = ld->ctx;
 
@@ -419,7 +439,7 @@ static phys_size_t pagemgr_ensure_levels_cb
         shift = PGMGR_LEVEL_TO_SHIFT(ld->current_level);
         entry = (ld->pos >> shift) & 0x1FF;
 
-#if 1
+#if 0
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->current_level, 
@@ -439,6 +459,7 @@ static phys_size_t pagemgr_ensure_levels_cb
             ld->level[entry] |= (PAGE_PRESENT | PAGE_WRITABLE);
             used_bytes += PAGE_SIZE;
             ld->do_map = 1;
+            pgmgr_clear_pt(ld->ctx, ld->level[entry]);
         }
 
         /* If we are not at the bottom level, go DEEEPAH */
@@ -496,6 +517,7 @@ static phys_size_t pagemgr_ensure_levels_cb
                     ld->level[entry] = base + used_bytes;
                     ld->level[entry] |= (PAGE_PRESENT | PAGE_WRITABLE);
                     used_bytes += PAGE_SIZE;
+                    pgmgr_clear_pt(ld->ctx, ld->level[entry]);
                 }
                 
                 /* Store the level and go down again */
@@ -589,7 +611,7 @@ static phys_size_t pagemgr_fill_tables_cb
         shift = PGMGR_LEVEL_TO_SHIFT(ld->current_level);
         entry = (ld->pos >> shift) & 0x1FF;
 
-#if 1
+#if 0
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->current_level, 
@@ -687,7 +709,7 @@ static phys_size_t pagemgr_fill_tables_cb
                
                 entry = (next_pos >> shift) & 0x1FF;
                
-                if((ld->current_level >= PGMGR_MIN_PAGE_TABLE_LEVEL) && 
+                if((ld->current_level > PGMGR_MIN_PAGE_TABLE_LEVEL) && 
                     !(ld->level[entry] & PAGE_PRESENT)             && 
                     !(ld->level[entry] & PAGE_TABLE_SIZE))
                 {
@@ -719,6 +741,8 @@ static phys_size_t pagemgr_fill_tables_cb
 }
 
 
+
+
 static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
 {
     pgmgr_level_data_t lvl_dat;
@@ -732,7 +756,7 @@ static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
     PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, REMAP_TABLE_SIZE, 2, 0);
 
     /* Allocate pages */
-    status = pfmgr->alloc(0, 
+    status = pfmgr->alloc(1, 
                           ALLOC_CB_STOP, 
                           pagemgr_ensure_levels_cb, 
                           &lvl_dat);
@@ -835,7 +859,7 @@ int pgmgr_map
     spinlock_lock_int(&ctx->lock, &int_status);
 
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
-kprintf("LEVEL OK\n");
+
     if(status || ld.error)
     {
         kprintf("STATUS %x LD %x\n",status,ld.error);
@@ -853,10 +877,10 @@ kprintf("LEVEL OK\n");
     if(ld.error)
     {
         spinlock_unlock_int(&ctx->lock, int_status);
-        kprintf("Failed tomap\n");
+        kprintf("Failed to map %x\n", ld.error);
         return(-1);
     }
-
+ __write_cr3(__read_cr3());
     spinlock_unlock_int(&ctx->lock, int_status);
 
     return(0);
@@ -882,7 +906,7 @@ int pgmgr_alloc
     spinlock_lock_int(&ctx->lock, &int_status);
 
     status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
-
+    
     if(status || ld.error)
     {
         spinlock_unlock_int(&ctx->lock, int_status);
@@ -894,18 +918,19 @@ int pgmgr_alloc
 
     /* Do allocation */
     PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1, attr_mask);
-
+   
     status = pfmgr->alloc(length >> PAGE_SIZE_SHIFT, 
                           ALLOC_CB_STOP, 
                           pagemgr_fill_tables_cb, 
                           &ld);
-
+ 
     if(ld.error || status)
     {
-        kprintf("Failed to allocate\n");
+        kprintf("Failed to allocate %d %d\n", status, ld.error);
         spinlock_unlock_int(&ctx->lock, int_status);
         return(-1);
     }
+     __write_cr3(__read_cr3());
 
     spinlock_unlock_int(&ctx->lock, int_status);
 
@@ -946,6 +971,7 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
 {
     pat_t *pat = NULL;
     pgmgr_level_data_t lvl_dat;
+    virt_addr_t top_level = 0;
     memset(&pgmgr.pat, 0, sizeof(pat_t));
     
 
@@ -973,6 +999,8 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
         kprintf("Failed to allocate page table root\n");
         while(1);
     } 
+
+    pgmgr_clear_pt(ctx, ctx->pg_phys);
 
     pgmgr_map_kernel(ctx);
     pgmgr_setup_remap_table(ctx);
@@ -1005,14 +1033,10 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     /* switch to the new page table */
     
     __write_cr3(ctx->pg_phys);
-    
+    kprintf("CR3 %x\n",ctx->pg_phys);
     /* Flush again */
     __wbinvd();
     
-    virt_addr_t *temp = _pgmgr_temp_map(0x7EFC8000, 16);
-
-    temp[0] = 8888;
-
 
     return(0);
 }
@@ -1049,6 +1073,7 @@ static inline virt_addr_t _pgmgr_temp_map
     remap_value = pgmgr.remap_tbl + (PAGE_SIZE * ix);
 
     __invlpg(remap_value);
+    
 
     return(remap_value);
 }

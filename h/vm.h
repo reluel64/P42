@@ -24,7 +24,7 @@
 #define VM_PERMANENT (1 << 4)
 #define VM_LOCKED    (1 << 5)
 #define VM_ALLOC_NOW (1 << 6)
-
+#define VM_LAZY      (1 << 7)
 
 #define VM_BASE_AUTO (~0ull)
 

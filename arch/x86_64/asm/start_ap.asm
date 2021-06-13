@@ -7,7 +7,7 @@ global __start_ap_nx_on
 global __start_ap_stack
 global __start_ap_entry_pt
 
-extern  pcpu_entry_point
+
 
 section .ap_init
 

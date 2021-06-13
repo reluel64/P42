@@ -12,7 +12,7 @@
 #include <serial.h>
 #include <utils.h>
 #include <vga.h>
-#define ACPI_MAX_INIT_TABLES   16
+
 
 extern int pcpu_init(void);
 extern int apic_register(void);
@@ -106,7 +106,7 @@ InstallHandlers (void)
 
 
 
-#define ACPI_MAX_INIT_TABLES    16
+#define ACPI_MAX_INIT_TABLES    1024
 static ACPI_TABLE_DESC      TableArray[ACPI_MAX_INIT_TABLES];
 
 
@@ -123,7 +123,7 @@ InitializeAcpiTables (
 
     /* Initialize the ACPICA Table Manager and get all ACPI tables */
 
-    Status = AcpiInitializeTables (TableArray, ACPI_MAX_INIT_TABLES, TRUE);
+    Status = AcpiInitializeTables (NULL, ACPI_MAX_INIT_TABLES, TRUE);
     return (Status);
 }
 
@@ -202,9 +202,6 @@ int platform_pre_init(void)
 
     /* initialize temporary mapping */
     pagemgr_boot_temp_map_init();
-    
-
-    status = InitializeAcpiTables();
 
     return(status);
 }
@@ -212,12 +209,13 @@ int platform_pre_init(void)
 int platform_early_init(void)
 {
     /* install ISR handlers for the page manager */
+ 
     if(pagemgr_install_handler())
         return(-1);
 
     /* Tell ACPI code that now the memory manager is up and running */
     acpi_mem_mgr_on();
-
+    InitializeAcpiTables();
     InitializeAcpi();
 
     /* Register and initalize interrupt controllers */
@@ -229,6 +227,7 @@ int platform_early_init(void)
      */
     
     pic8259_register();
+
     ioapic_register();
 
     /* register and initialize PIT */
@@ -240,7 +239,7 @@ int platform_early_init(void)
    
     /* Register and initialize APIC TIMER */
     apic_timer_register();
-     
+
     vga_init();
 
     return(0);
@@ -252,7 +251,7 @@ int platform_init(void)
     device_t *apic_timer = NULL;
 
     cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
-#if 0
+#if 1
     /* Mask the PIT8254 */
     apic_timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, 0);
 

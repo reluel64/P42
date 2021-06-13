@@ -109,7 +109,7 @@ int devmgr_dev_create(device_t **dev)
     
     if(*dev == NULL)
     {
-        (*dev) = kmalloc(sizeof(device_t));
+        (*dev) = kcalloc(sizeof(device_t), 1);
 
         if((*dev) == NULL)
             return(-1);
@@ -149,7 +149,7 @@ int devmgr_dev_add(device_t *dev, device_t *parent)
       }
 
     status = devmgr_dev_probe(dev);
-             
+
     devmgr_dev_add_to_parent(dev, parent);
  
     kprintf("PROBE_STATUS %d\n",status);
@@ -264,14 +264,14 @@ static int devmgr_dev_add_to_parent
 
     if(dev->parent != NULL)
         return(-1);
-
+       
     if(!linked_list_find_node(&parent->children, &dev->dev_node))
         return(-1);
-    
+ 
     linked_list_add_tail(&parent->children, &dev->dev_node);
-
-    dev->parent = parent;
     
+    dev->parent = parent;
+
     return(0);
 }
 
@@ -358,13 +358,14 @@ int devmgr_dev_probe(device_t *dev)
                 status,
                 dev->dev_name, 
                 drv->drv_name);
-
+        
         if(!status)
         {   
             dev->flags |= DEVMGR_DEV_PROBED;
             dev->drv = drv;
             break;
         }
+        
         node = linked_list_next(node);
     }
 

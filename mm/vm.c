@@ -57,6 +57,7 @@ void vm_list_entries()
 
         node = next_node;
     }
+
     kprintf("DONE\n");
 
 }
@@ -147,8 +148,7 @@ int vm_init(void)
    status = pgmgr_alloc(&kernel_ctx.pagemgr,
                         kernel_ctx.vm_base,
                         VM_SLOT_SIZE,
-                        PAGE_WRITABLE | 
-                        PAGE_WRITE_THROUGH);
+                        PAGE_WRITABLE);
 
     if(status)
     {
@@ -196,8 +196,7 @@ int vm_init(void)
     status = pgmgr_alloc(&kernel_ctx.pagemgr,
                         kernel_ctx.vm_base + VM_SLOT_SIZE,
                         VM_SLOT_SIZE,
-                        PAGE_WRITABLE | 
-                        PAGE_WRITE_THROUGH);
+                        PAGE_WRITABLE);
 
     if(status)
     {
@@ -232,6 +231,7 @@ virt_addr_t vm_alloc
 {
     virt_addr_t addr = 0;
     int status = 0;
+    int int_status = 0;
 
     if(len % PAGE_SIZE)
         return(0);
@@ -239,30 +239,40 @@ virt_addr_t vm_alloc
     if(ctx == NULL)
         ctx = &kernel_ctx;
 
-
+    alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_ALLOCATED;
     /* Allocate virtual memory */
+    spinlock_lock_int(&ctx->lock, &int_status);
+    
     addr = vm_space_alloc(ctx, 
                           virt, 
                           len, 
                           alloc_flags, 
                           page_flags);
 
+    spinlock_unlock_int(&ctx->lock, int_status);
+
     if(addr == 0)
+    {
         return(0);
-    
+    }
+
+
 
     /* Check if we also need to allocate physical space now */
-    if(alloc_flags & VM_ALLOC_NOW)
+    if(!(alloc_flags & VM_LAZY))
     {
-        status = pgmgr_alloc(&ctx->pagemgr,
+    status = pgmgr_alloc(&ctx->pagemgr,
                             addr,
                             len,
                             page_flags);
     }
-
     if(status != 0)
     {
+        spinlock_lock_int(&ctx->lock, &int_status);
+        
         vm_space_free(ctx, addr, len);
+        
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
     }
 
@@ -290,6 +300,7 @@ int vm_free
 {
     return(0);
 }
+
 virt_addr_t vm_map
 (
     vm_ctx_t *ctx, 
@@ -302,27 +313,32 @@ virt_addr_t vm_map
 {
     virt_addr_t addr = 0;
     int status = 0;
-#if 0
+    int int_status = 0;
+    
     if(len % PAGE_SIZE || phys % PAGE_SIZE)
         return(0);
-#endif
+
     if(ctx == NULL)
         ctx = &kernel_ctx;
 
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_MAPPED;
-
+    kprintf("HELLO\n");
     /* Allocate virtual memory */
+
+    spinlock_lock_int(&ctx->lock, &int_status);
+
     addr = vm_space_alloc(ctx, 
                           virt, 
                           len, 
                           alloc_flags, 
                           page_flags);
 
+    spinlock_unlock_int(&ctx->lock, int_status);
+
     if(addr == 0)
         return(0);
     
-        kprintf("ADDR %x VIRT %x LEN %x FLAGS %x\n",addr, virt, len, alloc_flags) ;
 
     /* Check if we also need to allocate physical space now */
  
@@ -330,39 +346,21 @@ virt_addr_t vm_map
                             addr,
                             len,
                             phys,
-                            PAGE_WRITABLE);
+                            page_flags);
     
     kprintf("STATUS %x\n",status);
     if(status != 0)
     {
+        spinlock_lock_int(&ctx->lock, &int_status);
         vm_space_free(ctx, addr, len);
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(0);
     }
 
     return(addr);
 }
 
-int vm_temp_identity_unmap
-(
-    vm_ctx_t *ctx,
-    virt_addr_t vaddr, 
-    virt_size_t len
-)
-{
-    while(1);
-}
 
-virt_addr_t vm_temp_identity_map
-(
-    vm_ctx_t *ctx,
-    phys_addr_t phys, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t attr
-)
-{
-    while(1);
-}
 
 int vm_reserve
 (

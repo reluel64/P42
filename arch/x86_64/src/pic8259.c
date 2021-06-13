@@ -53,11 +53,11 @@ static int pic8259_drv_init(driver_t *drv)
 
     if(!devmgr_dev_create(&dev))
     {
-
+      
         devmgr_dev_name_set(dev, PIC8259_DRIVER_NAME);
         devmgr_dev_type_set(dev, INTERRUPT_CONTROLLER);
         devmgr_dev_index_set(dev, 0);
-
+        
         if(devmgr_dev_add(dev, NULL))
         {
             kprintf("%s %d failed to add device\n");
@@ -70,6 +70,7 @@ static int pic8259_drv_init(driver_t *drv)
 
 static int pic8259_dev_init(device_t *drv)
 {
+
     __outb(PIC1_COMMAND, ICW1_IC4|ICW1_PIC_INIT);
     __outb(PIC2_COMMAND, ICW1_IC4|ICW1_PIC_INIT);
 
@@ -94,6 +95,7 @@ static int pic8259_disable(device_t *dev)
 
 static int pic8259_enable(device_t *dev)
 {
+  
     __outb(0xa1, 0);
     __outb(0x21, 0);
     return(0);
@@ -125,5 +127,6 @@ int pic8259_register(void)
 {
     devmgr_drv_add(&pic8259);
     devmgr_drv_init(&pic8259);
+
     return(0);
 }

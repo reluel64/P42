@@ -10,7 +10,7 @@
 
 #define VGA_POS(x,y) (((x) + ((y) * VGA_MAX_ROW)))
 #define FB_LEN (VGA_MAX_ROW * VGA_MAX_COL * sizeof(uint16_t))
-
+#define FB_ALLOC ALIGN_UP(FB_LEN, PAGE_SIZE)
 typedef struct _vga
 {
     uint16_t *base;
@@ -24,7 +24,7 @@ static vga_t vga;
 void vga_init()
 {
     vga.base = (uint16_t*)vm_map(NULL, VM_BASE_AUTO, 
-                                    FB_LEN, 
+                                    FB_ALLOC, 
                                     FB_PHYS_MEM,
                                     0,
                                     VM_ATTR_WRITABLE|

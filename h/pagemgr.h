@@ -10,6 +10,13 @@
 #define REMAP_TABLE_SIZE  (0x200000)
 #define BOOT_REMAP_TABLE_VADDR (0xFFFFFFFFBFE00000)
 
+#define TEMP_MAP_PFMGR_START (510)
+#define TEMP_MAP_PFMGR_END   (511)
+
+
+#define TEMP_MAP_ACPI_START (508)
+#define TEMP_MAP_ACPI_END   (509)
+
 
 #define PGMGR_WRITABLE        (1 << 0)
 #define PGMGR_USER            (1 << 1)

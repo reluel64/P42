@@ -27,6 +27,7 @@ typedef struct pit8254_dev_t
     uint16_t divider;
     timer_dev_cb func;
     void *func_data;
+    isr_t timer_isr;
 }pit8254_dev_t;
 
 static int pit8254_rearm(device_t *dev)
@@ -103,7 +104,12 @@ static int pit8254_drv_init(driver_t *drv)
         
         if(!devmgr_dev_add(dev, NULL))
         {
-            isr_install(pit8254_irq_handler, dev, IRQ0, 0);
+            pit_dev = devmgr_dev_data_get(dev);
+            isr_install(pit8254_irq_handler, 
+                        dev, 
+                        IRQ0, 
+                        0, 
+                        &pit_dev->timer_isr);
         }
     }
 

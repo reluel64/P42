@@ -19,6 +19,7 @@ extern virt_addr_t kstack_top;
 #define IDT_ENTRY_SIZE (sizeof(idt64_entry_t))
 #define IDT_TABLE_COUNT (256)
 #define IDT_TABLE_SIZE (IDT_ENTRY_SIZE * IDT_TABLE_COUNT)
+#define IDT_ALLOC_SIZE (ALIGN_UP(IDT_TABLE_SIZE, PAGE_SIZE))
 #define ISR_EC_MASK (0x27D00)
 #define RESERVED_ISR_BEGIN (21)
 #define RESERVED_ISR_END   (31)

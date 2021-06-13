@@ -22,6 +22,7 @@ typedef struct apic_timer_t
     uint32_t counter;
 }apic_timer_t;
 
+static isr_t timer_isr;
 
 static int apic_timer_isr(void *dev, isr_info_t *inf)
 {
@@ -125,7 +126,7 @@ static int apic_timer_init(device_t *dev)
                             &data, 
                             1);
 
-    isr_install(apic_timer_isr, dev, PLATFORM_LOCAL_TIMER_VECTOR, 0);
+    isr_install(apic_timer_isr, dev, PLATFORM_LOCAL_TIMER_VECTOR, 0, &timer_isr);
     return(0);
 }
 

@@ -618,7 +618,7 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     
     spinlock_write_unlock_int(&units_lock, int_status);
 
-    isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0);
+    isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0, NULL);
 
     timer_dev_connect_cb(timer,
                         sched_timer_callback,

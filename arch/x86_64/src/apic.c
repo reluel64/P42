@@ -16,6 +16,11 @@
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
+static isr_t lint_isr;
+static isr_t error_isr;
+static isr_t spur_isr;
+static isr_t eoi_isr;
+
 static int xapic_write
 (
     virt_addr_t    reg_base,
@@ -322,7 +327,7 @@ static int apic_send_ipi
                          INTERRUPT_COMMAND_REGISTER, 
                          data, 
                          2);
-
+    
     /* Poll for IPI delivery status */
     do
     {
@@ -345,6 +350,8 @@ static int apic_probe(device_t *dev)
     if(!devmgr_dev_name_match(dev, APIC_DRIVER_NAME))
         return(-1);
 
+    
+    
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
     if(ACPI_FAILURE(status))
@@ -368,7 +375,7 @@ static int apic_dev_init(device_t *dev)
     uint8_t             trigger   = 0;
     uint32_t            data      = 0;
     uint64_t            apic_base = 0;
-
+    kprintf("APIC_DEV_INIT\n");
     cpu_int_lock();
     
     drv = devmgr_dev_drv_get(dev);
@@ -382,6 +389,7 @@ static int apic_dev_init(device_t *dev)
     /* If x2APIC is supported, then enable it */
     if(apic_drv->x2)
     {
+        kprintf("USING X2APIC\n");
         apic_enable_x2();
     }   
     
@@ -510,12 +518,26 @@ static int apic_drv_init(driver_t *drv)
     }
 
     /* Install the ISRs for the APIC */
-    isr_install(apic_lvt_error_handler, drv, LVT_ERROR_VECTOR, 0);
-    isr_install(apic_spurious_handler,  drv, SPURIOUS_VECTOR,  0);
-    isr_install(apic_eoi_handler,       drv, 0,                1);
+    isr_install(apic_lvt_error_handler, 
+                drv, 
+                LVT_ERROR_VECTOR, 
+                0, 
+                &error_isr);
+
+    isr_install(apic_spurious_handler,  
+                drv, 
+                SPURIOUS_VECTOR, 
+                0, 
+                &spur_isr);
+
+    isr_install(apic_eoi_handler,       
+                drv, 
+                0,                
+                1, 
+                &eoi_isr);
 
     devmgr_drv_data_set(drv, apic_drv);
-   
+
     return(0);
 }
 

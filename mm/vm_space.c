@@ -71,12 +71,12 @@ virt_addr_t vm_space_alloc
     status = vm_extent_extract(&ctx->free_mem,
                                ctx->free_per_slot,
                                &req_ext);
-    
+    #if 0
     kprintf("EXTENT IS %x %x - %s\n",
             req_ext.base, 
             req_ext.length, 
             (req_ext.flags & VM_HIGH_MEM) == VM_HIGH_MEM ? "HIGH_MEM":"LOW_MEM");
-
+#endif
     /* Hmm...should the routine be smart?
      * make it stupid for now and report
      * error in case we cannot satisfy a 'prefferred' address
@@ -101,7 +101,9 @@ virt_addr_t vm_space_alloc
 
     if(status < 0)
     {
+
         kprintf("OOOPS...no memory\n");
+        while(1);
         return(0);
     }
     
@@ -120,7 +122,7 @@ virt_addr_t vm_space_alloc
                               addr, 
                               len, 
                               &rem_ext);
-
+#if 0
     kprintf("AFTER SPLIT %x %x - %x %x - %x %x\n", 
             req_ext.base,
             req_ext.length, 
@@ -128,7 +130,7 @@ virt_addr_t vm_space_alloc
             rem_ext.length, 
             addr, 
             len);
-
+#endif
     /* Insert the left side - this is guaranteed to work 
      * If it doesn't...well...we're fucked
      */
@@ -139,6 +141,7 @@ virt_addr_t vm_space_alloc
         vm_extent_insert(&ctx->free_mem,
                         ctx->free_per_slot,
                         &req_ext);
+                        while(1);
         return(0);
     }
 
@@ -172,10 +175,11 @@ virt_addr_t vm_space_alloc
         /* Hehe... no slots?...try to allocate */
         if(status == VM_NOMEM)
         {
+            kprintf("%s %d\n", __FUNCTION__,__LINE__);
             status = vm_extent_alloc_slot(ctx, 
                                    &ctx->free_mem, 
                                    ctx->free_per_slot);
-            
+            kprintf("%s %d\n", __FUNCTION__,__LINE__);
             /* status != 0? ...well..FUCK */
             if(status != 0)
             {
@@ -208,10 +212,11 @@ virt_addr_t vm_space_alloc
      /* Hehe... no slots?....again?...try to allocate */
     if(status == VM_NOMEM)
     {
+
         status = vm_extent_alloc_slot(ctx, 
                                &ctx->alloc_mem, 
                                ctx->alloc_per_slot);
-        
+
         /* status != 0? ...well..FUCK */
         if(status != 0)
         {

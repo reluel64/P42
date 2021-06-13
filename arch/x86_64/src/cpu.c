@@ -199,7 +199,7 @@ static int cpu_idt_setup(cpu_platform_driver_t *cpu_drv)
     idt = cpu_drv->idt;
 
     memset(idt, 0, IDT_TABLE_SIZE);
-
+    kprintf("IDT %x\n", idt);
     /* Set up interrupt handlers */
     for(uint16_t i = 0; i < IDT_TABLE_COUNT; i++)
     {
@@ -263,7 +263,7 @@ static virt_addr_t cpu_prepare_trampoline(void)
     virt_addr_t *stack       = NULL;
     virt_addr_t *entry_pt    = NULL;
 
-    tr_size = _TRAMPOLINE_END - _TRAMPOLINE_BEGIN;
+    tr_size = ALIGN_UP(_TRAMPOLINE_END - _TRAMPOLINE_BEGIN, PAGE_SIZE);
 
     tr_code = (uint8_t*)vm_map(NULL,
                                  VM_BASE_AUTO,
@@ -336,13 +336,12 @@ static int cpu_bring_cpu_up
     __atomic_store_n(&cpu_on, 0, __ATOMIC_RELEASE);
 
     sched_sleep(10);
-
+    kprintf("BRINGING %d\n", cpu);
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < timeout / 10; attempt++)
     {
-        
         intc_send_ipi(issuer, &ipi);
-    
+  
         /* wait for about 10ms */
 
         for(uint32_t i = 0; i < 10;i++)
@@ -350,10 +349,12 @@ static int cpu_bring_cpu_up
             sched_sleep(1);
 
             if(__atomic_load_n(&cpu_on, __ATOMIC_ACQUIRE))
+            {
+
                 return(0);
+            }
         }
     }
-
     return(-1);
 }
 
@@ -434,11 +435,15 @@ int cpu_ap_start
     }
 
     /* create identity mapping for the trampoline code */
-    vm_temp_identity_map(NULL, CPU_TRAMPOLINE_LOCATION_START,
-                                  CPU_TRAMPOLINE_LOCATION_START,
-                                  PAGE_SIZE,
-                                  VM_ATTR_EXECUTABLE |
-                                  VM_ATTR_WRITABLE);
+   virt_addr_t addr =  vm_map(NULL,CPU_TRAMPOLINE_LOCATION_START,
+                PAGE_SIZE,
+                CPU_TRAMPOLINE_LOCATION_START,
+                0,
+                VM_ATTR_EXECUTABLE |
+                VM_ATTR_WRITABLE);
+
+
+           
 
     /* check if are going to use x2APIC */
     for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
@@ -507,7 +512,7 @@ int cpu_ap_start
     }
 
     /* unmap the 1:1 trampoline */
-    vm_temp_identity_unmap(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);
+    /*(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);*/
 
     /* clear the trampoline from the area */
     memset((void*)trampoline, 0, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
@@ -723,9 +728,7 @@ void *cpu_ctx_init
 
     th = thread;
 
-    ctx = (pcpu_context_t*)vm_alloc(NULL, VM_BASE_AUTO,
-                                       PAGE_SIZE,VM_HIGH_MEM,
-                                       VM_ATTR_WRITABLE);
+    ctx = (pcpu_context_t*)kmalloc(sizeof(pcpu_context_t));
 
     if(ctx == NULL)
         return(NULL);
@@ -737,7 +740,7 @@ void *cpu_ctx_init
     ctx->iframe.ss  = seg;
     
     /* a new task does not disable interrupts */
-    ctx->iframe.rflags = 0x1 | 0x200;
+    ctx->iframe.rflags = (1 << 0) | (1 << 9);
     ctx->iframe.cs = cs;
 
 
@@ -745,7 +748,11 @@ void *cpu_ctx_init
     ctx->addr_spc = __read_cr3();
     ctx->dseg = seg;
 
-    ctx->esp0 = vm_alloc(NULL, VM_BASE_AUTO, PAGE_SIZE, VM_HIGH_MEM, VM_ATTR_WRITABLE);
+    ctx->esp0 = vm_alloc(NULL, 
+                         VM_BASE_AUTO, 
+                         PAGE_SIZE, 
+                         VM_HIGH_MEM,
+                         VM_ATTR_WRITABLE);
 
     if(ctx->esp0 == 0)
     {
@@ -798,15 +805,15 @@ static int pcpu_dev_init(device_t *dev)
     pdrv = devmgr_drv_data_get(drv);
 
     cpu_id = cpu_id_get();
-    pagemgr_per_cpu_init();
+ 
 
     cpu = kcalloc(sizeof(cpu_t), 1);
-
+kprintf("CPU %x\n",cpu);
     if(cpu == NULL)
         return(-1);
 
     pcpu = kcalloc(sizeof(cpu_platform_t), 1);
-
+    kprintf("PCPU %x\n",pcpu);
     if(pcpu == NULL)
     {
         kfree(cpu);
@@ -824,9 +831,11 @@ static int pcpu_dev_init(device_t *dev)
 
     /* Prepare the GDT */
     gdt_per_cpu_init(cpu->cpu_pv);
-
+  
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
+
+    kprintf("IDT_SETUP\n");
 
     if(!devmgr_dev_create(&apic_dev))
     {
@@ -890,17 +899,20 @@ static int pcpu_drv_init(driver_t *drv)
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
 
     cpu_drv->idt = (idt64_entry_t*)vm_alloc(NULL, VM_BASE_AUTO,
-                                               IDT_TABLE_SIZE,
+                                               IDT_ALLOC_SIZE,
                                                VM_HIGH_MEM,
                                                VM_ATTR_WRITABLE);
 
     /* Setup the IDT */
     cpu_idt_setup(cpu_drv);
+    kprintf("TEST\n");
 
     /* make IDT read-only */
+    #if 0
     vm_change_attrib(NULL, (virt_addr_t)cpu_drv->idt,
                         IDT_TABLE_SIZE,
                         ~VM_ATTR_WRITABLE);
+    #endif
 
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);

@@ -131,15 +131,26 @@ void kmain()
 
     /* Initialize basic platform functionality */
     platform_early_init();
-    
+     
     /* Initialize base of the scheduler */
     sched_init();
-
+  
     /* Prepare the initialization thread */
     sched_init_thread(&init_th, kmain_sys_init, 0x1000, 0, 0);
 
     /* Enqueue the thread */
     sched_start_thread(&init_th);
+#if 0
+    while(1)
+    {
+        vm_alloc(NULL, VM_BASE_AUTO, PAGE_SIZE*512, 0 ,0);
+        pfmgr_show_free_memory();
+    }
+#endif
+
+ kprintf("SCHED HELLO WORLD\n");
+
+
 
     /* initialize the CPU driver and the BSP */
     if(cpu_init())
@@ -150,4 +161,6 @@ void kmain()
             cpu_halt();
         }
     }
+    vga_print("HELLO\n");
+    while(1);
 }

@@ -41,6 +41,7 @@ typedef struct pfmgr_range_header_t
 
      
     list_node_t node;
+    phys_addr_t next_range;
     phys_addr_t base;
     phys_size_t len;
     phys_size_t struct_len;

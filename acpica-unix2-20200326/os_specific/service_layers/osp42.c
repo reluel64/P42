@@ -93,9 +93,9 @@ static void *acpi_map(phys_addr_t addr, phys_size_t size, uint32_t attr)
         size = ALIGN_UP(size, PAGE_SIZE);
 
     ret_addr = (virt_addr_t) vm_map(NULL, VM_BASE_AUTO, size, align_addr, 0, attr);
-    
-    ret_addr += diff;
 
+    ret_addr += diff;
+    
     return((void*)ret_addr);
 
 }
@@ -654,11 +654,10 @@ AcpiOsMapMemory (
     ACPI_SIZE               length)
 {
     virt_addr_t ret_addr = 0;
-#if 0
-    if(mem_mgr_ready)
-        ret_addr = (virt_addr_t)acpi_map(where, length, PAGE_WRITABLE|PAGE_STRONG_UNCACHED);
-    else
-        ret_addr = pagemgr_boot_temp_map_big(where, length);
+#if 1
+
+    ret_addr = (virt_addr_t)acpi_map(where, length, VM_ATTR_STRONG_UNCACHED | VM_ATTR_WRITABLE);
+
 #endif
     return ((void*)ret_addr);
 }
@@ -689,6 +688,7 @@ AcpiOsUnmapMemory (
     else
         pagemgr_boot_temp_unmap_big((virt_addr_t)where, length);
 #endif
+    kprintf("UNMAP %x %x\n",where, length);
     return;
 }
 #endif

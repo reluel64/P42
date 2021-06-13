@@ -10,12 +10,6 @@
 #include <liballoc.h>
 #include <platform.h>
 
-typedef struct isr_t
-{
-    list_node_t node;
-    interrupt_handler_t ih;
-    void *pv;
-}isr_t;
 
 typedef struct isr_list_t
 {
@@ -43,25 +37,41 @@ int isr_init(void)
     return(0);
 }
 
-int isr_install
+isr_t *isr_install
 (
     interrupt_handler_t ih, 
     void *pv, 
     uint16_t index, 
-    uint8_t  eoi
+    uint8_t  eoi,
+    isr_t *isr_slot
 )
 {
     isr_t *intr = NULL;
     int int_status = 0;
 
     if(index >= MAX_HANDLERS  && eoi == 0)
-        return(-1);
-
-    intr = kcalloc(sizeof(isr_t), 1);
-   
-    if(intr == NULL)
-        return(-1);
+        return(NULL);
     
+    if(isr_slot == NULL)
+    {
+        intr = kmalloc(sizeof(isr_t));
+    }
+    else
+    {
+        intr = isr_slot;
+    }
+
+
+    if(intr == NULL)
+        return(NULL);
+
+    memset(intr, 0, sizeof(isr_t));
+
+    /* If the isr slot is null, then we have allocated memory for it */
+    if(isr_slot == NULL)
+        intr->allocated = 1;
+        
+
     intr->ih = ih;
     intr->pv = pv;
 
@@ -81,13 +91,12 @@ int isr_install
 
         spinlock_write_unlock_int(&eoi_lock, int_status);
     }
-    return(0);
+    return(intr);
 }
 
 int isr_uninstall
 (
-    interrupt_handler_t ih,
-    void *pv,
+    isr_t *isr,
     uint8_t eoi
 )
 {
@@ -97,22 +106,28 @@ int isr_uninstall
     list_node_t *next_node = NULL;    
     isr_list_t  *isr_lst    = NULL;
 
+
+    if(isr == NULL)
+        return(-1);
+
     if(eoi)
     {
         spinlock_write_lock_int(&eoi_lock, &int_status);
 
         node = linked_list_first(&eoi_handlers);
-
+    
         while(node)
         {
             next_node = linked_list_next(node);
 
             intr = (isr_t*)node;
             
-            if(intr->ih == ih && intr->pv == pv)
+            if(intr == isr)
             {
                 linked_list_remove(&eoi_handlers, node);
-                kfree(intr);
+
+                if(intr->allocated)
+                    kfree(intr);
             }
 
             node = next_node;
@@ -136,7 +151,7 @@ int isr_uninstall
 
             intr = (isr_t*)node;
 
-            if(intr->ih == ih)
+            if(isr == intr)
             {
                 linked_list_remove(&isr_lst->head, node);
                 kfree(intr);
