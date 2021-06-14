@@ -685,7 +685,7 @@ static int pfmgr_alloc
         if(req_pf == 0)
         {
             if(flags & ALLOC_CB_STOP)
-                req_pf = freer->total_pf;
+                req_pf = freer->avail_pf;
             else
                 return(0);
         }
@@ -699,6 +699,9 @@ static int pfmgr_alloc
             continue;
         }
        
+        if(freer->next_lkup >= freer->total_pf)
+            freer->next_lkup = 0;
+
         /* help the lookup a bit */
         addr = freer->hdr.base + freer->next_lkup * PAGE_SIZE;
         avail_pf   = req_pf;    
@@ -710,11 +713,13 @@ static int pfmgr_alloc
         /* Contiguous pages should be satisfied from one lookup */
         if((flags & ALLOC_CONTIG) && lkup_sts != 0)
         {
-            addr += avail_pf * PAGE_SIZE;
             
             if(avail_pf == 0)
                 freer = next_freer;
-       
+
+            /* Update the next lookup */
+            freer->next_lkup = (addr - freer->hdr.base) / PAGE_SIZE + avail_pf;
+            
             continue;
         }
  
@@ -734,7 +739,7 @@ static int pfmgr_alloc
             }
 
             next_addr = (addr - freer->hdr.base) / PAGE_SIZE + used_pf;
-
+kprintf("PREV_LKUP %x NEXT_LKUP %x\n",freer->next_lkup, next_addr);
             freer->next_lkup = next_addr;
             
         }
@@ -753,8 +758,11 @@ static int pfmgr_alloc
         freer = next_freer;
     }
 
-    if(req_pf != 0)
-        return(-1);
+    if(!(flags & ALLOC_CB_STOP))
+    {
+        if(req_pf != 0)
+            return(-1);
+    }
 
     return(0);
 }

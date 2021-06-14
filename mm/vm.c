@@ -323,7 +323,7 @@ virt_addr_t vm_map
 
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_MAPPED;
-    kprintf("HELLO\n");
+
     /* Allocate virtual memory */
 
     spinlock_lock_int(&ctx->lock, &int_status);

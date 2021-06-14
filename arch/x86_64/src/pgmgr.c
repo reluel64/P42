@@ -756,7 +756,7 @@ static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
     PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, REMAP_TABLE_SIZE, 2, 0);
 
     /* Allocate pages */
-    status = pfmgr->alloc(1, 
+    status = pfmgr->alloc(0, 
                           ALLOC_CB_STOP, 
                           pagemgr_ensure_levels_cb, 
                           &lvl_dat);
