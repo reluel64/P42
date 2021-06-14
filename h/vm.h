@@ -98,5 +98,6 @@ virt_addr_t vm_alloc
     uint32_t page_flags
 );
 
+int vm_init(void);
 
 #endif

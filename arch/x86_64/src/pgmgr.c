@@ -586,9 +586,7 @@ static phys_size_t pagemgr_fill_tables_cb
         kprintf("CURRENT_LEVEL_IS_ZERO\n");
         ld->current_level = ctx->max_level;
     }
-    /* Make sure that the min_level is at least 2 
-     * A level of 2 means that it will only create the page tables but will
-     * not try to allocate page frames
+    /* Make sure that the min_level is at least 1
      */
 
     if((ld->min_level < 1) || 
@@ -851,6 +849,7 @@ int pgmgr_map
     phys_addr_t attr_mask = 0;
     int status = 0;
     int int_status = 0;
+    
     kprintf("virt %x Len %x phys %x\n",virt, length, phys);
 
     /* Create the tables */

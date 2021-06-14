@@ -902,6 +902,8 @@ static int pcpu_drv_init(driver_t *drv)
                                                IDT_ALLOC_SIZE,
                                                VM_HIGH_MEM,
                                                VM_ATTR_WRITABLE);
+    int zz = 0;
+
 
     /* Setup the IDT */
     cpu_idt_setup(cpu_drv);

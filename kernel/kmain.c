@@ -61,10 +61,6 @@ static void kmain_sys_init(void)
     kprintf("starting APs\n");
     
     kprintf("Platform init\n");
-kprintf("ADDR %x\n",vm_alloc(NULL,VM_BASE_AUTO, 1024ull*1024ull*1024ull*16ull, VM_LAZY, 0));
-memset(0xffff800000002000,0,1);
-    int *z = 0;
-*z = 0x1;
 
 
     platform_init();
@@ -155,8 +151,6 @@ void kmain()
 #endif
 
  kprintf("SCHED HELLO WORLD\n");
-
-
 
     /* initialize the CPU driver and the BSP */
     if(cpu_init())

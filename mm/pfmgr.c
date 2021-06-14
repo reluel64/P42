@@ -695,7 +695,6 @@ static int pfmgr_alloc
         if(freer->hdr.base  < LOW_MEMORY)
         {
             freer = next_freer;
-            
             continue;
         }
        
@@ -713,13 +712,16 @@ static int pfmgr_alloc
         /* Contiguous pages should be satisfied from one lookup */
         if((flags & ALLOC_CONTIG) && lkup_sts != 0)
         {
-            
-            if(avail_pf == 0)
-                freer = next_freer;
-
             /* Update the next lookup */
             freer->next_lkup = (addr - freer->hdr.base) / PAGE_SIZE + avail_pf;
             
+            if(avail_pf == 0)
+            {
+                /* reset next_lkup if contig is used */
+                freer->next_lkup = 0; 
+                freer = next_freer;
+            }
+
             continue;
         }
  
@@ -739,7 +741,7 @@ static int pfmgr_alloc
             }
 
             next_addr = (addr - freer->hdr.base) / PAGE_SIZE + used_pf;
-kprintf("PREV_LKUP %x NEXT_LKUP %x\n",freer->next_lkup, next_addr);
+
             freer->next_lkup = next_addr;
             
         }
@@ -754,6 +756,11 @@ kprintf("PREV_LKUP %x NEXT_LKUP %x\n",freer->next_lkup, next_addr);
         /* If we got frames, try again on the same range */
         if(avail_pf != 0)
             continue;
+
+        if(flags & ALLOC_CONTIG)
+        {
+            freer->next_lkup = 0;
+        }
         
         freer = next_freer;
     }
@@ -906,8 +913,6 @@ int pfmgr_init(void)
         linked_list_add_tail(&base.freer, &hdr->node);
 
     }while(phys != 0);
-
-    kprintf("FREE_DONE\n");
 
     phys = base.physb_start;
     hdr = NULL;
