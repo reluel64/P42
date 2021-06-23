@@ -404,9 +404,9 @@ int cpu_ap_start
 )
 {
     int                    status      = 0;
-    virt_addr_t            trampoline   = 0;
-    device_t               *dev     = NULL;
-    uint32_t               cpu_id     = 0;
+    virt_addr_t            trampoline  = 0;
+    device_t               *dev        = NULL;
+    uint32_t               cpu_id      = 0;
     ACPI_TABLE_MADT        *madt       = NULL;
     ACPI_MADT_LOCAL_APIC   *lapic      = NULL;
     ACPI_MADT_LOCAL_X2APIC *x2lapic    = NULL;
@@ -568,65 +568,7 @@ static void cpu_entry_point(void)
 
 }
 
-#if 0
-/* Setup platform specific cpu stuff
- * this should be called in the context of the cpu
- */
-static int pcpu_setup(cpu_t *cpu)
-{
-    device_t *apic_dev          = NULL;
-    device_t *apic_timer_dev    = NULL;
-    driver_t *drv               = NULL;
-    cpu_platform_t *pcpu        = NULL;
-    cpu_platform_driver_t *pdrv = NULL;
 
-    drv = devmgr_dev_drv_get(cpu->dev);
-    pdrv = devmgr_drv_data_get(drv);
-
-    cpu->cpu_pv = kcalloc(1, sizeof(cpu_platform_t));
-
-    if(cpu->cpu_pv == NULL)
-        return(-1);
-
-    pcpu = cpu->cpu_pv;
-
-    /* Prepare the GDT */
-    gdt_per_cpu_init(cpu->cpu_pv);
-
-    /* Load the IDT */
-    __lidt(&pdrv->idt_ptr);
-
-    if(!devmgr_dev_create(&apic_dev))
-    {
-        devmgr_dev_name_set(apic_dev, APIC_DRIVER_NAME);
-        devmgr_dev_type_set(apic_dev, INTERRUPT_CONTROLLER);
-        devmgr_dev_index_set(apic_dev, cpu->cpu_id);
-
-        if(devmgr_dev_add(apic_dev, cpu->dev))
-        {
-            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
-            return(-1);
-        }
-
-        kprintf("DEV_TYPE %s\n",devmgr_dev_type_get(apic_dev));
-    }
-
-    if(!devmgr_dev_create(&apic_timer_dev))
-    {
-        devmgr_dev_name_set(apic_timer_dev, APIC_TIMER_NAME);
-        devmgr_dev_type_set(apic_timer_dev, TIMER_DEVICE_TYPE);
-        devmgr_dev_index_set(apic_timer_dev, cpu->cpu_id);
-
-        if(devmgr_dev_add(apic_timer_dev, apic_dev))
-        {
-            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
-            return(-1);
-        }
-    }
-
-    return(0);
-}
-#endif
 static uint32_t cpu_get_domain
 (
     uint32_t cpu_id
@@ -801,19 +743,18 @@ static int pcpu_dev_init(device_t *dev)
 
     cpu_int_lock();
 
-    drv = devmgr_dev_drv_get(dev);
-    pdrv = devmgr_drv_data_get(drv);
-
+    drv    = devmgr_dev_drv_get(dev);
+    pdrv   = devmgr_drv_data_get(drv);
     cpu_id = cpu_id_get();
  
 
     cpu = kcalloc(sizeof(cpu_t), 1);
-kprintf("CPU %x\n",cpu);
+
     if(cpu == NULL)
         return(-1);
 
     pcpu = kcalloc(sizeof(cpu_platform_t), 1);
-    kprintf("PCPU %x\n",pcpu);
+    
     if(pcpu == NULL)
     {
         kfree(cpu);
@@ -907,7 +848,7 @@ static int pcpu_drv_init(driver_t *drv)
 
     /* Setup the IDT */
     cpu_idt_setup(cpu_drv);
-    kprintf("TEST\n");
+
 
     /* make IDT read-only */
     #if 0
@@ -942,11 +883,12 @@ static int pcpu_drv_init(driver_t *drv)
         {
             timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
         }
-
+#if 0
         if(sched_cpu_init(timer, cpu))
         {
             return(-1);
         }
+#endif
     }
 
     return(0);

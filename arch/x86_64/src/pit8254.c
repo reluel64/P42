@@ -51,12 +51,12 @@ static int pit8254_irq_handler(void *dev, isr_info_t *inf)
     pit_dev = devmgr_dev_data_get(dev);
 
 
-    spinlock_lock_int(&pit_dev->lock, &int_status);
+    spinlock_lock_int(&pit_dev->lock);
     vga_print("PIT8254\n");
     if(pit_dev->func != NULL)
         pit_dev->func(pit_dev->func_data, INT_INTERVAL_MS, inf);
     
-    spinlock_unlock_int(&pit_dev->lock, int_status);
+    spinlock_unlock_int(&pit_dev->lock);
 
     return(0);
 }
@@ -131,13 +131,13 @@ static int pit8254_install_cb
 
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_lock_int(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock);
 
     timer->func      = func;
     timer->func_data = data;
     ret = 0;
 
-    spinlock_unlock_int(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock);
 
     return(ret);
 }
@@ -155,13 +155,13 @@ static int pit8254_uninstall_cb
     
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_lock_int(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock);
 
     timer->func      = NULL;
     timer->func_data = NULL;
     ret              = 0;
 
-    spinlock_unlock_int(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock);
 
     return(ret);
 }
@@ -179,13 +179,13 @@ static int pit8254_get_cb
     
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_lock_int(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock);
 
     *func = timer->func;
     *data = timer->func_data;
     ret = 0;
 
-    spinlock_unlock_int(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock);
 
     return(ret);
 }

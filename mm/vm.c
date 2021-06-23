@@ -142,7 +142,7 @@ int vm_init(void)
 
     linked_list_init(&kernel_ctx.free_mem);
     linked_list_init(&kernel_ctx.alloc_mem);
-      
+   
     spinlock_init(&kernel_ctx.lock);
 
    status = pgmgr_alloc(&kernel_ctx.pagemgr,
@@ -241,7 +241,7 @@ virt_addr_t vm_alloc
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_ALLOCATED;
     /* Allocate virtual memory */
-    spinlock_lock_int(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock);
     
     addr = vm_space_alloc(ctx, 
                           virt, 
@@ -249,7 +249,7 @@ virt_addr_t vm_alloc
                           alloc_flags, 
                           page_flags);
 
-    spinlock_unlock_int(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock);
 
     if(addr == 0)
     {
@@ -268,11 +268,11 @@ virt_addr_t vm_alloc
     }
     if(status != 0)
     {
-        spinlock_lock_int(&ctx->lock, &int_status);
+        spinlock_lock_int(&ctx->lock);
         
         vm_space_free(ctx, addr, len);
         
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock);
         return(0);
     }
 
@@ -326,7 +326,7 @@ virt_addr_t vm_map
 
     /* Allocate virtual memory */
 
-    spinlock_lock_int(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock);
 
     addr = vm_space_alloc(ctx, 
                           virt, 
@@ -334,7 +334,7 @@ virt_addr_t vm_map
                           alloc_flags, 
                           page_flags);
 
-    spinlock_unlock_int(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock);
 
     if(addr == 0)
         return(0);
@@ -351,9 +351,9 @@ virt_addr_t vm_map
     kprintf("STATUS %x\n",status);
     if(status != 0)
     {
-        spinlock_lock_int(&ctx->lock, &int_status);
+        spinlock_lock_int(&ctx->lock);
         vm_space_free(ctx, addr, len);
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock);
         return(0);
     }
 

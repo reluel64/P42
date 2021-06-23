@@ -98,9 +98,9 @@ void vga_print(uint8_t *buf, uint8_t color, uint64_t len)
     if(vga.base == NULL)
         return;
 
-    spinlock_lock_int(&vga.lock, &int_status);
+    spinlock_lock_int(&vga.lock);
 
     vga_print_internal(buf);
     
-    spinlock_unlock_int(&vga.lock, int_status);
+    spinlock_unlock_int(&vga.lock);
 }

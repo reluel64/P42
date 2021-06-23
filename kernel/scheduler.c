@@ -29,17 +29,18 @@ static void sched_thread_main(sched_thread_t *th)
 
     entry_point = th->entry_point;
 
+    
     if(entry_point != NULL)
     {
         th->rval = entry_point(th->pv);
     }
 
     /* The thread is now dead */
-    spinlock_lock_int(&th->lock, &int_status);
+    spinlock_lock_int(&th->lock);
 
     __atomic_or_fetch(&th->flags, THREAD_DEAD, __ATOMIC_ACQUIRE);
     
-    spinlock_unlock_int(&th->lock, int_status);
+    spinlock_unlock_int(&th->lock);
     
     while(1)
     {
@@ -83,11 +84,11 @@ int sched_start_thread(sched_thread_t *th)
 {
     int int_status = 0;
 
-    spinlock_lock_int(&list_lock, &int_status);
+    spinlock_lock_int(&list_lock);
 
     linked_list_add_tail(&new_threads, &th->node);
 
-    spinlock_unlock_int(&list_lock, int_status);
+    spinlock_unlock_int(&list_lock);
 
     cpu_issue_ipi(IPI_DEST_ALL, 0, IPI_RESCHED);
 
@@ -323,7 +324,7 @@ static inline void sched_switch_to_thread
     if(next == NULL)
         next = &unit->idle;
 
-    spinlock_lock_int(&next->lock, &int_status);
+    spinlock_lock_int(&next->lock);
   
     if(next != &unit->idle)
         linked_list_remove(&unit->ready_q, &next->node);
@@ -350,7 +351,7 @@ static inline void sched_switch_to_thread
     cpu_ctx_restore(iframe, next);
 
     /* Unblock the thread structure */
-    spinlock_unlock_int(&next->lock, int_status);
+    spinlock_unlock_int(&next->lock);
 }
 
 /* Scheduling routine
@@ -375,13 +376,13 @@ static void sched_resched
     list_node_t            *node        = NULL;
     int                     need_tick   = 0;
 
-    spinlock_lock_int(&unit->lock, &int_status);
+    spinlock_lock_int(&unit->lock);
     current = unit->current;
 
     /* Check if we have new threads that await first
      * execution and if we do, take one
      */
-    spinlock_lock_int(&list_lock, &int_status);
+    spinlock_lock_int(&list_lock);
 
     new_thread = (sched_thread_t*)linked_list_first(&new_threads);
 
@@ -391,7 +392,7 @@ static void sched_resched
         linked_list_add_head(&unit->ready_q, &new_thread->node);
     }
 
-    spinlock_unlock_int(&list_lock, int_status);
+    spinlock_unlock_int(&list_lock);
 
     /* In case current is NULL, we will set the preempt
      * flag to 1 so that we can force at least the idle
@@ -405,7 +406,7 @@ static void sched_resched
     else
     {
         /* See if we need to pre-empt the thread */
-        spinlock_lock_int(&current->lock, &int_status);
+        spinlock_lock_int(&current->lock);
 
         if(current->remain > 0)
             current->remain--;
@@ -419,7 +420,7 @@ static void sched_resched
         if(preempt)
             sched_preempt_thread(unit, current, iframe);
 
-        spinlock_unlock_int(&current->lock, int_status);
+        spinlock_unlock_int(&current->lock);
     }
 
     if(linked_list_count(&unit->blk_tm_q) > 0)
@@ -497,7 +498,7 @@ static void sched_resched
     }
 
     /* Unblock the execution unit structure */
-    spinlock_unlock_int(&unit->lock, int_status);
+    spinlock_unlock_int(&unit->lock);
 
 }
 
@@ -509,7 +510,7 @@ void sched_unblock_thread(sched_thread_t *th)
 
     /* prevent thread from being migrated */
 
-    spinlock_lock_int(&th->lock, &int_status);
+    spinlock_lock_int(&th->lock);
     
     unit = th->unit;
     cpu = unit->cpu;
@@ -520,7 +521,7 @@ void sched_unblock_thread(sched_thread_t *th)
     
     cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, cpu->cpu_id, IPI_RESCHED);
 
-    spinlock_unlock_int(&th->lock, int_status);
+    spinlock_unlock_int(&th->lock);
 }
 
 
@@ -612,11 +613,11 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     sched_init_thread(&unit->idle, sched_idle_loop, PAGE_SIZE, 255, unit);
 
     /* Add the unit to the list */
-    spinlock_write_lock_int(&units_lock, &int_status);
+    spinlock_write_lock_int(&units_lock);
 
     linked_list_add_tail(&units, &unit->node);
     
-    spinlock_write_unlock_int(&units_lock, int_status);
+    spinlock_write_unlock_int(&units_lock);
 
     isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0, NULL);
 
@@ -662,11 +663,11 @@ sched_thread_t *sched_thread_self(void)
     unit = cpu->sched;
 
     /* No interrupts, no migration */
-    spinlock_lock_int(&unit->lock, &int_status);
+    spinlock_lock_int(&unit->lock);
 
     th = unit->current;
 
-    spinlock_unlock_int(&unit->lock, int_status);
+    spinlock_unlock_int(&unit->lock);
     
     if(istatus)
         cpu_int_unlock();
@@ -682,7 +683,7 @@ void sched_sleep(uint32_t delay)
 
     th = sched_thread_self();
 
-    spinlock_lock_int(&th->lock, &int_status);
+    spinlock_lock_int(&th->lock);
 
     th->to_sleep = delay;
     th->slept = 0;
@@ -691,7 +692,7 @@ void sched_sleep(uint32_t delay)
 
     cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
     
-    spinlock_unlock_int(&th->lock, int_status);
+    spinlock_unlock_int(&th->lock);
 }
 
 static inline void sched_clean_thread(sched_thread_t *th)
@@ -721,7 +722,7 @@ static void sched_idle_loop(void *pv)
         cpu_halt();
 
         /* Begin cleaning the dead threads */
-        spinlock_lock_int(&unit->lock, &int_status);    
+        spinlock_lock_int(&unit->lock);    
 
         c = linked_list_first(&unit->dead_q);
 
@@ -740,6 +741,6 @@ static void sched_idle_loop(void *pv)
             c = n;
         }
 
-        spinlock_unlock_int(&unit->lock, int_status);
+        spinlock_unlock_int(&unit->lock);
     }
 }

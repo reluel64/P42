@@ -27,11 +27,13 @@ typedef struct pgmgr_t
     isr_t inv_isr;
 }pgmgr_t;
 
-#define PGMGR_CHANGE_ATTRIBUTES 0x1
+#define PGMGR_CHANGE_ATTRIBUTES (1 << 0)
+#define PGMGR_ASSIGN_ADDRESS    (1 << 1)
+
 #define PGMGR_LEVEL_TO_SHIFT(x) (PT_SHIFT + (((x) - 1) << 3) + ((x) - 1))
 
 #define PGMGR_FILL_LEVEL(ld, context, _base,                        \
-                        _length, _min_level, _attr)                 \
+                        _length, _min_level, _attr, _flags)         \
                         (ld)->ctx = (context);                      \
                         (ld)->base = (_base);                       \
                         (ld)->level = NULL;                         \
@@ -42,7 +44,8 @@ typedef struct pgmgr_t
                         (ld)->current_level = (context)->max_level; \
                         (ld)->error = 1;                            \
                         (ld)->do_map = 1;                           \
-                        (ld)->attr_mask = (_attr)
+                        (ld)->attr_mask = (_attr);                  \
+                        (ld)->flags = (_flags)
 
 
 typedef struct pgmgr_contig_find_t
@@ -402,7 +405,7 @@ static phys_size_t pagemgr_ensure_levels_cb
     {
         return(0);
     }
-    
+
     ld->error = PGMGR_TBL_CREATE_FAIL;
 
     if(!ld->addr)
@@ -649,19 +652,31 @@ static phys_size_t pagemgr_fill_tables_cb
             continue;
         }
 
-        if(!(ld->level[entry] & PAGE_PRESENT))
+        if(ld->flags & PGMGR_ASSIGN_ADDRESS)
         {
-            ld->level[entry] = (base + used_bytes) | 
-                               ld->attr_mask       | 
-                               PAGE_PRESENT;
 
-            used_bytes += (virt_size_t)1 << shift;
+            if(!(ld->level[entry] & PAGE_PRESENT))
+            {
+                ld->level[entry] = (base + used_bytes) | 
+                                   ld->attr_mask       | 
+                                   PAGE_PRESENT;
+
+                used_bytes += (virt_size_t)1 << shift;
+            }
         }
-        else
+        else if(ld->flags & PGMGR_CHANGE_ATTRIBUTES)
         {
-            ld->level[entry] = PAGE_MASK_ADDRESS(ld->level[entry]) | 
-                                ld->attr_mask                      |
-                               PAGE_PRESENT;
+            if(ld->level[entry] & PAGE_PRESENT)
+            {
+                ld->level[entry] = PAGE_MASK_ADDRESS(ld->level[entry]) | 
+                                    ld->attr_mask                      |
+                                   PAGE_PRESENT;
+            }
+            else
+            {
+                ld->error = PGMGR_TABLE_NOT_ALLOCATED;
+                return(-1);
+            }
         }
 
         /* Calculate the next position */
@@ -751,7 +766,13 @@ static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
     uint8_t shift         = 0;
     int status            = 0;
 
-    PGMGR_FILL_LEVEL(&lvl_dat, ctx, REMAP_TABLE_VADDR, REMAP_TABLE_SIZE, 2, 0);
+    PGMGR_FILL_LEVEL(&lvl_dat, 
+                     ctx, 
+                     REMAP_TABLE_VADDR, 
+                     REMAP_TABLE_SIZE, 
+                     2, 
+                     0, 
+                     0);
 
     /* Allocate pages */
     status = pfmgr->alloc(0, 
@@ -792,50 +813,6 @@ static int pgmgr_setup_remap_table(pagemgr_ctx_t *ctx)
     return(0);
 }
 
-static phys_size_t pgmgr_contig_pf_cb
-(
-    phys_addr_t base,
-    phys_size_t pf_count,
-    void *pv
-)
-{
-    pgmgr_contig_find_t *pcf = NULL;
-
-    pcf = pv;
-
-    if(pcf->pf_req == pf_count)
-    {
-        pcf->base = base;
-        pcf->pf_count = pf_count;
-        return(pf_count);
-    }
-    
-    return(0);
-}
-
-static int pgmgr_contig_pf
-(
-    phys_addr_t *base, 
-    phys_size_t *count,
-    phys_size_t req_size
-)
-{
-    int status = 0;
-    pgmgr_contig_find_t pcf;
-
-    pcf.pf_req = req_size >> PAGE_SIZE_SHIFT;
-
-    status = pfmgr->alloc(pcf.pf_req, 
-                          ALLOC_CONTIG, 
-                          pgmgr_contig_pf_cb, 
-                          &pcf);
-
-    *base = pcf.base;
-    *count = pcf.pf_count;
-
-    return(status);
-}
-
 int pgmgr_map
 (
     pagemgr_ctx_t *ctx,
@@ -853,34 +830,45 @@ int pgmgr_map
     kprintf("virt %x Len %x phys %x\n",virt, length, phys);
 
     /* Create the tables */
-    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2, 0);
+    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2, 0, 0);
 
-    spinlock_lock_int(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock);
 
-    status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
+    status = pfmgr->alloc(0, 
+                          ALLOC_CB_STOP, 
+                          pagemgr_ensure_levels_cb, 
+                          &ld);
 
     if(status || ld.error)
     {
         kprintf("STATUS %x LD %x\n",status,ld.error);
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock);
         return(-1);
     }
     /* Setup attribute mask */
     pagemgr_attr_translate(&attr_mask, attr);
 
     /* Do mapping */
-    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1, attr_mask);
+    PGMGR_FILL_LEVEL(&ld, 
+                     ctx, 
+                     virt, 
+                     length, 
+                     1, 
+                     attr_mask, 
+                     PGMGR_ASSIGN_ADDRESS);
   
-    pagemgr_fill_tables_cb(phys, length >> PAGE_SIZE_SHIFT, &ld);
+    pagemgr_fill_tables_cb(phys, 
+                          length >> PAGE_SIZE_SHIFT, 
+                          &ld);
 
     if(ld.error)
     {
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock);
         kprintf("Failed to map %x\n", ld.error);
         return(-1);
     }
  __write_cr3(__read_cr3());
-    spinlock_unlock_int(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock);
 
     return(0);
 }
@@ -900,23 +888,38 @@ int pgmgr_alloc
 
 
     /* Create the tables */
-    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 2, 0);
+    PGMGR_FILL_LEVEL(&ld, 
+                     ctx, 
+                     virt, 
+                     length, 
+                     2, 
+                     0, 
+                     0);
 
-    spinlock_lock_int(&ctx->lock, &int_status);
+    spinlock_lock_int(&ctx->lock);
 
-    status = pfmgr->alloc(0, ALLOC_CB_STOP, pagemgr_ensure_levels_cb, &ld);
-    
+    status = pfmgr->alloc(0, 
+                          ALLOC_CB_STOP, 
+                          pagemgr_ensure_levels_cb, 
+                          &ld);
+ 
     if(status || ld.error)
     {
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock);
         return(-1);
     }
-    
+       
     /* Setup attribute mask */
     pagemgr_attr_translate(&attr_mask, attr);
 
     /* Do allocation */
-    PGMGR_FILL_LEVEL(&ld, ctx, virt, length, 1, attr_mask);
+    PGMGR_FILL_LEVEL(&ld, 
+                     ctx, 
+                     virt, 
+                     length, 
+                     1, 
+                     attr_mask,
+                     PGMGR_ASSIGN_ADDRESS);
    
     status = pfmgr->alloc(length >> PAGE_SIZE_SHIFT, 
                           ALLOC_CB_STOP, 
@@ -926,12 +929,12 @@ int pgmgr_alloc
     if(ld.error || status)
     {
         kprintf("Failed to allocate %d %d\n", status, ld.error);
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock_int(&ctx->lock);
         return(-1);
     }
      __write_cr3(__read_cr3());
 
-    spinlock_unlock_int(&ctx->lock, int_status);
+    spinlock_unlock_int(&ctx->lock);
 
     return(0);
 }
@@ -981,7 +984,7 @@ int pagemgr_init(pagemgr_ctx_t *ctx)
     kprintf("Initializing Page Manager\n");
 
     spinlock_init(&ctx->lock);
-
+    
     pgmgr.pml5_support = pgemgr_pml5_is_enabled();
     pgmgr.nx_support   = pgmgr_check_nx();
 
@@ -1145,7 +1148,7 @@ static inline void pagemgr_invalidate_all(void)
     cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
 }
 
-int pagemgr_attr_change
+int pgmgr_change_attrib
 (
     pagemgr_ctx_t *ctx,
     virt_addr_t vaddr, 
@@ -1153,6 +1156,34 @@ int pagemgr_attr_change
     uint32_t attr
 )
 {
+
+    pgmgr_level_data_t ld;
+    phys_addr_t attr_mask;
+    int status = 0;
+    
+    /* Clear the level data */
+    memset(&ld, 0, sizeof(pgmgr_level_data_t));
+
+    /* Translate the attributes */
+    pagemgr_attr_translate(&attr_mask, attr);
+
+    /* Fill the level data */
+    PGMGR_FILL_LEVEL(&ld, 
+                      ctx, 
+                      vaddr, 
+                      len, 
+                      1, 
+                      attr_mask, 
+                      PGMGR_CHANGE_ATTRIBUTES);
+
+    /* Change the attributes */
+    status = pagemgr_fill_tables_cb(0, 
+                                    len >> PAGE_SIZE_SHIFT, 
+                                    &ld);
+
+    if(status || ld.error)
+        return(-1);
+
     return(0);
 }
 

@@ -37,13 +37,13 @@ static int apic_timer_isr(void *dev, isr_info_t *inf)
     
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_lock_int(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock);
 
     /* Call the callback */
     if(timer->func != NULL)
         timer->func(timer->func_data, APIC_TIMER_INTERVAL_MS, inf);
 
-    spinlock_unlock_int(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock);
 
     return(0);
 }
@@ -149,13 +149,13 @@ static int apic_timer_install_cb
 
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_lock_int(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock);
 
     timer->func = func;
     timer->func_data = data;
     ret = 0;
     
-    spinlock_unlock_int(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock);
 
     return(ret);
 }
@@ -173,13 +173,13 @@ static int apic_timer_uninstall_cb
     
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_lock_int(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock);
 
     timer->func = NULL;
     timer->func_data = NULL;
     ret = 0;
 
-    spinlock_unlock_int(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock);
 
     return(ret);
 }
@@ -197,13 +197,13 @@ static int apic_timer_get_cb
     
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_lock_int(&timer->lock, &int_status);
+    spinlock_lock_int(&timer->lock);
 
     *func = timer->func;
     *data = timer->func_data;
     ret = 0;
 
-    spinlock_unlock_int(&timer->lock, int_status);
+    spinlock_unlock_int(&timer->lock);
 
     return(ret);
 }

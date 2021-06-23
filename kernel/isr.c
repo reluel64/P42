@@ -77,19 +77,19 @@ isr_t *isr_install
 
     if(!eoi)
     {   
-        spinlock_write_lock_int(&handlers[index].lock, &int_status);
+        spinlock_write_lock_int(&handlers[index].lock);
 
         linked_list_add_head(&handlers[index].head, &intr->node);
 
-        spinlock_write_unlock_int(&handlers[index].lock, int_status);
+        spinlock_write_unlock_int(&handlers[index].lock);
     }
     else
     {
-        spinlock_write_lock_int(&eoi_lock, &int_status);
+        spinlock_write_lock_int(&eoi_lock);
 
         linked_list_add_head(&eoi_handlers, &intr->node);
 
-        spinlock_write_unlock_int(&eoi_lock, int_status);
+        spinlock_write_unlock_int(&eoi_lock);
     }
     return(intr);
 }
@@ -112,7 +112,7 @@ int isr_uninstall
 
     if(eoi)
     {
-        spinlock_write_lock_int(&eoi_lock, &int_status);
+        spinlock_write_lock_int(&eoi_lock);
 
         node = linked_list_first(&eoi_handlers);
     
@@ -132,7 +132,7 @@ int isr_uninstall
 
             node = next_node;
         }
-        spinlock_write_unlock_int(&eoi_lock, int_status);
+        spinlock_write_unlock_int(&eoi_lock);
 
         return(0);
     }
@@ -141,7 +141,7 @@ int isr_uninstall
     {
         isr_lst = &handlers[i];
         
-        spinlock_write_lock_int(&isr_lst->lock, &int_status);
+        spinlock_write_lock_int(&isr_lst->lock);
         
         node = linked_list_first(&isr_lst->head);
 
@@ -159,7 +159,7 @@ int isr_uninstall
 
             node = next_node;
         }
-        spinlock_write_unlock_int(&isr_lst->lock, int_status);
+        spinlock_write_unlock_int(&isr_lst->lock);
     }
     return(0);
 }
@@ -184,7 +184,7 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
     inf.cpu_id    = cpu_id_get();
 
     /* gain exclusive access to the list */
-    spinlock_read_lock_int(&int_lst->lock, &int_status);
+    spinlock_read_lock_int(&int_lst->lock);
 
     node = linked_list_first(&int_lst->head);
 
@@ -198,9 +198,9 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
         node = linked_list_next(node);
     }
 
-    spinlock_read_unlock_int(&int_lst->lock, int_status);
+    spinlock_read_unlock_int(&int_lst->lock);
 
-    spinlock_read_lock_int(&eoi_lock, &int_status);
+    spinlock_read_lock_int(&eoi_lock);
 
     /* Send EOIs */
     node = linked_list_first(&eoi_handlers);
@@ -215,7 +215,7 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
         node = linked_list_next(node);
     }
 
-    spinlock_read_unlock_int(&eoi_lock, int_status);
+    spinlock_read_unlock_int(&eoi_lock);
 
 
 }

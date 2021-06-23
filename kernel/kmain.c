@@ -161,6 +161,6 @@ void kmain()
             cpu_halt();
         }
     }
-    vga_print("HELLO\n");
+    vga_print("HELLO WORLD\n");
     while(1);
 }

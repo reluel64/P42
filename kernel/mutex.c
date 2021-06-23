@@ -35,7 +35,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
     sched_thread_t *thread = NULL;
     uint32_t block_flags = THREAD_BLOCKED;
 
-    spinlock_lock_int(&mtx->lock, &int_state);
+    spinlock_lock_int(&mtx->lock);
     thread = sched_thread_self();
 
 
@@ -56,7 +56,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
             /* set recursion level to 1 */
             __atomic_store_n(&mtx->rlevel, 1, __ATOMIC_RELEASE);
         
-            spinlock_unlock_int(&mtx->lock, int_state);
+            spinlock_unlock_int(&mtx->lock);
 
             return(0);
         }
@@ -77,7 +77,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
             if(mtx->opts & MUTEX_RECUSRIVE)
                 __atomic_add_fetch(&mtx->rlevel, 1, __ATOMIC_ACQUIRE);
-            spinlock_unlock_int(&mtx->lock, int_state);
+            spinlock_unlock_int(&mtx->lock);
             return(0);
         }
 
@@ -89,17 +89,17 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         if(block_flags & THREAD_SLEEPING)
         {
             /* remove the thread from the pendq */
-            spinlock_unlock_int(&mtx->lock, int_state);
+            spinlock_unlock_int(&mtx->lock);
             return(-1);
         }
 
         if(wait_ms == NO_WAIT)
         {
-            spinlock_unlock_int(&mtx->lock, int_state);
+            spinlock_unlock_int(&mtx->lock);
             return(-1);
         }
 
-        spinlock_lock_int(&thread->lock, &th_int_state);
+        spinlock_lock_int(&thread->lock);
 
         /* we are going to sleep */
         if(wait_ms != WAIT_FOREVER)
@@ -116,13 +116,13 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
         linked_list_add_tail(&mtx->pendq, &thread->pend_node); 
 
-        spinlock_unlock_int(&thread->lock, th_int_state);
+        spinlock_unlock_int(&thread->lock);
 
-        spinlock_unlock_int(&mtx->lock, int_state);
+        spinlock_unlock_int(&mtx->lock);
 
         sched_yield();
 
-        spinlock_lock_int(&mtx->lock, &int_state);
+        spinlock_lock_int(&mtx->lock);
         linked_list_remove(&mtx->pendq, &thread->pend_node); 
     }
 
@@ -139,7 +139,7 @@ int mtx_release(mutex_t *mtx)
     list_node_t    *pend_node = NULL;
     void *expected = NULL;
 
-    spinlock_lock_int(&mtx->lock, &int_state);
+    spinlock_lock_int(&mtx->lock);
 
     self = sched_thread_self();
     
@@ -154,7 +154,7 @@ int mtx_release(mutex_t *mtx)
                                        __ATOMIC_RELAXED
                                        ))
     {
-        spinlock_unlock_int(&mtx->lock, int_state);
+        spinlock_unlock_int(&mtx->lock);
         return(-1);
     }
 
@@ -163,7 +163,7 @@ int mtx_release(mutex_t *mtx)
         /* reduce the recursion level */
         if(__atomic_sub_fetch(&mtx->rlevel, 1, __ATOMIC_RELEASE) > 0)
         {
-            spinlock_unlock_int(&mtx->lock, int_state);
+            spinlock_unlock_int(&mtx->lock);
             return(0);
         }
     }
@@ -173,7 +173,7 @@ int mtx_release(mutex_t *mtx)
 
     if(pend_node == NULL)
     {
-        spinlock_unlock_int(&mtx->lock, int_state);
+        spinlock_unlock_int(&mtx->lock);
         return(0);
     }
 
@@ -182,11 +182,11 @@ int mtx_release(mutex_t *mtx)
     /* Set the new owner */
     __atomic_store_n(&mtx->owner, thread, __ATOMIC_RELEASE);
     
-    spinlock_unlock_int(&thread->lock, unit_int_state);
+    spinlock_unlock_int(&thread->lock);
 
     sched_unblock_thread(thread);
 
-    spinlock_unlock_int(&mtx->lock, int_state);
+    spinlock_unlock_int(&mtx->lock);
     
     return(0);
 }
