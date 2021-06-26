@@ -29,6 +29,11 @@ static void sched_thread_main(sched_thread_t *th)
 
     entry_point = th->entry_point;
 
+    /* during startup of the thread, unlock the scheduling unit 
+     * on which we are running.
+     * failing to do so will cause one thread to run on the locked unit
+     */
+    spinlock_unlock_int(&th->unit->lock);
     
     if(entry_point != NULL)
     {

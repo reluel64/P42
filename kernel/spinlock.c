@@ -28,8 +28,8 @@ void spinlock_lock(spinlock_t *s)
 
     while(!__atomic_compare_exchange_n(&s->lock, 
                                       &expected, 1, 0, 
-                                      __ATOMIC_ACQUIRE, 
-                                      __ATOMIC_RELAXED)
+                                      __ATOMIC_SEQ_CST, 
+                                      __ATOMIC_SEQ_CST)
          )
     {
         expected = 0;
@@ -43,8 +43,8 @@ void spinlock_unlock(spinlock_t *s)
     
     __atomic_compare_exchange_n(&s->lock, 
                                &expected, 0, 0, 
-                               __ATOMIC_RELEASE, 
-                               __ATOMIC_RELAXED);
+                               __ATOMIC_SEQ_CST, 
+                               __ATOMIC_SEQ_CST);
 
 
    cpu_int_unlock();
@@ -55,7 +55,7 @@ void spinlock_lock_int(spinlock_t *s)
     int expected = 0;
 
 
-    if(!__atomic_fetch_add(&s->int_lock_cnt, 1, __ATOMIC_ACQUIRE))
+    if(!__atomic_fetch_add(&s->int_lock_cnt, 1, __ATOMIC_SEQ_CST))
     {
         s->pre_lock_state = cpu_int_check();
 
@@ -66,7 +66,7 @@ void spinlock_lock_int(spinlock_t *s)
     while(!__atomic_compare_exchange_n(&s->lock, 
                                       &expected, 1, 0, 
                                       __ATOMIC_SEQ_CST, 
-                                      __ATOMIC_RELAXED)
+                                      __ATOMIC_SEQ_CST)
          )
     {
         expected = 0;
@@ -80,13 +80,13 @@ void spinlock_unlock_int(spinlock_t *s)
 
     __atomic_compare_exchange_n(&s->lock, 
                                &expected, 0, 0, 
-                               __ATOMIC_RELEASE, 
-                               __ATOMIC_RELAXED);
+                               __ATOMIC_SEQ_CST, 
+                               __ATOMIC_SEQ_CST);
 
 
-    if(__atomic_load_n(&s->int_lock_cnt, __ATOMIC_ACQUIRE) > 0)
+    if(__atomic_load_n(&s->int_lock_cnt, __ATOMIC_SEQ_CST) > 0)
     {
-        if(!__atomic_sub_fetch(&s->int_lock_cnt, 1, __ATOMIC_ACQUIRE))
+        if(!__atomic_sub_fetch(&s->int_lock_cnt, 1, __ATOMIC_SEQ_CST))
         {
             if(s->pre_lock_state)
                 cpu_int_unlock();
@@ -97,7 +97,7 @@ void spinlock_unlock_int(spinlock_t *s)
 void spinlock_read_lock_int(spinlock_t *s)
 {
 
-    if(!__atomic_fetch_add(&s->int_lock_cnt, 1, __ATOMIC_ACQUIRE))
+    if(!__atomic_fetch_add(&s->int_lock_cnt, 1, __ATOMIC_SEQ_CST))
     {
         s->pre_lock_state = cpu_int_check();
 
@@ -105,24 +105,24 @@ void spinlock_read_lock_int(spinlock_t *s)
             cpu_int_lock();
     }
 
-    while(!__atomic_load_n(&s->lock, __ATOMIC_ACQUIRE) > 0)
+    while(!__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) > 0)
     {
         cpu_pause();
     }
 
-    __atomic_sub_fetch(&s->lock, 1, __ATOMIC_ACQUIRE);
+    __atomic_sub_fetch(&s->lock, 1, __ATOMIC_SEQ_CST);
     
 }
 
 void spinlock_read_unlock_int(spinlock_t *s)
 {
 
-    if(__atomic_load_n(&s->lock, __ATOMIC_ACQUIRE) < UINT32_MAX)
-        __atomic_add_fetch(&s->lock, 1, __ATOMIC_RELEASE);
+    if(__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) < UINT32_MAX)
+        __atomic_add_fetch(&s->lock, 1, __ATOMIC_SEQ_CST);
 
-    if(__atomic_load_n(&s->int_lock_cnt, __ATOMIC_ACQUIRE) > 0)
+    if(__atomic_load_n(&s->int_lock_cnt, __ATOMIC_SEQ_CST) > 0)
     {
-        if(!__atomic_sub_fetch(&s->int_lock_cnt, 1, __ATOMIC_ACQUIRE))
+        if(!__atomic_sub_fetch(&s->int_lock_cnt, 1, __ATOMIC_SEQ_CST))
         {
             if(s->pre_lock_state)
                 cpu_int_unlock();
@@ -134,7 +134,7 @@ void spinlock_write_lock_int(spinlock_t *s)
 {
     uint32_t expected = UINT32_MAX;
 
-    if(!__atomic_fetch_add(&s->int_lock_cnt, 1, __ATOMIC_ACQUIRE))
+    if(!__atomic_fetch_add(&s->int_lock_cnt, 1, __ATOMIC_SEQ_CST))
     {
         s->pre_lock_state = cpu_int_check();
 
@@ -144,8 +144,8 @@ void spinlock_write_lock_int(spinlock_t *s)
 
     while(!__atomic_compare_exchange_n(&s->lock, 
                                       &expected, 0, 0, 
-                                      __ATOMIC_ACQUIRE, 
-                                      __ATOMIC_RELAXED)
+                                      __ATOMIC_SEQ_CST, 
+                                      __ATOMIC_SEQ_CST)
          )
     {
         expected = UINT32_MAX;
@@ -159,12 +159,12 @@ void spinlock_write_unlock_int(spinlock_t *s)
 
     __atomic_compare_exchange_n(&s->lock, 
                                &expected, UINT32_MAX, 0, 
-                               __ATOMIC_RELEASE, 
-                               __ATOMIC_RELAXED);
+                               __ATOMIC_SEQ_CST, 
+                               __ATOMIC_SEQ_CST);
 
-    if(__atomic_load_n(&s->int_lock_cnt, __ATOMIC_ACQUIRE) > 0)
+    if(__atomic_load_n(&s->int_lock_cnt, __ATOMIC_SEQ_CST) > 0)
     {
-        if(!__atomic_sub_fetch(&s->int_lock_cnt, 1, __ATOMIC_ACQUIRE))
+        if(!__atomic_sub_fetch(&s->int_lock_cnt, 1, __ATOMIC_SEQ_CST))
         {
             if(s->pre_lock_state)
                 cpu_int_unlock();

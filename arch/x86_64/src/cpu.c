@@ -620,13 +620,14 @@ void cpu_ctx_save(virt_addr_t iframe, void *th)
     pcpu_context_t *context = NULL;
     virt_addr_t     reg_loc = 0;
     sched_thread_t *thread = NULL;
-
+#if 0
     thread = th;
     context = thread->context;
     reg_loc = iframe - sizeof(pcpu_regs_t);
 
     memcpy(&context->iframe, (uint8_t*)iframe, sizeof(interrupt_frame_t));
     memcpy(&context->regs, (uint8_t*)reg_loc, sizeof(pcpu_regs_t));
+#endif
 }
 
 void cpu_ctx_restore(virt_addr_t iframe, void *th)
@@ -685,9 +686,10 @@ void *cpu_ctx_init
     ctx->iframe.rflags = (1 << 0) | (1 << 9);
     ctx->iframe.cs = cs;
 
-
+#if 0
     ctx->regs.rdi = (uint64_t)exec_pv;
     ctx->addr_spc = __read_cr3();
+
     ctx->dseg = seg;
 
     ctx->esp0 = vm_alloc(NULL, 
@@ -701,7 +703,7 @@ void *cpu_ctx_init
         vm_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
         return(NULL);
     }
-
+#endif
     return(ctx);
 }
 
@@ -851,11 +853,10 @@ static int pcpu_drv_init(driver_t *drv)
 
 
     /* make IDT read-only */
-    #if 0
-    vm_change_attrib(NULL, (virt_addr_t)cpu_drv->idt,
-                        IDT_TABLE_SIZE,
-                        ~VM_ATTR_WRITABLE);
-    #endif
+    vm_change_attr(NULL, (virt_addr_t)cpu_drv->idt,
+                        IDT_ALLOC_SIZE,
+                        ~VM_ATTR_WRITABLE,
+                        NULL);
 
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);

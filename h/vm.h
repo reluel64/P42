@@ -98,6 +98,15 @@ virt_addr_t vm_alloc
     uint32_t page_flags
 );
 
+int vm_change_attr
+(
+    vm_ctx_t *ctx,
+    virt_addr_t addr,
+    virt_size_t size,
+    uint32_t pg_flags,
+    uint32_t *old_pg_flags
+);
+
 int vm_init(void);
 
 #endif

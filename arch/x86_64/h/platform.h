@@ -78,7 +78,7 @@ typedef struct interrupt_frame_t
 }__attribute__((packed))  interrupt_frame_t;
 
 
-typedef struct pcpu_regs_t
+typedef struct pcpu_gpr_t
 {
     uint64_t rax;
     uint64_t rbx;
@@ -94,22 +94,43 @@ typedef struct pcpu_regs_t
     uint64_t r13;
     uint64_t r14;
     uint64_t r15;
-    uint64_t rbp;
-}__attribute__((packed))  pcpu_regs_t;
+}__attribute__((packed))  pcpu_gpr_t;
+
+typedef struct pcpu_seg_t
+{
+    uint64_t cs;
+    uint64_t ds;
+    uint64_t es;
+    uint64_t fs;
+    uint64_t gs;
+}__attribute__((packed))  pcpu_seg_t;
 
 typedef struct pcpu_context_t
 {
-    uint64_t          dseg;
-    uint64_t          addr_spc;
-    pcpu_regs_t       regs;
-    interrupt_frame_t iframe;
+    pcpu_gpr_t gpr;
+
+    /* Stack regs */
+    uint64_t rbp;
+    uint64_t rsp;
+
+    uint64_t rflags;
+    uint64_t cr3;
+
+    /* segment registers */
+    pcpu_seg_t seg;
+    
+
+
     
     /* below should go things that 
      * do not need to be popped from the stack 
      */
     
-    uint64_t          esp0;
+    uint64_t          tss_esp0;
+    interrupt_frame_t iframe;
 }__attribute__((packed))  pcpu_context_t;
+
+
 
 
 extern void        __wrmsr(uint64_t reg, uint64_t val);

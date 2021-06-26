@@ -266,6 +266,7 @@ virt_addr_t vm_alloc
                             len,
                             page_flags);
     }
+
     if(status != 0)
     {
         spinlock_lock_int(&ctx->lock);
@@ -279,6 +280,18 @@ virt_addr_t vm_alloc
     return(addr);
 }
 
+
+int vm_change_attr
+(
+    vm_ctx_t *ctx,
+    virt_addr_t addr,
+    virt_size_t size,
+    uint32_t pg_flags,
+    uint32_t *old_pg_flags
+)
+{
+    return(0);
+}
 
 int vm_unmap
 (

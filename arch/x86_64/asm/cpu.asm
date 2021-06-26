@@ -212,4 +212,67 @@ __resched_interrupt:
     int 240
     ret
 
+; RDI - next thread
+; RSI - current thread
+; RIP is already saved in the stack 
+__cpu_switch_to:
 
+; save the context of the current task
+    mov qword [rsi]       ,  rax
+    mov qword [rsi + 0x8] ,  rbx
+    mov qword [rsi + 0x10],  rcx
+    mov qword [rsi + 0x18],  rdx
+    mov qword [rsi + 0x20],  rsi
+    mov qword [rsi + 0x28],  rdi
+    mov qword [rsi + 0x30],  r8
+    mov qword [rsi + 0x38],  r9
+    mov qword [rsi + 0x40],  r10
+    mov qword [rsi + 0x48],  r11
+    mov qword [rsi + 0x50],  r12
+    mov qword [rsi + 0x58],  r13
+    mov qword [rsi + 0x60],  r14
+    mov qword [rsi + 0x68],  r15
+    mov qword [rsi + 0x70],  rbp
+    mov qword [rsi + 0x78],  rsp
+    
+; Save RFLAGS
+    pushf
+    pop rax
+
+    mov qword [rsi + 0x80], rax
+
+; load the next task context
+
+    mov rax, cr3
+    mov rbx, mov qword [rsi + 0x88]
+
+    cmp rax, rbx
+
+    je .no_vm_change
+
+    mov cr3, rbx
+
+.no_vm_change:
+    
+    mov rax, qword [rdi]
+    mov rbx, qword [rdi + 0x8]
+    mov rcx, qword [rdi + 0x10]
+    mov rdx, qword [rdi + 0x18]
+    mov rsi, qword [rdi + 0x20]
+    mov r8,  qword [rdi + 0x30]
+    mov r9,  qword [rdi + 0x38]
+    mov r10, qword [rdi + 0x40]
+    mov r11, qword [rdi + 0x48]
+    mov r12, qword [rdi + 0x50]
+    mov r13, qword [rdi + 0x58]
+    mov r14, qword [rdi + 0x60]
+    mov r15, qword [rdi + 0x68]
+    mov rbp, qword [rdi + 0x70]
+    mov rsp, qword [rdi + 0x78]
+
+    ;update RDI last - same reason as RSI
+    mov rdi, qword [rdi + 0x28]
+
+    
+
+    iretq
