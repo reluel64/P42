@@ -19,7 +19,10 @@
 #include <scheduler.h>
 #include <semaphore.h>
 #include <mutex.h>
+#include <context.h>
 
+static sched_thread_t th1;
+static sched_thread_t th2;
 static sched_thread_t init_th;
 
 uint16_t pciConfigReadWord (uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
@@ -62,7 +65,11 @@ static void kmain_sys_init(void)
     
     kprintf("Platform init\n");
 
-
+    while(1)
+    {
+        schedule();
+        kprintf("TEST\n");
+    }
     platform_init();
 
    vga_print("Hello World\n");
@@ -104,7 +111,89 @@ static void kmain_sys_init(void)
 
 }
 
+uint64_t tcb1[PAGE_SIZE];
+uint64_t tcb2[PAGE_SIZE];
+uint64_t  stack_1[PAGE_SIZE];
+uint64_t stack_2[PAGE_SIZE];
+void *crt;
+void *next_crt;
 
+
+static int was = 0;
+extern void __context_save(void *tcb);
+extern void __context_load(void *tcb);
+
+static void context_save1(void *tcb)
+{
+    __context_save(tcb);
+}
+static void  context_load1(void *tcb)
+{
+    __context_load(tcb);
+}
+
+
+static int  sched_yield1(void)
+{
+   
+    context_save1(crt);
+    kprintf("SWITCHING\n");
+    if(crt == th1.context)
+    {
+      kprintf("TCB1\n");
+        crt = th2.context;
+    }
+    else
+    {
+        kprintf("TCB2\n");
+        crt = th1.context;
+    }
+    
+
+    kprintf("RESTORING\n");
+    context_load1(crt);
+}
+
+
+
+
+int func1(void)
+{
+    while(1)
+    {
+     
+
+        kprintf("Hello1 ",tcb1[RIP_INDEX],tcb2[RIP_INDEX]);
+        for(int i = 0; i<10;i++)
+        {
+            kprintf("%d ", i);
+        }
+        kprintf("\n");
+      sched_yield1();
+ 
+
+    }
+
+    return(0);
+}
+
+
+int func2(void)
+{
+    int i = 20;
+    while(1)
+    {
+        kprintf("Hello2 %d",i++);
+for(int i = 0; i<10;i++)
+        {
+            kprintf("%d ", i);
+        }
+        kprintf("\n");
+      sched_yield1();
+    }
+}
+
+#include <thread.h>
 /* Kernel entry point */
 
 void kmain()
@@ -133,15 +222,15 @@ void kmain()
 
     /* Initialize basic platform functionality */
     platform_early_init();
-     
+ 
     /* Initialize base of the scheduler */
     sched_init();
   
     /* Prepare the initialization thread */
-    sched_init_thread(&init_th, kmain_sys_init, 0x1000, 0, 0);
-
+   thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 0);
+    thread_start(&init_th);
     /* Enqueue the thread */
-    sched_start_thread(&init_th);
+  
 #if 0
     while(1)
     {
@@ -149,6 +238,8 @@ void kmain()
         pfmgr_show_free_memory();
     }
 #endif
+
+#if 1
 
  kprintf("SCHED HELLO WORLD\n");
 
@@ -161,6 +252,17 @@ void kmain()
             cpu_halt();
         }
     }
+
     vga_print("HELLO WORLD\n");
+
+#endif
+
+
+vga_print("HELLO\n");
+
+kprintf("STOP\n");
+kprintf("BIBIRIBIS\n");
+
+
     while(1);
 }

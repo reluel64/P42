@@ -183,8 +183,9 @@ virt_addr_t vm_space_alloc
             /* status != 0? ...well..FUCK */
             if(status != 0)
             {
-                /* we should revert what we did earlier and bail out, 
-                 * but for now we will deadlock here
+                
+                /* We failed to allocate so we must revert
+                 * everything
                  */
                 vm_space_undo(&ctx->alloc_mem, 
                         &ctx->free_mem,

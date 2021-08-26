@@ -102,7 +102,9 @@ static char * itoa(unsigned long value, char * str, int base)
     do
     {
         // Modulo is negative for negative value. This trick makes abs() unnecessary.
-        *ptr++ = "zyxwvutsrqponmlkjihgfedcba9876543210123456789abcdefghijklmnopqrstuvwxyz"[35 + value % base];
+        *ptr++ = "zyxwvutsrqponmlkjihgfedcba"
+                 "9876543210123456789"
+                 "abcdefghijklmnopqrstuvwxyz"[35 + value % base];
         value /= base;
     } while ( value );
     // Terminating the string.

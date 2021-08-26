@@ -111,8 +111,6 @@ static int vm_setup_protected_regions
             kprintf("FAILED\n");
         }
     }
-
-    vm_space_free(ctx, re[0].base, re[0].length);
 }
  
 int vm_init(void)
@@ -371,28 +369,4 @@ virt_addr_t vm_map
     }
 
     return(addr);
-}
-
-
-
-int vm_reserve
-(
-    vm_ctx_t *ctx, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t type
-)
-{
-    while(1);
-}
-
-int vm_change_attrib
-(
-    vm_ctx_t *ctx, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    uint32_t attr
-)
-{
-    while(1);
 }

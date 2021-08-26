@@ -10,7 +10,8 @@
 #include <intc.h>
 #include <platform.h>
 #include <scheduler.h>
-
+#include <context.h>
+#include <thread.h>
 #define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
 #define SCHEDULER_TICK_MS 1
 
@@ -18,9 +19,10 @@ static list_head_t new_threads;
 static list_head_t units;
 static spinlock_t  units_lock;
 static spinlock_t  list_lock;
+static sched_owner_t kernel;
 
-static void sched_idle_loop(void *pv);
-
+static void sched_idle_thread(void *pv);
+void schedule(void);
 static void sched_thread_main(sched_thread_t *th)
 {
     sched_thread_t  *self        = NULL;
@@ -53,36 +55,21 @@ static void sched_thread_main(sched_thread_t *th)
     }
 }
 
-int sched_init_thread
+
+int sched_enqueue_thread
 (
-    sched_thread_t *th,
-    void           *entry_pt,
-    virt_size_t     stack_sz,
-    uint32_t        prio,
-    void           *pv
+    sched_thread_t *th
 )
 {
-    if(th == NULL)
-        return(-1);
+    /* Lock everything */
+    spinlock_lock_int(&th->lock);
+    spinlock_lock_int(&list_lock);
 
-    memset(th, 0, sizeof(sched_thread_t));
+    linked_list_add_head(&new_threads, &th->node);
 
-    th->stack = vm_alloc(NULL, VM_BASE_AUTO, stack_sz, VM_HIGH_MEM, VM_ATTR_WRITABLE);
-
-    if(!th->stack)
-    {
-        kfree(th);
-        return(-1);
-    }
-
-    th->stack_sz    = stack_sz;
-    th->entry_point = entry_pt;
-    th->prio        = prio;
-    th->pv          = pv;
-    th->context     = cpu_ctx_init(th, sched_thread_main, th);
-
-    spinlock_init(&th->lock);
-    return(0);
+    /* Unlock everything */
+    spinlock_unlock_int(&list_lock);
+    spinlock_unlock_int(&th->lock);
 }
 
 int sched_start_thread(sched_thread_t *th)
@@ -252,7 +239,7 @@ static inline void sched_preempt_thread
 
     list_head_t *queue = NULL;
 
-    cpu_ctx_save(iframe,  current);
+    /*cpu_ctx_save(iframe,  current);*/
 
     /* do not move the idle task anywhere - just break out */
     if(unit->current == &unit->idle)
@@ -353,7 +340,7 @@ static inline void sched_switch_to_thread
                     THREAD_RUNNING, 
                     __ATOMIC_ACQUIRE);
 
-    cpu_ctx_restore(iframe, next);
+    /*cpu_ctx_restore(iframe, next);*/
 
     /* Unblock the thread structure */
     spinlock_unlock_int(&next->lock);
@@ -365,8 +352,8 @@ static inline void sched_switch_to_thread
  * 2) The thread lock to protect the thread-specific data
  * 
  */ 
-
-static void sched_resched
+#if 0
+static void schedule
 (
     virt_addr_t        iframe,
     sched_exec_unit_t *unit,
@@ -530,18 +517,23 @@ void sched_unblock_thread(sched_thread_t *th)
 }
 
 
-static int sched_timer_callback(void *pv, uint32_t interval, isr_info_t *inf)
+static int sched_timer_callback
+(
+    void *pv, 
+    uint32_t interval, 
+    isr_info_t *inf
+)
 {
     sched_exec_unit_t *unit      = NULL;
     cpu_t             *cpu       = NULL;
-
+    
     unit = (sched_exec_unit_t*)pv;
     cpu = unit->cpu;
 
     if(cpu->cpu_id != inf->cpu_id)
         return(-1);
-        
-    sched_resched(inf->iframe, unit, SCHEDULER_TICK_MS);
+    
+  /*  sched_resched(inf->iframe, unit, SCHEDULER_TICK_MS);*/
 
     return(0);
 }
@@ -561,6 +553,7 @@ static int sched_resched_isr(void *pv, isr_info_t *inf)
 
     return(0);
 }
+#endif
 
 int sched_init(void)
 {
@@ -570,6 +563,7 @@ int sched_init(void)
     linked_list_init(&units);
     return(0);
 }
+
 
 int sched_cpu_init(device_t *timer, cpu_t *cpu)
 {
@@ -581,7 +575,7 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
         kprintf("ERROR: TIMER %x CPU %x\n", timer, cpu);
         return(-1);
     }
-
+   
     kprintf("Initializing Scheduler for CPU %d\n",cpu->cpu_id);
 
     unit = kcalloc(sizeof(sched_exec_unit_t), 1);
@@ -614,8 +608,8 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
      * The scheduler will automatically start executing 
      * it in case there are no other threads in the ready_q
      */
-
-    sched_init_thread(&unit->idle, sched_idle_loop, PAGE_SIZE, 255, unit);
+    thread_create_static(&unit->idle, sched_idle_thread, unit, PAGE_SIZE, 255);
+    kprintf("IDLE THREAD %x\n",&unit->idle);
 
     /* Add the unit to the list */
     spinlock_write_lock_int(&units_lock);
@@ -624,15 +618,21 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     
     spinlock_write_unlock_int(&units_lock);
 
-    isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0, NULL);
+#if 0
+    isr_install(sched_resched_isr, unit, PLATFORM_RESCHED_VECTOR, 0, NULL);*/
+
 
     timer_dev_connect_cb(timer,
                         sched_timer_callback,
                         unit);
 
+
+    
     /* begin execution of the scheduler code */
     cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
+#endif
 
+    schedule();
     while(1)
     {
         cpu_halt();
@@ -645,72 +645,12 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
 
 void sched_yield()
 {
-    cpu_int_lock();
-    cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
-    cpu_int_unlock();
-}
-
-sched_thread_t *sched_thread_self(void)
-{
-    cpu_t             *cpu        = NULL;
-    sched_exec_unit_t *unit       = NULL;
-    sched_thread_t    *th         = NULL;
-    int                int_status = 0;
-    int                istatus    = 0;
-
-    istatus = cpu_int_check();
-    
-    if(istatus)
-        cpu_int_lock();
-    
-    cpu = cpu_current_get();
-
-    unit = cpu->sched;
-
-    /* No interrupts, no migration */
-    spinlock_lock_int(&unit->lock);
-
-    th = unit->current;
-
-    spinlock_unlock_int(&unit->lock);
-    
-    if(istatus)
-        cpu_int_unlock();
-        
-    return(th);
+   schedule();
 }
 
 
-void sched_sleep(uint32_t delay)
-{
-    sched_thread_t *th = NULL;
-    int            int_status = 0;
 
-    th = sched_thread_self();
-
-    spinlock_lock_int(&th->lock);
-
-    th->to_sleep = delay;
-    th->slept = 0;
-    
-    __atomic_fetch_or(&th->flags, THREAD_SLEEPING, __ATOMIC_ACQUIRE);
-
-    cpu_issue_ipi(IPI_DEST_SELF, 0, IPI_RESCHED);
-    
-    spinlock_unlock_int(&th->lock);
-}
-
-static inline void sched_clean_thread(sched_thread_t *th)
-{
-    memset((void*)th->stack, 0, th->stack_sz);
-    vm_free(NULL, th->stack, th->stack_sz);
-    cpu_ctx_destroy(th);
-
-    if(th->flags & THREAD_ALLOCATED)
-        kfree(th);
-}
-
-static void sched_idle_loop(void *pv)
+static void sched_idle_thread(void *pv)
 {
     sched_exec_unit_t *unit       = NULL;
     sched_thread_t    *th         = NULL;
@@ -718,6 +658,13 @@ static void sched_idle_loop(void *pv)
     list_node_t        *c         = NULL;
     list_node_t        *n         = NULL;
     
+
+
+    while(1)
+    {
+schedule();
+    }
+
     unit = (sched_exec_unit_t*)pv;
     
     kprintf("Entered idle loop on %x\n", unit->cpu->cpu_id);
@@ -748,4 +695,57 @@ static void sched_idle_loop(void *pv)
 
         spinlock_unlock_int(&unit->lock);
     }
+}
+
+/******************************************************************************/
+
+
+void schedule(void)
+{
+    list_node_t *rdy_thread = NULL;
+    list_node_t *next       = NULL;
+    list_node_t *current    = NULL;
+    sched_exec_unit_t *unit = NULL;
+    cpu_t             *cpu = NULL;
+
+    cpu = cpu_current_get();
+    unit = cpu->sched;
+
+    /* Lock the execution unit */
+    spinlock_lock_int(&unit->lock);
+
+    if(unit->current != NULL)
+    {
+
+        /* save the current context */
+        context_save(unit->current);
+    }
+
+    /* Lock the new_thread list */
+    spinlock_lock_int(&list_lock);
+
+    rdy_thread = linked_list_first(&new_threads);
+    
+    if(rdy_thread)
+    {
+        linked_list_remove(&new_threads, rdy_thread);
+        linked_list_add_tail(&unit->ready_q, rdy_thread);
+    }
+
+    spinlock_unlock_int(&list_lock);
+
+    next = linked_list_first(&unit->ready_q);
+
+    current = &unit->current->node;
+
+    if(next == NULL)
+    {
+        next = &unit->idle.node;
+    }
+
+
+    spinlock_unlock_int(&unit->lock);
+    unit->current = (sched_thread_t*)next;
+    context_load(unit->current);
+
 }

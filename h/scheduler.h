@@ -11,7 +11,7 @@
 #define THREAD_SLEEPING         (1 << 3)
 #define THREAD_DEAD             (1 << 4)
 #define THREAD_ALLOCATED        (1 << 5)
-
+#define CPU_AFFINITY_VECTOR     (0x8)
 
 
 
@@ -34,6 +34,7 @@ typedef struct sched_thread_t
     uint32_t           id;          /* thread id                                     */
     uint16_t           prio;        /* priority                                      */
     virt_addr_t        stack;       /* start of memory allocated for the stack       */
+    virt_addr_t        stack_end;
     virt_size_t        stack_sz;    /* stack size                                    */
     void              *entry_point; /* entry point of the thread                     */
     void              *pv;          /* parameter for the entry point of the thread   */
@@ -44,6 +45,7 @@ typedef struct sched_thread_t
     uint32_t          to_sleep;     /* amount in ms to sleep                         */
     uint32_t          remain;       /* reamining time before task switch             */
     void              *rval;        /* return value */
+    uint64_t          affinity[CPU_AFFINITY_VECTOR];
 }sched_thread_t;
 
 
@@ -58,7 +60,7 @@ typedef struct sched_exec_unit_t
     list_head_t       blocked_q;    /* queue of blocked threads                      */
     list_head_t       sleep_q;      /* queue of sleeping threads                     */
     list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
-    list_head_t       blk_tm_q;    /* queue of blocked with timeout queue           */
+    list_head_t       blk_tm_q;     /* queue of blocked with timeout queue           */
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t    idle;         /* our dearest idle task                         */
     spinlock_t        lock;         /* lock to protect the queues                    */
@@ -85,7 +87,13 @@ typedef struct sched_exec_unit_t
                                      */
 }sched_exec_unit_t;
 
-
+typedef struct sched_owner_t
+{
+    list_node_t node;
+    uint32_t    owner_id;
+    void *vm_ctx;
+    uint8_t user_space;
+}sched_owner_t;
 
 
 int sched_cpu_init(device_t *timer, cpu_t *cpu);
@@ -104,4 +112,8 @@ void sched_unblock_thread(sched_thread_t *th);
 void sched_block_thread(sched_thread_t *th);
 void sched_yield();
 void sched_sleep(uint32_t delay);
+int sched_enqueue_thread
+(
+    sched_thread_t *th
+);
 #endif

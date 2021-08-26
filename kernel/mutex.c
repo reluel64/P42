@@ -26,7 +26,7 @@ mutex_t *mtx_create(int options)
 
     return(mtx);
 }
-
+#if 0
 int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 {
     int int_state = 0;
@@ -190,3 +190,4 @@ int mtx_release(mutex_t *mtx)
     
     return(0);
 }
+#endif

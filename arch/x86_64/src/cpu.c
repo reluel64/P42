@@ -27,6 +27,8 @@ extern void __cpu_switch_stack
 );
 
 
+
+
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -286,11 +288,20 @@ static virt_addr_t cpu_prepare_trampoline(void)
      * the data for trampoline code
      */
 
-    pml5_on  = ((virt_addr_t)&__start_ap_pml5_on                 - _TRAMPOLINE_BEGIN) + tr_code;
-    nx_on    = ((virt_addr_t)&__start_ap_nx_on                   - _TRAMPOLINE_BEGIN) + tr_code;
-    pt_base  = (phys_addr_t*)(((virt_addr_t)&__start_ap_pt_base  - _TRAMPOLINE_BEGIN) + tr_code);
-    stack    = (virt_addr_t*)(((virt_addr_t)&__start_ap_stack    - _TRAMPOLINE_BEGIN) + tr_code);
-    entry_pt = (virt_addr_t*)(((virt_addr_t)&__start_ap_entry_pt - _TRAMPOLINE_BEGIN) + tr_code);
+    pml5_on  = ((virt_addr_t)&__start_ap_pml5_on                 
+                             - _TRAMPOLINE_BEGIN) + tr_code;
+
+    nx_on    = ((virt_addr_t)&__start_ap_nx_on   
+                             - _TRAMPOLINE_BEGIN) + tr_code;
+
+    pt_base  = (phys_addr_t*)(((virt_addr_t)&__start_ap_pt_base  
+                                            - _TRAMPOLINE_BEGIN) + tr_code);
+
+    stack    = (virt_addr_t*)(((virt_addr_t)&__start_ap_stack    
+                                            - _TRAMPOLINE_BEGIN) + tr_code);
+
+    entry_pt = (virt_addr_t*)(((virt_addr_t)&__start_ap_entry_pt 
+                                            - _TRAMPOLINE_BEGIN) + tr_code);
 
     pml5_on [0] = pagemgr_pml5_support();
     nx_on   [0] = pagemgr_nx_support();
@@ -335,7 +346,7 @@ static int cpu_bring_cpu_up
     /* prepare cpu_on flag */
     __atomic_store_n(&cpu_on, 0, __ATOMIC_RELEASE);
 
-    sched_sleep(10);
+    //sched_sleep(10);
     kprintf("BRINGING %d\n", cpu);
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < timeout / 10; attempt++)
@@ -346,11 +357,10 @@ static int cpu_bring_cpu_up
 
         for(uint32_t i = 0; i < 10;i++)
         {
-            sched_sleep(1);
+          //  sched_sleep(1);
 
             if(__atomic_load_n(&cpu_on, __ATOMIC_ACQUIRE))
             {
-
                 return(0);
             }
         }
@@ -561,6 +571,8 @@ static void cpu_entry_point(void)
 
     sched_cpu_init(timer, cpu);
 
+    kprintf("HALTING CPU %x\n",cpu_id);
+
     while(1)
     {
         cpu_halt();
@@ -615,123 +627,6 @@ static uint32_t cpu_get_domain
     return(domain);
 }
 
-void cpu_ctx_save(virt_addr_t iframe, void *th)
-{
-    pcpu_context_t *context = NULL;
-    virt_addr_t     reg_loc = 0;
-    sched_thread_t *thread = NULL;
-#if 0
-    thread = th;
-    context = thread->context;
-    reg_loc = iframe - sizeof(pcpu_regs_t);
-
-    memcpy(&context->iframe, (uint8_t*)iframe, sizeof(interrupt_frame_t));
-    memcpy(&context->regs, (uint8_t*)reg_loc, sizeof(pcpu_regs_t));
-#endif
-}
-
-void cpu_ctx_restore(virt_addr_t iframe, void *th)
-{
-
-    pcpu_context_t    *context = NULL;
-    interrupt_frame_t *frame = NULL;
-    cpu_t             *cpu = NULL;
-    cpu_platform_t    *cpu_pv = NULL;
-    sched_thread_t    *thread = NULL;
-
-    thread = th;
-    context = thread->context;
-    cpu     = thread->unit->cpu;
-    cpu_pv  = cpu->cpu_pv;
-
-    frame = (interrupt_frame_t*)iframe;
-
-    frame->cs = 0x8;
-    frame->rsp = ((virt_addr_t)context);
-    frame->rip = (uint64_t)__cpu_context_restore;
-    frame->ss  = 0x10;
-
-    /* Clear NT and IF */
-    frame->rflags &= ~((1 << 14) | (1 << 9));
-
-    gdt_update_tss(cpu_pv, context->esp0);
-}
-
-void *cpu_ctx_init
-(
-    void *thread,
-    void *exec_pt,
-    void *exec_pv
-)
-{
-    sched_thread_t *th = NULL;
-    pcpu_context_t *ctx = NULL;
-    uint8_t         cs = 0x8;
-    uint8_t         seg = 0x10;
-
-    th = thread;
-
-    ctx = (pcpu_context_t*)kmalloc(sizeof(pcpu_context_t));
-
-    if(ctx == NULL)
-        return(NULL);
-
-    memset(ctx, 0, PAGE_SIZE);
-
-    ctx->iframe.rip = (virt_addr_t)exec_pt;
-    ctx->iframe.rsp = th->stack + th->stack_sz;
-    ctx->iframe.ss  = seg;
-    
-    /* a new task does not disable interrupts */
-    ctx->iframe.rflags = (1 << 0) | (1 << 9);
-    ctx->iframe.cs = cs;
-
-#if 0
-    ctx->regs.rdi = (uint64_t)exec_pv;
-    ctx->addr_spc = __read_cr3();
-
-    ctx->dseg = seg;
-
-    ctx->esp0 = vm_alloc(NULL, 
-                         VM_BASE_AUTO, 
-                         PAGE_SIZE, 
-                         VM_HIGH_MEM,
-                         VM_ATTR_WRITABLE);
-
-    if(ctx->esp0 == 0)
-    {
-        vm_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
-        return(NULL);
-    }
-#endif
-    return(ctx);
-}
-
-int cpu_ctx_destroy(void *thread)
-{
-    sched_thread_t *th = NULL;
-    pcpu_context_t *ctx = NULL;
-
-    th = thread;
-
-    if(th == NULL)
-        return(-1);
-
-    ctx = th->context;
-
-    if(ctx == NULL)
-        return(-1);
-
-    /* Sanitize and free ESP0 */
-    memset(&ctx->esp0, 0, PAGE_SIZE);
-    vm_free(NULL, ctx->esp0, PAGE_SIZE);
-
-    /* Sanitize and free context */
-    memset(ctx, 0, PAGE_SIZE);
-    vm_free(NULL, (virt_addr_t)ctx, PAGE_SIZE);
-
-    return(0);
-}
 
 static int pcpu_dev_init(device_t *dev)
 {
@@ -845,8 +740,6 @@ static int pcpu_drv_init(driver_t *drv)
                                                IDT_ALLOC_SIZE,
                                                VM_HIGH_MEM,
                                                VM_ATTR_WRITABLE);
-    int zz = 0;
-
 
     /* Setup the IDT */
     cpu_idt_setup(cpu_drv);
@@ -884,12 +777,12 @@ static int pcpu_drv_init(driver_t *drv)
         {
             timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
         }
-#if 0
+
         if(sched_cpu_init(timer, cpu))
         {
             return(-1);
         }
-#endif
+
     }
 
     return(0);
@@ -900,11 +793,21 @@ cpu_t *cpu_current_get(void)
     device_t *dev = NULL;
     uint32_t cpu_id = 0;
     cpu_t    *cpu = NULL;
+    int int_state = 0;
+
+    int_state = cpu_int_check();
+
+    if(int_state)
+        cpu_int_lock();
+
 
     cpu_id = cpu_id_get();
     
     dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, cpu_id);
     cpu = devmgr_dev_data_get(dev);
+
+    if(int_state)
+        cpu_int_unlock();
 
     return(cpu);
 }

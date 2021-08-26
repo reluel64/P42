@@ -93,9 +93,6 @@ enable_paging:
     lgdt [GDT_PTR64 - __start_ap_begin]
 
     jmp 0x8:(0x8000  + start_64 - __start_ap_begin)
-    
-   
-   ; jmp 0x8:rax
 
 
 [BITS 64]

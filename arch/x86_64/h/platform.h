@@ -105,13 +105,13 @@ typedef struct pcpu_seg_t
     uint64_t gs;
 }__attribute__((packed))  pcpu_seg_t;
 
+
+
 typedef struct pcpu_context_t
 {
-    pcpu_gpr_t gpr;
 
-    /* Stack regs */
-    uint64_t rbp;
-    uint64_t rsp;
+
+    char regs[PAGE_SIZE];
 
     uint64_t rflags;
     uint64_t cr3;
@@ -167,7 +167,7 @@ extern int  __geti();
 extern void __lidt(idt64_ptr_t *);
 extern void __hlt();
 extern void __pause();
-extern void __cpu_context_restore(void);
+
 
 
 #define cpu_halt        __hlt

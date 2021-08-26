@@ -175,7 +175,7 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 
     if(index >= MAX_HANDLERS)
         return;
-
+    kprintf("EXCEPTION\n");
     memset(&inf, 0, sizeof(isr_info_t));
     
     int_lst = &handlers[index];

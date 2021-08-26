@@ -266,7 +266,6 @@ static int ioapic_redirect_vector
             override = (ACPI_MADT_INTERRUPT_OVERRIDE*)subhdr;
             if(override->SourceIrq == (*vector))
             {
-
                 kprintf("REDIRECTING %d to %d\n",(*vector), override->GlobalIrq);
                 (*vector) = override->GlobalIrq;
                 (*flags)  = override->IntiFlags;

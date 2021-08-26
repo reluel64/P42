@@ -718,7 +718,7 @@ static phys_size_t pagemgr_fill_tables_cb
                 * the address from the base remapping table 
                 */
                 ld->level = (virt_addr_t*) (pgmgr.remap_tbl + 
-                                        (ld->current_level  << PAGE_SIZE_SHIFT));
+                            (ld->current_level  << PAGE_SIZE_SHIFT));
                
                 entry = (next_pos >> shift) & 0x1FF;
                
@@ -867,7 +867,7 @@ int pgmgr_map
         kprintf("Failed to map %x\n", ld.error);
         return(-1);
     }
- __write_cr3(__read_cr3());
+    __write_cr3(__read_cr3());
     spinlock_unlock_int(&ctx->lock);
 
     return(0);

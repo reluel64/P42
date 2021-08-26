@@ -42,14 +42,25 @@
         "tuple": "c",
         "type_traits": "c",
         "errno.h": "c",
-        "hash_map": "c"
+        "hash_map": "c",
+        "platform.h": "c",
+        "vm_extent.h": "c",
+        "vm.h": "c",
+        "context.h": "c"
     },
 
-    "editor.fontFamily":"Fira Code",
+    "editor.fontFamily":"Cascadia Code",
     "editor.fontSize": 11,
     "editor.fontLigatures": false,
     "files.autoSave": "onFocusChange",
     "editor.trimAutoWhitespace": true,
     "editor.renderWhitespace": "all",
-    "editor.rulers": [0,80],
+    "editor.rulers": [
+        0,
+        80
+    ],
+    "editor.cursorSmoothCaretAnimation": true,
+    "editor.cursorBlinking": "smooth",
+    "diffEditor.codeLens": true,
+    "editor.inlineSuggest.enabled": true,
 }

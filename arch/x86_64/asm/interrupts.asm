@@ -26,7 +26,6 @@ extern isr_dispatcher
 [BITS 64]
 %macro isr_no_ec_def 1
 isr_%1:
-    cli
     push rbp
     mov rbp, rsp
     push r15
@@ -73,7 +72,6 @@ isr_%1:
 ; error codes
 %macro isr_with_ec_def 1
 isr_%1:
-    cli
     push rbp
     mov rbp, rsp
     push r15

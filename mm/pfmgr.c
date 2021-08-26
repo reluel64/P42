@@ -217,7 +217,12 @@ static void pfmgr_init_free_callback
     local_freer.total_pf       = (e->length - track_len) / PAGE_SIZE;
     local_freer.avail_pf       = local_freer.total_pf;
 
-    kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",__FUNCTION__,e->base, e->length, e->base + e->length);
+    kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",
+            __FUNCTION__,
+            e->base, 
+            e->length, 
+            e->base + e->length);
+
     kprintf("TRACKING START 0x%x LENGTH 0x%x\n",track_addr, track_len);
 
     pfmgr_early_clear_bitmap(&local_freer, 
@@ -257,6 +262,7 @@ static void pfmgr_init_free_callback
     init->prev = track_addr;
         
 }
+
 /* pfmgr_early_init_busy_callback - initialize busy ranges using boot page tables */
 
 static void pfmgr_init_busy_callback
@@ -305,7 +311,11 @@ static void pfmgr_init_busy_callback
                  sizeof(pfmgr_busy_range_t);
 
     base.busyr.count++;
-    kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",__FUNCTION__,e->base, e->length, e->base + e->length);
+    kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",
+            __FUNCTION__,
+            e->base, 
+            e->length, 
+            e->base + e->length);
     
 }
 
@@ -590,7 +600,10 @@ static int pfmgr_mark_bmp
 
     if(pf > 0)
     {
-        kprintf("PF %d pf_pos %d total_pf %d avail_pf %d\n", pf,pf_pos, freer->total_pf, freer->avail_pf);
+        kprintf("PF %d pf_pos %d total_pf %d avail_pf %d\n", 
+                 pf,pf_pos, 
+                 freer->total_pf, 
+                 freer->avail_pf);
     }
 
     return(pf > 0 ? -1 : 0);
@@ -942,7 +955,8 @@ int pfmgr_init(void)
         else
         {
             /* advance manually */
-            hdr = (pfmgr_range_header_t*)((uint8_t*)hdr + sizeof(pfmgr_busy_range_t));
+            hdr = (pfmgr_range_header_t*)((uint8_t*)hdr + 
+                  sizeof(pfmgr_busy_range_t));
         }
    
       phys = (phys_addr_t)hdr->next_range;
