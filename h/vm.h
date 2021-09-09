@@ -17,16 +17,17 @@
 #define VM_ATTR_WRITE_COMBINE     PGMGR_WRITE_COMBINE
 #define VM_ATTR_EXECUTABLE        PGMGR_EXECUTABLE
 
-#define VM_LOW_MEM   (1 << 0)
-#define VM_HIGH_MEM  (1 << 1)
-#define VM_MAPPED    (1 << 2)
-#define VM_ALLOCATED (1 << 3)
-#define VM_PERMANENT (1 << 4)
-#define VM_LOCKED    (1 << 5)
-#define VM_ALLOC_NOW (1 << 6)
-#define VM_LAZY      (1 << 7)
+#define VM_LOW_MEM   (1 << 0) /* Low memory is used            */
+#define VM_HIGH_MEM  (1 << 1) /* High memory is used           */
+#define VM_MAPPED    (1 << 2) /* Memory is used for mapping    */
+#define VM_ALLOCATED (1 << 3) /* Memory is used for allocation */
+#define VM_PERMANENT (1 << 4) /* Memory cannot be swaped       */
+#define VM_LOCKED    (1 << 5) /* Memory cannot be freed        */
+#define VM_LAZY      (1 << 7) /* Memory will be alocated when needed */
 
-#define VM_BASE_AUTO (~0ull)
+#define VM_BASE_AUTO (~0ull)    /* Find the best memory from the either high
+                                 * or low memory 
+                                 */
 
 
 #define VM_CTX_PREFER_HIGH_MEMORY VM_HIGH_MEM
@@ -47,7 +48,10 @@ typedef struct vm_ctx_t
     list_head_t alloc_mem; /* allocated memory */
     uint16_t    free_per_slot;
     uint16_t    alloc_per_slot;
-    virt_addr_t vm_base; /* base address where we will keep the structures */
+    virt_addr_t vm_base; /* base address where 
+                          * we will keep the structures for the current context
+                          * This must be available only in kernel context
+                          */
     pagemgr_ctx_t pagemgr;
     spinlock_t   lock;
     uint32_t     flags;

@@ -22,30 +22,55 @@
 
 #define SCHED_MAX_PRIORITY 255
 
+
+#define NODE_TO_THREAD(x) (sched_thread_t*)(((uint8_t*)(x)) -  \
+                          offsetof(sched_thread_t, node))
+
 typedef struct sched_exec_unit_t sched_exec_unit_t;
+typedef struct sched_thread_t    sched_thread_t;
+typedef struct sched_policy_t
+{
+    char *policy_name;
+
+    int (*next_thread)
+    (
+        list_head_t       *new_th_list,
+        spinlock_t        *new_th_lock,
+        sched_exec_unit_t *unit,
+        sched_thread_t    **next
+    );
+
+    int (*put_thread)
+    (
+        sched_thread_t *th
+    );
+
+}sched_policy_t;
 
 typedef struct sched_thread_t
 {
-    list_node_t        node;        /* node in the queue                             */
-    list_node_t        pend_node;   /* node for synchronization                      */
-    uint32_t           flags;       /* thread flags                                  */
-    void              *owner;       /* owner of the thread - if kernel, owner = null */
-    void              *context;     /* platform dependent context                    */
-    uint32_t           id;          /* thread id                                     */
-    uint16_t           prio;        /* priority                                      */
-    virt_addr_t        stack;       /* start of memory allocated for the stack       */
-    virt_addr_t        stack_end;
-    virt_size_t        stack_sz;    /* stack size                                    */
-    void              *entry_point; /* entry point of the thread                     */
-    void              *pv;          /* parameter for the entry point of the thread   */
-    sched_exec_unit_t *unit;        /* execution unit on which the thread is running */
-
-    spinlock_t        lock;         /* lock to protect the structure members         */
-    uint32_t          slept;        /* sleeping cursor                               */
-    uint32_t          to_sleep;     /* amount in ms to sleep                         */
-    uint32_t          remain;       /* reamining time before task switch             */
-    void              *rval;        /* return value */
+    
+    list_node_t        node;         /* node in the queue                             */
+    list_node_t        pend_node;    /* node for synchronization                      */
+    virt_addr_t        stack_bottom; /* start of memory allocated for the stack       */
+    virt_size_t        stack_sz;     /* stack size                                    */
+    virt_size_t        stack_top;   
+    uint32_t           flags;        /* thread flags                                  */
+    void              *owner;        /* owner of the thread - if kernel, owner = null */
+    virt_addr_t        context;
+    uint32_t           id;           /* thread id                                     */
+    uint16_t           prio;         /* priority                                      */
+    virt_addr_t        stack_pos;
+    void              *entry_point;  /* entry point of the thread                     */
+    void              *arg;          /* parameter for the entry point of the thread   */
+    sched_exec_unit_t *unit;         /* execution unit on which the thread is running */
+    spinlock_t        lock;          /* lock to protect the structure members         */
+    uint32_t          slept;         /* sleeping cursor                               */
+    uint32_t          to_sleep;      /* amount in ms to sleep                         */
+    uint32_t          remain;        /* reamining time before task switch             */
+    void              *rval;         /* return value                                  */
     uint64_t          affinity[CPU_AFFINITY_VECTOR];
+    
 }sched_thread_t;
 
 
@@ -60,7 +85,6 @@ typedef struct sched_exec_unit_t
     list_head_t       blocked_q;    /* queue of blocked threads                      */
     list_head_t       sleep_q;      /* queue of sleeping threads                     */
     list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
-    list_head_t       blk_tm_q;     /* queue of blocked with timeout queue           */
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t    idle;         /* our dearest idle task                         */
     spinlock_t        lock;         /* lock to protect the queues                    */
@@ -85,6 +109,7 @@ typedef struct sched_exec_unit_t
     uint32_t          c_sleep;      /* currsor for least timeout for threads that
                                      * are sleeping                                  
                                      */
+    sched_policy_t    *policy;
 }sched_exec_unit_t;
 
 typedef struct sched_owner_t
@@ -113,6 +138,10 @@ void sched_block_thread(sched_thread_t *th);
 void sched_yield();
 void sched_sleep(uint32_t delay);
 int sched_enqueue_thread
+(
+    sched_thread_t *th
+);
+void sched_thread_entry_point
 (
     sched_thread_t *th
 );

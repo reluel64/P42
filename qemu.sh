@@ -1,6 +1,6 @@
 clear
-qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64,+x2apic -smp 8 \
--drive format=raw,file='/home/alex/disk.img' -m 24G       \
+qemu-system-x86_64 -machine q35,accel=kvm -cpu Icelake-Server,+x2apic -smp 8 \
+-drive format=raw,file='/home/alex/disk.img' -m 8G       \
 -no-reboot                                                           \
 -no-shutdown                                                         \
 -chardev stdio,mux=on,id=char0                                       \
@@ -13,6 +13,7 @@ qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64,+x2apic -smp 8 \
  
 #-monitor stdio
 
+#qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64,+x2apic -smp 8 \
 
 #clear
 #qemu-system-x86_64 -machine q35 -cpu Icelake-Server,+x2apic -smp 32,sockets=4,maxcpus=32 \

@@ -46,7 +46,10 @@
         "platform.h": "c",
         "vm_extent.h": "c",
         "vm.h": "c",
-        "context.h": "c"
+        "context.h": "c",
+        "i8254.h": "c",
+        "scheduler.h": "c",
+        "linked_list.h": "c"
     },
 
     "editor.fontFamily":"Cascadia Code",
@@ -63,4 +66,6 @@
     "editor.cursorBlinking": "smooth",
     "diffEditor.codeLens": true,
     "editor.inlineSuggest.enabled": true,
+    "editor.bracketPairColorization.enabled": true
+ 
 }

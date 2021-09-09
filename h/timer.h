@@ -21,6 +21,7 @@ typedef struct timer_api_t
     int (*enable)(device_t *dev);
     int (*disable)(device_t *dev);
     int (*reset)  (device_t *dev);
+    int (*delay_poll)(device_t *dev, uint32_t delay_ms);
 }timer_api_t;
 
 

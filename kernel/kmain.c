@@ -24,7 +24,7 @@
 static sched_thread_t th1;
 static sched_thread_t th2;
 static sched_thread_t init_th;
-
+static sched_thread_t init_th2;
 uint16_t pciConfigReadWord (uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
     uint32_t address;
     uint32_t lbus  = (uint32_t)bus;
@@ -67,8 +67,9 @@ static void kmain_sys_init(void)
 
     while(1)
     {
-        schedule();
         kprintf("TEST\n");
+        for(int i = 0; i < INT32_MAX / 2 - 1; i++);
+                schedule();
     }
     platform_init();
 
@@ -111,86 +112,70 @@ static void kmain_sys_init(void)
 
 }
 
-uint64_t tcb1[PAGE_SIZE];
-uint64_t tcb2[PAGE_SIZE];
-uint64_t  stack_1[PAGE_SIZE];
-uint64_t stack_2[PAGE_SIZE];
-void *crt;
-void *next_crt;
 
-
-static int was = 0;
-extern void __context_save(void *tcb);
-extern void __context_load(void *tcb);
-
-static void context_save1(void *tcb)
+int func2(int i)
 {
-    __context_save(tcb);
-}
-static void  context_load1(void *tcb)
-{
-    __context_load(tcb);
-}
-
-
-static int  sched_yield1(void)
-{
-   
-    context_save1(crt);
-    kprintf("SWITCHING\n");
-    if(crt == th1.context)
-    {
-      kprintf("TCB1\n");
-        crt = th2.context;
-    }
-    else
-    {
-        kprintf("TCB2\n");
-        crt = th1.context;
-    }
-    
-
-    kprintf("RESTORING\n");
-    context_load1(crt);
-}
-
-
-
-
-int func1(void)
-{
-    while(1)
-    {
-     
-
-        kprintf("Hello1 ",tcb1[RIP_INDEX],tcb2[RIP_INDEX]);
-        for(int i = 0; i<10;i++)
-        {
-            kprintf("%d ", i);
-        }
-        kprintf("\n");
-      sched_yield1();
- 
-
-    }
-
+    kprintf("XXXX %d\n",i);
+    schedule();
     return(0);
 }
 
-
-int func2(void)
+static void kmain_sys_init2(void *arg)
 {
-    int i = 20;
+    int hr = 0;
+    int min = 0;
+    int sec = 0;
+
+    /* Start APs */
+    kprintf("starting APs\n");
+    
+    kprintf("Platform init\n");
+
     while(1)
     {
-        kprintf("Hello2 %d",i++);
-for(int i = 0; i<10;i++)
-        {
-            kprintf("%d ", i);
-        }
-        kprintf("\n");
-      sched_yield1();
+        kprintf("TEST2 %x\n", arg);
+        for(int i = 0; i < INT32_MAX/2 - 1; i++);
+        func2(90);
     }
+    platform_init();
+
+   vga_print("Hello World\n");
+
+    for(int bus = 0; bus < 256; bus++)
+    {
+        for(int slot = 0; slot < 32; slot++)
+        {
+            pciCheckVendor(bus, slot);
+        }
+    }
+
+#if 0
+    while(1)
+    {
+        
+      
+//mask_test();
+        
+        sec++;
+
+        if(sec == 60)
+        {
+            min++;
+            sec = 0;
+        }
+
+        if(min == 60)
+        {
+            min = 0;
+            sec = 0;
+            hr++;
+        }
+    
+
+    }
+#endif
+
+
 }
 
 #include <thread.h>
@@ -226,9 +211,14 @@ void kmain()
     /* Initialize base of the scheduler */
     sched_init();
   
+
+    kprintf("TH1 %x TH2 %x\n", &init_th, &init_th2);
+
     /* Prepare the initialization thread */
    thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 0);
+   thread_create_static(&init_th2, kmain_sys_init2,0x200, 0x1000, 0);
     thread_start(&init_th);
+     thread_start(&init_th2);
     /* Enqueue the thread */
   
 #if 0
@@ -242,7 +232,7 @@ void kmain()
 #if 1
 
  kprintf("SCHED HELLO WORLD\n");
-
+ vga_print("HELLO WORLD\n");
     /* initialize the CPU driver and the BSP */
     if(cpu_init())
     {
@@ -253,7 +243,7 @@ void kmain()
         }
     }
 
-    vga_print("HELLO WORLD\n");
+   
 
 #endif
 

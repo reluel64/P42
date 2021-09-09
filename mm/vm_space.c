@@ -1,3 +1,7 @@
+/* Virtual memory space management
+ * Part of P42 Kernel
+ */
+
 #include <utils.h>
 #include <vm.h>
 #include <vm_extent.h>

@@ -2,6 +2,15 @@
 #include <context.h>
 #include <utils.h>
 
+
+static void thread_entry_point
+(
+    sched_thread_t *th
+)
+{
+    
+}
+
 static int _thread_create
 (
     void *out_th,
@@ -24,10 +33,10 @@ static int _thread_create
 
 
     th->prio = prio;
-    th->pv   = arg;
+    th->arg   = arg;
     th->entry_point = th_entry;
     th->stack_sz = stack_sz;
-
+    th->flags = THREAD_READY;
    
     /* Initialize the platform context */
     ret = context_init(th);

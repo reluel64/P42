@@ -480,7 +480,6 @@ static int ioapic_mask
     return(ioapic_toggle_mask(dev, irq, 1));
 }
 
-
 static int ioapic_unmask
 (
     device_t *dev,
@@ -489,8 +488,6 @@ static int ioapic_unmask
 {
     return(ioapic_toggle_mask(dev, irq, 0));
 }
-
-
 
 static int ioapic_probe(device_t *dev)
 {
@@ -579,7 +576,6 @@ static driver_t ioapic_drv =
     .drv_type   = INTERRUPT_CONTROLLER,
     .drv_api    = &api
 };
-
 
 int ioapic_register(void)
 {

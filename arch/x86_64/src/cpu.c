@@ -669,7 +669,7 @@ static int pcpu_dev_init(device_t *dev)
 
     /* Prepare the GDT */
     gdt_per_cpu_init(cpu->cpu_pv);
-  
+
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
 

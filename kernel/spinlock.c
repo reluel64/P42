@@ -20,11 +20,7 @@ void spinlock_rw_init(spinlock_t *s)
 
 void spinlock_lock(spinlock_t *s)
 {  
-    int expected = 0;
-
-   
-    cpu_int_lock();
-    
+    int expected = 0;    
 
     while(!__atomic_compare_exchange_n(&s->lock, 
                                       &expected, 1, 0, 
@@ -46,8 +42,6 @@ void spinlock_unlock(spinlock_t *s)
                                __ATOMIC_SEQ_CST, 
                                __ATOMIC_SEQ_CST);
 
-
-   cpu_int_unlock();
 }
 
 void spinlock_lock_int(spinlock_t *s)

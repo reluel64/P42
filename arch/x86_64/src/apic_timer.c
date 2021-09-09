@@ -78,7 +78,7 @@ static int apic_timer_init(device_t *dev)
     if(apic_timer == NULL)
         return(-1);
 
-
+    cpu_int_unlock();
     spinlock_init(&apic_timer->lock);
     linked_list_init(&apic_timer->queue);
 
@@ -126,7 +126,12 @@ static int apic_timer_init(device_t *dev)
                             &data, 
                             1);
 
-    isr_install(apic_timer_isr, dev, PLATFORM_LOCAL_TIMER_VECTOR, 0, &timer_isr);
+    isr_install(apic_timer_isr, 
+                dev, 
+                PLATFORM_LOCAL_TIMER_VECTOR, 
+                0, 
+                &timer_isr);
+                
     return(0);
 }
 

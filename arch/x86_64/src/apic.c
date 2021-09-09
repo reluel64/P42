@@ -350,8 +350,6 @@ static int apic_probe(device_t *dev)
     if(!devmgr_dev_name_match(dev, APIC_DRIVER_NAME))
         return(-1);
 
-    
-    
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
     if(ACPI_FAILURE(status))
@@ -375,8 +373,14 @@ static int apic_dev_init(device_t *dev)
     uint8_t             trigger   = 0;
     uint32_t            data      = 0;
     uint64_t            apic_base = 0;
+    int                 int_status = 0;
+
     kprintf("APIC_DEV_INIT\n");
-    cpu_int_lock();
+
+    int_status = cpu_int_check();
+
+    if(int_status)
+        cpu_int_lock();
     
     drv = devmgr_dev_drv_get(dev);
     apic_drv = devmgr_drv_data_get(drv);
@@ -384,7 +388,15 @@ static int apic_dev_init(device_t *dev)
     apic = kcalloc(sizeof(apic_device_t), 1);
 
     if(apic == NULL)
+    {
+        if(int_status)
+        {
+            cpu_int_unlock();
+        }
+
         return(-1);
+    }
+        
     
     /* If x2APIC is supported, then enable it */
     if(apic_drv->x2)
@@ -470,9 +482,10 @@ static int apic_dev_init(device_t *dev)
                         EOI_REGISTER, 
                         &data, 
                         1);
- 
-    cpu_int_unlock();
-   
+    if(int_status)
+    {
+        cpu_int_unlock();
+    }
     return(0);
 }
 
@@ -501,11 +514,11 @@ static int apic_drv_init(driver_t *drv)
         apic_drv->paddr  = apic_phys_addr();
 
         apic_drv->vaddr  = vm_map(NULL, VM_BASE_AUTO,  
-                                PAGE_SIZE,
-                                apic_drv->paddr, 
-                                0,
-                                VM_ATTR_WRITABLE |
-                                VM_ATTR_STRONG_UNCACHED);
+                                  PAGE_SIZE,
+                                  apic_drv->paddr, 
+                                  0,
+                                  VM_ATTR_WRITABLE |
+                                  VM_ATTR_STRONG_UNCACHED);
         
         if(apic_drv->vaddr == 0)
         {

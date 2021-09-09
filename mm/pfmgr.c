@@ -22,9 +22,6 @@ static pfmgr_t pfmgr_interface;
 #define TRACK_LEN(x) (ALIGN_UP((sizeof(pfmgr_free_range_t)) + \
                                BITMAP_SIZE_FOR_AREA((x)), PAGE_SIZE))
 
-#define BIT_SET(x) ((1ull) << x)
-#define BIT_CLEAR(x) (~((1ull) << x))
-
 /* pfmgr_in_range -  check if a a memory interval is in range */
 
 static inline int pfmgr_in_range
@@ -155,7 +152,7 @@ static void pfmgr_early_mark_bitmap
     
     kprintf("bmp_phys %x\n",bmp_phys);
 
-    while(pos < len)
+    while(pos < len && fmem->avail_pf > 0)
     {
         pf_pos = ((addr + pos) - fmem->hdr.base) / PAGE_SIZE;
         pf_ix = pf_pos % PF_PER_ITEM;
@@ -164,12 +161,9 @@ static void pfmgr_early_mark_bitmap
         if(pf_ix == 0 || bmp == NULL)
             bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + bmp_off);
 
-        bmp = (virt_addr_t*)((uint8_t*)bmp );
-
         bmp[0] |= ((virt_addr_t)1 << pf_ix);
         pos += PAGE_SIZE;
         fmem->avail_pf--;
-
     }
 }
 
@@ -433,17 +427,17 @@ static int pfmgr_lkup_bmp_for_free_pf
 )
 {
     pfmgr_range_header_t *hdr = NULL;
-    phys_addr_t pf_count   = 0;
-    phys_addr_t start_addr = 0;
-    phys_size_t pf_ix              = 0;
-    phys_size_t pf_pos             = 0;
-    phys_size_t bmp_pos            = 0;
-    phys_size_t mask_frames        = 0;
-    phys_size_t mask               = 0;
-    phys_size_t pf_ret             = 0;
-    phys_size_t req_pf             = 0;
-    uint8_t     stop               = 0;
-    int         status             = -1;
+    phys_addr_t pf_count      = 0;
+    phys_addr_t start_addr    = 0;
+    phys_size_t pf_ix         = 0;
+    phys_size_t pf_pos        = 0;
+    phys_size_t bmp_pos       = 0;
+    phys_size_t mask_frames   = 0;
+    phys_size_t mask          = 0;
+    phys_size_t pf_ret        = 0;
+    phys_size_t req_pf        = 0;
+    uint8_t     stop          = 0;
+    int         status        = -1;
 
     /* Check if there's anything interesting here */
     if(freer->avail_pf == 0)
@@ -491,6 +485,10 @@ static int pfmgr_lkup_bmp_for_free_pf
             mask = ~(virt_addr_t)0;
         }
 
+        /* 
+         * Check if we have PF_PER_ITEM from one shot 
+         * Otherwise we must check every bit
+         */
         if((freer->bmp[bmp_pos] & mask) == 0)
         {
             if(pf_ret == 0)
@@ -850,8 +848,8 @@ static int pfmgr_free
             /* WTF is this? */
             return(-1);
         }
-        /* Find free range */
-       
+
+        /* Clear free range */
         if(pfmgr_clear_bmp(freer, addr, to_free_pf) !=0)
         {
             kprintf("TO_FREE_PF 0x%x\n",addr);

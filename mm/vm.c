@@ -1,4 +1,4 @@
-
+/* Virtual Memory API */
 #include <vm.h>
 #include <vm_extent.h>
 #include <vm_space.h>
@@ -112,7 +112,7 @@ static int vm_setup_protected_regions
         }
     }
 }
- 
+
 int vm_init(void)
 {
 
@@ -143,10 +143,10 @@ int vm_init(void)
    
     spinlock_init(&kernel_ctx.lock);
 
-   status = pgmgr_alloc(&kernel_ctx.pagemgr,
-                        kernel_ctx.vm_base,
-                        VM_SLOT_SIZE,
-                        PAGE_WRITABLE);
+    status = pgmgr_alloc(&kernel_ctx.pagemgr,
+                          kernel_ctx.vm_base,
+                          VM_SLOT_SIZE,
+                          PAGE_WRITABLE);
 
     if(status)
     {
@@ -154,7 +154,7 @@ int vm_init(void)
         while(1);
     }
 
-     hdr = (vm_slot_hdr_t*) kernel_ctx.vm_base;
+    hdr = (vm_slot_hdr_t*) kernel_ctx.vm_base;
 
     /* Clear the memory */
     memset(hdr,    0, VM_SLOT_SIZE);
@@ -214,9 +214,6 @@ int vm_init(void)
 
     return(VM_OK);
 }
-
-
-
 
 virt_addr_t vm_alloc
 (
@@ -349,9 +346,6 @@ virt_addr_t vm_map
 
     if(addr == 0)
         return(0);
-    
-
-    /* Check if we also need to allocate physical space now */
  
     status = pgmgr_map(&ctx->pagemgr,
                             addr,

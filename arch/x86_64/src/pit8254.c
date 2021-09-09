@@ -190,6 +190,15 @@ static int pit8254_get_cb
     return(ret);
 }
 
+static int pit8254_delay_poll
+(
+    device_t *dev,
+    uint32_t delay
+)
+{
+    return(0);
+}
+
 static timer_api_t pit8254_api = 
 {
     .install_cb    = pit8254_install_cb,
@@ -197,7 +206,8 @@ static timer_api_t pit8254_api =
     .get_cb        = pit8254_get_cb,
     .enable        = NULL,
     .disable       = NULL,
-    .reset         = pit8254_rearm
+    .reset         = pit8254_rearm,
+    .delay_poll    = pit8254_delay_poll
 };
 
 static driver_t pit8254 = 
