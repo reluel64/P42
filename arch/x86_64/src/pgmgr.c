@@ -1211,12 +1211,12 @@ int pagemgr_unmap
 static int pagemgr_page_fault_handler(void *pv, isr_info_t *inf)
 {
 
-    interrupt_frame_t *int_frame = 0;
+    isr_frame_t *int_frame = 0;
     virt_addr_t fault_address = 0;
     virt_addr_t error_code = *(virt_addr_t*)(inf->iframe - sizeof(uint64_t));
 
     fault_address = __read_cr2();
-    int_frame = (interrupt_frame_t*)inf->iframe;
+    int_frame = (isr_frame_t*)inf->iframe;
 
     kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x RFLAGS 0x%x\n",
             fault_address,  \

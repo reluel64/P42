@@ -175,6 +175,7 @@ int kprintf(char *fmt,...)
         }
         fmt++;
     }
+    va_end(lst);
 }
 
 #if 0

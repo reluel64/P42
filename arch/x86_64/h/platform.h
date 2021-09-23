@@ -68,14 +68,14 @@ typedef struct cpu_platfrom_driver_t
     idt64_ptr_t    idt_ptr;
 }cpu_platform_driver_t;
 
-typedef struct interrupt_frame_t
+typedef struct isr_frame_t
 {
     uint64_t rip;
     uint64_t cs;
     uint64_t rflags;
     uint64_t rsp;
     uint64_t ss;
-}__attribute__((packed))  interrupt_frame_t;
+}__attribute__((packed))  isr_frame_t;
 
 
 typedef struct pcpu_gpr_t
@@ -127,7 +127,7 @@ typedef struct pcpu_context_t
      */
     
     uint64_t          tss_esp0;
-    interrupt_frame_t iframe;
+    isr_frame_t iframe;
 }__attribute__((packed))  pcpu_context_t;
 
 

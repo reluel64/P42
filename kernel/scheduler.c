@@ -12,9 +12,10 @@
 #include <scheduler.h>
 #include <context.h>
 #include <thread.h>
-#define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
+#include <isr.h>
+#include <platform.h>
 
-                          
+#define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
 #define SCHEDULER_TICK_MS 1
 
 static list_head_t new_threads;
@@ -24,17 +25,24 @@ static spinlock_t  new_threads_lock;
 static sched_owner_t kernel;
 
 static void sched_idle_thread(void *pv);
+static void schedule_main(void);
 void schedule(void);
 
 extern void __context_unit_start(void *tcb);
 extern int sched_simple_register(sched_policy_t **p);
+
+static uint32_t sched_update_thread_time
+(
+    void *unit,
+    void *isr_info
+);
+
 
 void sched_thread_entry_point
 (
     sched_thread_t *th
 )
 {
-    sched_thread_t  *self        = NULL;
     int             int_status   = 0;
     void *(*entry_point)(void *) = NULL;
 
@@ -46,7 +54,7 @@ void sched_thread_entry_point
      */
     kprintf("UNLOCKING %x\n",th->unit);
     spinlock_unlock_int(&th->unit->lock);
-    
+
     if(entry_point != NULL)
     {
         th->rval = entry_point(th->arg);
@@ -92,7 +100,7 @@ int sched_start_thread(sched_thread_t *th)
 
     spinlock_unlock_int(&new_threads_lock);
 
-    cpu_issue_ipi(IPI_DEST_ALL, 0, IPI_RESCHED);
+    schedule();
 
     return(0);
 }
@@ -105,8 +113,13 @@ sched_thread_t *sched_thread_self(void)
     sched_thread_t    *self = NULL;
 
     cpu = cpu_current_get();
-    unit = cpu->sched;
 
+    if(cpu == NULL)
+        return(NULL);
+    
+    unit = cpu->sched;
+    if(unit == NULL)
+        return(NULL);
     spinlock_lock_int(&unit->lock);
     
     self = unit->current;
@@ -115,9 +128,6 @@ sched_thread_t *sched_thread_self(void)
 
     return(self);
 }
-
-
-
 
 /*
  * sched_init - initialize scheduler structures
@@ -143,19 +153,24 @@ int sched_init(void)
  * sched_cpu_init - initializes per CPU scheduler structures
  */
 
-int sched_cpu_init(device_t *timer, cpu_t *cpu)
+int sched_unit_init
+(
+    device_t *timer, 
+    cpu_t *cpu
+)
 {
     sched_exec_unit_t *unit       = NULL;
     int                int_status = 0;
 
-    if(timer == NULL || cpu == NULL)
+    if(cpu == NULL)
     {
-        kprintf("ERROR: TIMER %x CPU %x\n", timer, cpu);
+        kprintf("ERROR: CPU %x\n", cpu);
         return(-1);
     }
    
     kprintf("Initializing Scheduler for CPU %d\n",cpu->cpu_id);
 
+    /* Allocate cleared memory for the unit */
     unit = kcalloc(sizeof(sched_exec_unit_t), 1);
 
     if(unit == NULL)
@@ -171,47 +186,51 @@ int sched_cpu_init(device_t *timer, cpu_t *cpu)
     /* tell the scheduler unit on which cpu it belongs */
     unit->cpu = cpu;
 
+    /* Initialize the queues */
     linked_list_init(&unit->ready_q);
     linked_list_init(&unit->blocked_q);
     linked_list_init(&unit->sleep_q);
     linked_list_init(&unit->dead_q);
 
+    /* Set up the spinlock for the unit */
     spinlock_init(&unit->lock);
     
     /* For now we have only one policy - a primitive one */
     sched_simple_register(&unit->policy);
-    
-    memset(&unit->idle, 0, sizeof(sched_thread_t));
-    
-    unit->timer_dev = timer;
-    unit->timer_on  = 0;
 
     /* Initialize the idle thread
      * The scheduler will automatically start executing 
      * it in case there are no other threads in the ready_q
      */
-    thread_create_static(&unit->idle, sched_idle_thread, unit, PAGE_SIZE, 255);
+    thread_create_static(&unit->idle, 
+                         sched_idle_thread, 
+                         unit, 
+                         PAGE_SIZE, 
+                         255);
     
     unit->idle.unit = unit;
-    
-    kprintf("IDLE THREAD %x\n",&unit->idle);
-    kprintf("PENDING THREADS %d\n", linked_list_count(&new_threads));
+
     /* Add the unit to the list */
     spinlock_write_lock_int(&units_lock);
 
     linked_list_add_tail(&units, &unit->node);
     
     spinlock_write_unlock_int(&units_lock);
-    
+
+    /* Link the execution unit to the timer provided by
+     * platform's CPU driver
+     */
+    if(timer != NULL)
+    {
+        unit->timer_dev = timer;
+        timer_dev_connect_cb(timer, sched_update_thread_time, unit);
+        timer_dev_enable(timer); 
+    }
+
     /* From now , we are entering the unit's idle routine */
     context_unit_start(&unit->idle);
 
-    while(1)
-    {
-       // cpu_halt();
-    }
-
-    /* make the compiler happy */
+    /* make the compiler happy  - we would never reach this*/
     return(0);
 
 }
@@ -221,23 +240,102 @@ void sched_yield()
    schedule();
 }
 
+void sched_unblock_thread
+(
+    sched_thread_t *th
+)
+{
+    spinlock_lock_int(&th->lock);
+
+    __atomic_and_fetch(&th->flags, ~THREAD_BLOCKED, __ATOMIC_SEQ_CST);
+
+    spinlock_unlock_int(&th->lock);
+}
+
+void sched_block_thread
+(
+    sched_thread_t *th
+)
+{
+    spinlock_lock_int(&th->lock);
+
+    __atomic_or_fetch(&th->flags, THREAD_BLOCKED, __ATOMIC_SEQ_CST);
+
+    spinlock_unlock_int(&th->lock);
+}
+
+void sched_sleep_thread
+(
+    sched_thread_t *th
+)
+{
+    spinlock_lock_int(&th->lock);
+
+    __atomic_or_fetch(&th->flags, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+
+    spinlock_unlock_int(&th->lock);
+}
+
+void sched_wake_thread
+(
+    sched_thread_t *th
+)
+{
+    spinlock_lock_int(&th->lock);
+
+    __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+
+    spinlock_unlock_int(&th->lock);
+}
+
+
+static uint32_t sched_update_thread_time
+(
+    void *pv_unit,
+    void *isr_inf
+)
+{
+    sched_exec_unit_t *unit = NULL;
+    sched_policy_t    *policy = NULL;
+    sched_thread_t    *thread = NULL;
+
+    unit = pv_unit;
+
+    spinlock_lock_int(&unit->lock);
+
+    policy = unit->policy;
+
+    if(unit->current)
+        thread = unit->current;
+    else
+        thread = &unit->idle;
+
+    policy->update_time(thread);
+
+    spinlock_unlock_int(&unit->lock);
+
+    return(0);
+    
+}
+
 /******************************************************************************/
 
-static void sched_idle_thread(void *pv)
+static void sched_idle_thread
+(
+    void *pv
+)
 {
     sched_exec_unit_t *unit       = NULL;
     sched_thread_t    *th         = NULL;
     int                int_status = 0;
     list_node_t        *c         = NULL;
     list_node_t        *n         = NULL;
-    
-    kprintf("HELLOOOOOO\n");
 
 
     unit = (sched_exec_unit_t*)pv;
     
     kprintf("Entered idle loop on %x\n", unit->cpu->cpu_id);
-    schedule();
+
     while(1)
     {
         cpu_halt();
@@ -275,8 +373,30 @@ static void sched_context_switch
     context_switch(prev, next);
 }
 
+int sched_need_resched
+(
+    sched_exec_unit_t *unit
+)
+{
+    sched_thread_t *th = NULL;
+
+    if(unit->current)
+        th = unit->current;
+    else
+        th = &unit->idle;
+    
+    /* Return a boolean (TRUE or FALSE) value - 
+     * not the value of THREAD_NEED_RESCHEDULE 
+     */
+    return(!!(th->flags & THREAD_NEED_RESCHEDULE));
+}
 
 void schedule(void)
+{
+    schedule_main();
+}
+
+static void schedule_main(void)
 {
     cpu_t             *cpu     = NULL;
     list_node_t       *new_th  = NULL;
@@ -286,6 +406,7 @@ void schedule(void)
     sched_thread_t    *prev_th = NULL;
     sched_policy_t    *policy  = NULL;
     int               status = 0;
+    
     cpu    = cpu_current_get();
     unit   = cpu->sched;
     policy = unit->policy;
@@ -318,10 +439,6 @@ void schedule(void)
         next_th->unit = unit;
         unit->current = next_th;
     }
-
-    
-
-    kprintf("SWITCH PREV %x NEXT %x\n",prev_th, next_th);
 
     /* Switch context */
     sched_context_switch(prev_th, next_th);

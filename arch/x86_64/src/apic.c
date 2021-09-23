@@ -549,6 +549,8 @@ static int apic_drv_init(driver_t *drv)
                 1, 
                 &eoi_isr);
 
+   
+
     devmgr_drv_data_set(drv, apic_drv);
 
     return(0);

@@ -569,7 +569,7 @@ static void cpu_entry_point(void)
     if(timer == NULL)
         timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
 
-    sched_cpu_init(timer, cpu);
+    sched_unit_init(timer, cpu);
 
     kprintf("HALTING CPU %x\n",cpu_id);
 
@@ -778,7 +778,7 @@ static int pcpu_drv_init(driver_t *drv)
             timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
         }
 
-        if(sched_cpu_init(timer, cpu))
+        if(sched_unit_init(timer, cpu))
         {
             return(-1);
         }

@@ -35,8 +35,6 @@ int devmgr_show_devices(void)
 
     dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(list_node_t*));
 
-    memset(dev_stack, 0, sizeof(dev_stack));
-
     node = linked_list_first(&root_bus.children);
 
     for(;;)

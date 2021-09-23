@@ -20,6 +20,7 @@
 #include <semaphore.h>
 #include <mutex.h>
 #include <context.h>
+#include <thread.h>
 
 static sched_thread_t th1;
 static sched_thread_t th2;
@@ -64,12 +65,11 @@ static void kmain_sys_init(void)
     kprintf("starting APs\n");
     
     kprintf("Platform init\n");
-
     while(1)
     {
+        kprintf("XXXX %d\n",cpu_int_check());
         kprintf("TEST\n");
         for(int i = 0; i < INT32_MAX / 2 - 1; i++);
-                schedule();
     }
     platform_init();
 
@@ -82,41 +82,13 @@ static void kmain_sys_init(void)
             pciCheckVendor(bus, slot);
         }
     }
-
-#if 0
-    while(1)
-    {
-        
-      
-//mask_test();
-        
-        sec++;
-
-        if(sec == 60)
-        {
-            min++;
-            sec = 0;
-        }
-
-        if(min == 60)
-        {
-            min = 0;
-            sec = 0;
-            hr++;
-        }
-    
-
-    }
-#endif
-
-
 }
 
 
 int func2(int i)
 {
-    kprintf("XXXX %d\n",i);
-    schedule();
+    kprintf("XXXX %d\n",cpu_int_check());
+  //  schedule();
     return(0);
 }
 
@@ -149,36 +121,7 @@ static void kmain_sys_init2(void *arg)
         }
     }
 
-#if 0
-    while(1)
-    {
-        
-      
-//mask_test();
-        
-        sec++;
-
-        if(sec == 60)
-        {
-            min++;
-            sec = 0;
-        }
-
-        if(min == 60)
-        {
-            min = 0;
-            sec = 0;
-            hr++;
-        }
-    
-
-    }
-#endif
-
-
 }
-
-#include <thread.h>
 /* Kernel entry point */
 
 void kmain()
@@ -210,29 +153,11 @@ void kmain()
  
     /* Initialize base of the scheduler */
     sched_init();
-  
-
-    kprintf("TH1 %x TH2 %x\n", &init_th, &init_th2);
 
     /* Prepare the initialization thread */
-   thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 0);
-   thread_create_static(&init_th2, kmain_sys_init2,0x200, 0x1000, 0);
-    thread_start(&init_th);
-     thread_start(&init_th2);
-    /* Enqueue the thread */
-  
-#if 0
-    while(1)
-    {
-        vm_alloc(NULL, VM_BASE_AUTO, PAGE_SIZE*512, 0 ,0);
-        pfmgr_show_free_memory();
-    }
-#endif
+  //  thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 0);
+   // thread_start(&init_th);
 
-#if 1
-
- kprintf("SCHED HELLO WORLD\n");
- vga_print("HELLO WORLD\n");
     /* initialize the CPU driver and the BSP */
     if(cpu_init())
     {
@@ -242,17 +167,4 @@ void kmain()
             cpu_halt();
         }
     }
-
-   
-
-#endif
-
-
-vga_print("HELLO\n");
-
-kprintf("STOP\n");
-kprintf("BIBIRIBIS\n");
-
-
-    while(1);
 }

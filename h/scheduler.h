@@ -11,8 +11,8 @@
 #define THREAD_SLEEPING         (1 << 3)
 #define THREAD_DEAD             (1 << 4)
 #define THREAD_ALLOCATED        (1 << 5)
+#define THREAD_NEED_RESCHEDULE  (1 << 6)
 #define CPU_AFFINITY_VECTOR     (0x8)
-
 
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
@@ -45,6 +45,11 @@ typedef struct sched_policy_t
         sched_thread_t *th
     );
 
+    int (*update_time)
+    (
+        sched_thread_t *th
+    );
+
 }sched_policy_t;
 
 typedef struct sched_thread_t
@@ -70,7 +75,7 @@ typedef struct sched_thread_t
     uint32_t          remain;        /* reamining time before task switch             */
     void              *rval;         /* return value                                  */
     uint64_t          affinity[CPU_AFFINITY_VECTOR];
-    
+
 }sched_thread_t;
 
 
@@ -121,7 +126,12 @@ typedef struct sched_owner_t
 }sched_owner_t;
 
 
-int sched_cpu_init(device_t *timer, cpu_t *cpu);
+int sched_unit_init
+(
+    device_t *timer, 
+    cpu_t *cpu
+);
+
 int sched_init(void);
 int sched_init_thread
 (
@@ -131,16 +141,43 @@ int sched_init_thread
     uint32_t    prio,
     void *pv
 );
-int sched_start_thread(sched_thread_t *th);
+
+int sched_start_thread
+(
+    sched_thread_t *th
+);
+
+int sched_need_resched
+(
+    sched_exec_unit_t *unit
+);
+
 sched_thread_t *sched_thread_self(void);
-void sched_unblock_thread(sched_thread_t *th);
-void sched_block_thread(sched_thread_t *th);
+
+void sched_unblock_thread
+(
+    sched_thread_t *th
+);
+
+void sched_block_thread
+(
+    sched_thread_t *th
+);
+
+void sched_unblock_thread
+(
+    sched_thread_t *th
+);
+
 void sched_yield();
+
 void sched_sleep(uint32_t delay);
+
 int sched_enqueue_thread
 (
     sched_thread_t *th
 );
+
 void sched_thread_entry_point
 (
     sched_thread_t *th

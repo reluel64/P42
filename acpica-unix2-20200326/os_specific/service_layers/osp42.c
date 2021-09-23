@@ -1102,7 +1102,6 @@ ACPI_STATUS
 AcpiOsCreateLock (
     ACPI_SPINLOCK           *OutHandle)
 {
-kprintf("%s\n",__FUNCTION__);
     return (AcpiOsCreateSemaphore (1, 1, OutHandle));
 }
 
@@ -1155,7 +1154,6 @@ AcpiOsInstallInterruptHandler (
     ACPI_OSD_HANDLER        ServiceRoutine,
     void                    *Context)
 {
-kprintf("%d - 0x%x - %s\n", InterruptNumber, ServiceRoutine,__FUNCTION__);
     return (AE_OK);
 }
 

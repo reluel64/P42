@@ -75,6 +75,9 @@ int context_init
     context[CR3_INDEX] = __read_cr3();
     context[TH_INDEX]  = (virt_addr_t)th;
 
+    /* Make sure we enable interrupts */
+    context[RFLAGS_INDEX]  = 1 << 9;
+
 
     return(0);
 }
@@ -85,11 +88,6 @@ void context_switch
     sched_thread_t *next
 )
 {
-    sched_exec_unit_t *unit = NULL;
-    virt_addr_t       *prev_ctx = NULL;
-    virt_addr_t       *next_ctx = NULL;
-    phys_addr_t        prev_cr3  = 0;
-
     __context_switch(prev->context, next->context);
 
 }

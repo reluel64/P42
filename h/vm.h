@@ -113,4 +113,18 @@ int vm_change_attr
 
 int vm_init(void);
 
+int vm_unmap
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t vaddr, 
+    virt_size_t len
+);
+
+int vm_free
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t vaddr, 
+    virt_size_t len
+);
+
 #endif

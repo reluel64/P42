@@ -1,3 +1,8 @@
+/* 
+ * Stupidly simple scheduler policy 
+ * Part of P42
+ */
+
 #include <scheduler.h>
 #include <utils.h>
 #include <linked_list.h>
@@ -21,7 +26,7 @@ static int simple_next_thread
     spinlock_lock_int(new_th_lock);
 
     th = linked_list_first(new_th_list);
-    kprintf("NEW_THREAD %x\n", th);
+
     if(th)
     {
         linked_list_remove(new_th_list, th);
@@ -40,7 +45,8 @@ static int simple_next_thread
 
         thread = NODE_TO_THREAD(th);
 
-        if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & THREAD_BLOCKED))
+        if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
+            THREAD_BLOCKED))
         {
             linked_list_remove(&unit->blocked_q, th);
             linked_list_add_tail(&unit->ready_q, th);
@@ -59,7 +65,8 @@ static int simple_next_thread
 
         thread = NODE_TO_THREAD(th);
 
-        if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & THREAD_SLEEPING))
+        if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
+            THREAD_SLEEPING))
         {
             linked_list_remove(&unit->sleep_q, th);
             linked_list_add_tail(&unit->ready_q, th);
@@ -93,9 +100,11 @@ static int simple_put_thread
     uint32_t          state = 0;
 
     unit = th->unit;
+    
+    __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
 
    state = __atomic_load_n(&th->flags, __ATOMIC_SEQ_CST) & THREAD_STATE_MASK;
-    kprintf("THREAD_STATE %x\n",state);
+
     switch(state)
     {
         case THREAD_BLOCKED:
@@ -122,11 +131,31 @@ static int simple_put_thread
 
 }
 
+static int simple_update_time
+(
+    sched_thread_t *th
+)
+{
+    if(th->remain > 1)
+    {
+        th->remain--;
+    }
+    else
+    {
+        __atomic_or_fetch(&th->flags, 
+                          THREAD_NEED_RESCHEDULE, 
+                          __ATOMIC_SEQ_CST);
+    }
+
+    return(0);
+}
+
 static sched_policy_t policy = 
 {
     .policy_name = "Simple",
     .next_thread = simple_next_thread,
-    .put_thread  = simple_put_thread 
+    .put_thread  = simple_put_thread ,
+    .update_time = simple_update_time
 };
 
 

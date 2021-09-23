@@ -9,7 +9,7 @@
 #include <linked_list.h>
 #include <liballoc.h>
 #include <platform.h>
-
+#include <scheduler.h>
 
 typedef struct isr_list_t
 {
@@ -170,20 +170,21 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
     isr_list_t        *int_lst   = NULL;
     isr_t             *intr      = NULL;
     list_node_t       *node      = NULL;
+    cpu_t             *cpu       = NULL;
     int               int_status = 0;
     isr_info_t        inf;
-
+    
     if(index >= MAX_HANDLERS)
         return;
 
-    kprintf("INTERRUPT NO %d\n", index);
 
     memset(&inf, 0, sizeof(isr_info_t));
     
     int_lst = &handlers[index];
 
     inf.iframe = iframe;
-    inf.cpu_id    = cpu_id_get();
+    inf.cpu_id = cpu_id_get();
+    cpu        = cpu_current_get();
 
     /* gain exclusive access to the list */
     spinlock_read_lock_int(&int_lst->lock);
@@ -219,6 +220,13 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
 
     spinlock_read_unlock_int(&eoi_lock);
 
-
+    /* check if we need to reschedule */
+    if(cpu && cpu->sched)
+    {
+        if(sched_need_resched(cpu->sched))
+        {
+            schedule();
+        }
+    }
 }
 
