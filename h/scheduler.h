@@ -14,6 +14,8 @@
 #define THREAD_NEED_RESCHEDULE  (1 << 6)
 #define CPU_AFFINITY_VECTOR     (0x8)
 
+#define UNIT_THREADS_WAKE        (1 << 0)
+
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
@@ -47,6 +49,14 @@ typedef struct sched_policy_t
 
     int (*update_time)
     (
+        sched_thread_t *th
+    );
+
+    int (*load_balancing)
+    (
+        list_head_t *units,
+        spinlock_t *units_lock,
+        sched_exec_unit_t *th_unit,
         sched_thread_t *th
     );
 
@@ -169,6 +179,16 @@ void sched_unblock_thread
     sched_thread_t *th
 );
 
+void sched_sleep_thread
+(
+    sched_thread_t *th
+);
+
+void sched_wake_thread
+(
+    sched_thread_t *th
+);
+
 void sched_yield();
 
 void sched_sleep(uint32_t delay);
@@ -182,4 +202,8 @@ void sched_thread_entry_point
 (
     sched_thread_t *th
 );
+
+
+void schedule(void);
+
 #endif

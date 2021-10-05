@@ -26,12 +26,12 @@ static sched_owner_t kernel;
 
 static void sched_idle_thread(void *pv);
 static void schedule_main(void);
-void schedule(void);
+
 
 extern void __context_unit_start(void *tcb);
 extern int sched_simple_register(sched_policy_t **p);
 
-static uint32_t sched_update_thread_time
+static uint32_t sched_update_time
 (
     void *unit,
     void *isr_info
@@ -118,8 +118,10 @@ sched_thread_t *sched_thread_self(void)
         return(NULL);
     
     unit = cpu->sched;
+
     if(unit == NULL)
         return(NULL);
+
     spinlock_lock_int(&unit->lock);
     
     self = unit->current;
@@ -223,7 +225,7 @@ int sched_unit_init
     if(timer != NULL)
     {
         unit->timer_dev = timer;
-        timer_dev_connect_cb(timer, sched_update_thread_time, unit);
+        timer_dev_connect_cb(timer, sched_update_time, unit);
         timer_dev_enable(timer); 
     }
 
@@ -289,16 +291,18 @@ void sched_wake_thread
 }
 
 
-static uint32_t sched_update_thread_time
+static uint32_t sched_update_time
 (
     void *pv_unit,
     void *isr_inf
 )
 {
-    sched_exec_unit_t *unit = NULL;
-    sched_policy_t    *policy = NULL;
-    sched_thread_t    *thread = NULL;
-
+    sched_exec_unit_t *unit         = NULL;
+    sched_policy_t    *policy       = NULL;
+    sched_thread_t    *thread       = NULL;
+    list_node_t       *next_node    = NULL;
+    list_node_t       *node         = NULL;
+    
     unit = pv_unit;
 
     spinlock_lock_int(&unit->lock);
@@ -311,6 +315,33 @@ static uint32_t sched_update_thread_time
         thread = &unit->idle;
 
     policy->update_time(thread);
+
+    /* Update sleeping threads */
+
+    node = linked_list_first(&unit->sleep_q);
+
+    while(node)
+    {
+        next_node = linked_list_next(node);
+        thread = (sched_thread_t*)node;
+
+        /* If timeout has been reached, remove the thread from the sleep_q */
+
+        if(thread->slept >= thread->to_sleep)
+        {
+            /* Remove the thread from the sleep queue */
+            linked_list_remove(&unit->sleep_q, node);
+            
+            /* Clear the sleeping flag */
+            thread->flags &= ~THREAD_SLEEPING;
+
+            /* Notify the unit that there are threads to be awaken */
+            unit->flags |= UNIT_THREADS_WAKE;
+
+        }
+
+        node = next_node;
+    }
 
     spinlock_unlock_int(&unit->lock);
 
@@ -396,6 +427,47 @@ void schedule(void)
     schedule_main();
 }
 
+static int sched_wake_up_threads
+(
+    sched_exec_unit_t *unit
+)
+{
+    list_node_t *node = NULL;
+    list_node_t *next_node = NULL;
+    sched_thread_t *th = NULL;
+    sched_policy_t *policy = NULL;
+
+    policy = unit->policy;
+
+    node = linked_list_first(&unit->sleep_q);
+
+    while(node)
+    {
+
+        next_node = linked_list_next(node);
+
+        th = (sched_thread_t*)node;
+        
+        /* Try to use policy's load balancing
+         * If we don't have a load balancing mechanism,
+         * then we will just add the thread in the ready queue of 
+         * the already owner unit
+         */ 
+
+        if(policy->load_balancing != NULL)
+        {
+            policy->load_balancing(&units, &units_lock, unit, th);
+        }
+        else
+        {
+            /* Add the thread to the ready queue */
+            linked_list_add_tail(&unit->ready_q, node);
+        }
+
+        node = next_node;
+    }
+}
+
 static void schedule_main(void)
 {
     cpu_t             *cpu     = NULL;
@@ -424,10 +496,13 @@ static void schedule_main(void)
         prev_th = &unit->idle;
     }
 
+    sched_wake_up_threads(unit);
+
     status = policy->next_thread(&new_threads, 
                                  &new_threads_lock, 
                                  unit, 
                                  &next_th);
+
 
     /* If we don't have a task to execute, go to the idle task */
     if(status != 0)

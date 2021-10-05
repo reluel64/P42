@@ -155,7 +155,8 @@ static sched_policy_t policy =
     .policy_name = "Simple",
     .next_thread = simple_next_thread,
     .put_thread  = simple_put_thread ,
-    .update_time = simple_update_time
+    .update_time = simple_update_time,
+    .load_balancing = NULL,
 };
 
 

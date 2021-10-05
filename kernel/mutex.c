@@ -8,15 +8,11 @@
                                 ((uint8_t*)(x) -  \
                                 offsetof(sched_thread_t, pend_node)))
 
-mutex_t *mtx_create(int options)
+mutex_t *mtx_init(mutex_t *mtx, int options)
 {
-    mutex_t *mtx = NULL;
-
-    mtx = kcalloc(1, sizeof(mutex_t));
-
     if(mtx == NULL)
         return(NULL);
-    
+
     mtx->opts = options;
 
     __atomic_store_n(&mtx->rlevel, 0, __ATOMIC_RELEASE);
@@ -26,14 +22,33 @@ mutex_t *mtx_create(int options)
 
     return(mtx);
 }
-#if 0
+
+
+mutex_t *mtx_create(int options)
+{
+    mutex_t *mtx = NULL;
+    mutex_t *ret_mtx = NULL;
+
+    mtx = kcalloc(1, sizeof(mutex_t));
+
+    if(mtx == NULL)
+        return(NULL);
+
+    ret_mtx = mtx_init(mtx, options);
+
+    if(ret_mtx != mtx)
+            kfree(mtx);
+   
+    return(ret_mtx);
+}
+
 int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 {
     int int_state = 0;
     int th_int_state = 0;
     void           *expected = NULL;
     sched_thread_t *thread = NULL;
-    uint32_t block_flags = THREAD_BLOCKED;
+    uint32_t block_flags = 0;
 
     spinlock_lock_int(&mtx->lock);
     thread = sched_thread_self();
@@ -77,6 +92,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
             if(mtx->opts & MUTEX_RECUSRIVE)
                 __atomic_add_fetch(&mtx->rlevel, 1, __ATOMIC_ACQUIRE);
+                
             spinlock_unlock_int(&mtx->lock);
             return(0);
         }
@@ -86,7 +102,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
          * then we already timed out so we will just exit 
          */
 
-        if(block_flags & THREAD_SLEEPING)
+        if(block_flags == THREAD_SLEEPING)
         {
             /* remove the thread from the pendq */
             spinlock_unlock_int(&mtx->lock);
@@ -101,16 +117,23 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
         spinlock_lock_int(&thread->lock);
 
+        thread->to_sleep = wait_ms;
+
         /* we are going to sleep */
         if(wait_ms != WAIT_FOREVER)
         {
-            block_flags |= THREAD_SLEEPING;
+            /* Timeout specified - sleep the thread */
             thread->to_sleep = wait_ms;
             thread->slept = 0;
+            block_flags = THREAD_SLEEPING;
+            sched_sleep_thread(thread);
         }
-         /* Mark the thread as blocked */
-        
-        __atomic_or_fetch(&thread->flags, block_flags, __ATOMIC_ACQUIRE);
+        else
+        {
+            /* Mark the thread as blocked */
+            block_flags = THREAD_BLOCKED;
+            sched_block_thread(thread);
+        }
 
         /* Add it to the mutex pend queue */
 
@@ -120,6 +143,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
         spinlock_unlock_int(&mtx->lock);
 
+        /* Catch the attention of the scheduler */
         sched_yield();
 
         spinlock_lock_int(&mtx->lock);
@@ -184,10 +208,13 @@ int mtx_release(mutex_t *mtx)
     
     spinlock_unlock_int(&thread->lock);
 
-    sched_unblock_thread(thread);
+    /* Wake up the thread */
+    if(thread->flags & THREAD_BLOCKED)
+        sched_unblock_thread(thread);
+    else
+        sched_wake_thread(thread);
 
     spinlock_unlock_int(&mtx->lock);
     
     return(0);
 }
-#endif

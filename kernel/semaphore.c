@@ -28,20 +28,25 @@ sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count)
 sem_t *sem_create(uint32_t init_val, uint32_t max_count)
 {
     sem_t *sem = NULL;
+    sem_t *ret_sem = NULL;
 
     sem = kcalloc(1, sizeof(sem_t));
 
-    return(sem_init(sem, init_val, max_count));
+    ret_sem = sem_init(sem, init_val, max_count);
+
+    /* check if we've failed to set up the semaphore */
+    if(ret_sem != sem)
+        kfree(sem);
+
+    return(ret_sem);
 }
 
-
-#if 0
 int sem_acquire(sem_t *sem, uint32_t wait_ms)
 {
     int int_state = 0;
     int th_int_state = 0;
     sched_thread_t *thread = NULL;
-    uint32_t        block_flags = THREAD_BLOCKED;
+    uint32_t        block_flags = 0;
 
 
     spinlock_lock_int(&sem->lock);
@@ -65,8 +70,6 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
         
         if(block_flags & THREAD_SLEEPING)
         {
-            /* remove the thread from the pendq */
-            /*linked_list_remove(&sem->pendq, &thread->pend_node);*/
             spinlock_unlock_int(&sem->lock);
             return(-1);
         }
@@ -82,13 +85,16 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
 
         if(wait_ms != WAIT_FOREVER)
         {
-            block_flags |= THREAD_SLEEPING;
+            block_flags = THREAD_SLEEPING;
             thread->to_sleep = wait_ms;
             thread->slept = 0;
+            sched_sleep_thread(thread);
         }
-
-         /* Mark the thread as blocked */
-        __atomic_or_fetch(&thread->flags, block_flags, __ATOMIC_ACQUIRE);
+        else
+        {
+            block_flags = THREAD_BLOCKED;
+            sched_block_thread(thread);
+        }
 
         /* Add it to the semaphore pend queue */
         linked_list_add_tail(&sem->pendq, &thread->pend_node); 
@@ -143,6 +149,11 @@ int sem_release(sem_t *sem)
    
     spinlock_lock_int(&thread->lock);
     
+    if(thread->flags & THREAD_BLOCKED)
+        sched_unblock_thread(thread);
+    else
+        sched_wake_thread(thread);
+
     
     spinlock_unlock_int(&thread->lock);
 
@@ -152,5 +163,3 @@ int sem_release(sem_t *sem)
 
     return(0);
 }
-
-#endif
