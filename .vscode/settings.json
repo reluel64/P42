@@ -22,7 +22,8 @@
     "files.associations": {
         "platform.h": "c",
         "thread.h": "c",
-        "scheduler.h": "c"
+        "scheduler.h": "c",
+        "mutex.h": "c"
     },
     
   

@@ -54,7 +54,7 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
        kprintf("HELLO WORLD %x %x\n",vendor, device);
     } return (vendor);
 }
-
+mutex_t mtx;
 static void kmain_sys_init(void)
 {
     int hr = 0;
@@ -67,9 +67,12 @@ static void kmain_sys_init(void)
     kprintf("Platform init\n");
     while(1)
     {
+        mtx_acquire(&mtx, WAIT_FOREVER);
         kprintf("XXXX %d\n",cpu_int_check());
         kprintf("TEST\n");
         for(int i = 0; i < INT32_MAX / 2 - 1; i++);
+        kprintf("ENDED\n");
+        mtx_release(&mtx);
     }
     platform_init();
 
@@ -83,6 +86,8 @@ static void kmain_sys_init(void)
         }
     }
 }
+
+
 
 
 int func2(int i)
@@ -99,15 +104,18 @@ static void kmain_sys_init2(void *arg)
     int sec = 0;
 
     /* Start APs */
-    kprintf("starting APs\n");
+    kprintf("starting APs 2\n");
     
     kprintf("Platform init\n");
 
     while(1)
     {
+        mtx_acquire(&mtx, WAIT_FOREVER);;
         kprintf("TEST2 %x\n", arg);
         for(int i = 0; i < INT32_MAX/2 - 1; i++);
         func2(90);
+
+        mtx_release(&mtx);
     }
     platform_init();
 
@@ -154,9 +162,13 @@ void kmain()
     /* Initialize base of the scheduler */
     sched_init();
 
+    mtx_init(&mtx, 0);
+
     /* Prepare the initialization thread */
-  //  thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 0);
-   // thread_start(&init_th);
+    thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 200);
+    thread_start(&init_th);
+    thread_create_static(&init_th2, kmain_sys_init2,NULL, 0x1000, 0);
+    thread_start(&init_th2);
 
     /* initialize the CPU driver and the BSP */
     if(cpu_init())

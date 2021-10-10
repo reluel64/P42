@@ -114,9 +114,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
             spinlock_unlock_int(&mtx->lock);
             return(-1);
         }
-
-        spinlock_lock_int(&thread->lock);
-
+            
         thread->to_sleep = wait_ms;
 
         /* we are going to sleep */
@@ -136,10 +134,8 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         }
 
         /* Add it to the mutex pend queue */
-
+        kprintf("BLOCKING %x\n",thread);
         linked_list_add_tail(&mtx->pendq, &thread->pend_node); 
-
-        spinlock_unlock_int(&thread->lock);
 
         spinlock_unlock_int(&mtx->lock);
 
@@ -162,11 +158,11 @@ int mtx_release(mutex_t *mtx)
     sched_exec_unit_t *unit = NULL;
     list_node_t    *pend_node = NULL;
     void *expected = NULL;
-
+    kprintf("REleasing thread\n");
     spinlock_lock_int(&mtx->lock);
 
     self = sched_thread_self();
-    
+
     expected = self;
 
     /* If we are not the owner, then get out */
@@ -205,8 +201,6 @@ int mtx_release(mutex_t *mtx)
 
     /* Set the new owner */
     __atomic_store_n(&mtx->owner, thread, __ATOMIC_RELEASE);
-    
-    spinlock_unlock_int(&thread->lock);
 
     /* Wake up the thread */
     if(thread->flags & THREAD_BLOCKED)

@@ -250,7 +250,7 @@ void sched_unblock_thread
     spinlock_lock_int(&th->lock);
 
     __atomic_and_fetch(&th->flags, ~THREAD_BLOCKED, __ATOMIC_SEQ_CST);
-
+    __atomic_or_fetch(&th->flags, (THREAD_READY), __ATOMIC_SEQ_CST);
     spinlock_unlock_int(&th->lock);
 }
 
@@ -262,6 +262,10 @@ void sched_block_thread
     spinlock_lock_int(&th->lock);
 
     __atomic_or_fetch(&th->flags, THREAD_BLOCKED, __ATOMIC_SEQ_CST);
+
+    __atomic_and_fetch(&th->flags, 
+                        ~(THREAD_RUNNING | THREAD_READY), 
+                        __ATOMIC_SEQ_CST);
 
     spinlock_unlock_int(&th->lock);
 }
@@ -275,6 +279,10 @@ void sched_sleep_thread
 
     __atomic_or_fetch(&th->flags, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
 
+    __atomic_and_fetch(&th->flags, 
+                        ~(THREAD_RUNNING | THREAD_READY), 
+                        __ATOMIC_SEQ_CST);
+
     spinlock_unlock_int(&th->lock);
 }
 
@@ -286,6 +294,7 @@ void sched_wake_thread
     spinlock_lock_int(&th->lock);
 
     __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+    __atomic_or_fetch(&th->flags, THREAD_READY, __ATOMIC_SEQ_CST);
 
     spinlock_unlock_int(&th->lock);
 }
@@ -328,10 +337,7 @@ static uint32_t sched_update_time
         /* If timeout has been reached, remove the thread from the sleep_q */
 
         if(thread->slept >= thread->to_sleep)
-        {
-            /* Remove the thread from the sleep queue */
-            linked_list_remove(&unit->sleep_q, node);
-            
+        {            
             /* Clear the sleeping flag */
             thread->flags &= ~THREAD_SLEEPING;
 
@@ -427,47 +433,6 @@ void schedule(void)
     schedule_main();
 }
 
-static int sched_wake_up_threads
-(
-    sched_exec_unit_t *unit
-)
-{
-    list_node_t *node = NULL;
-    list_node_t *next_node = NULL;
-    sched_thread_t *th = NULL;
-    sched_policy_t *policy = NULL;
-
-    policy = unit->policy;
-
-    node = linked_list_first(&unit->sleep_q);
-
-    while(node)
-    {
-
-        next_node = linked_list_next(node);
-
-        th = (sched_thread_t*)node;
-        
-        /* Try to use policy's load balancing
-         * If we don't have a load balancing mechanism,
-         * then we will just add the thread in the ready queue of 
-         * the already owner unit
-         */ 
-
-        if(policy->load_balancing != NULL)
-        {
-            policy->load_balancing(&units, &units_lock, unit, th);
-        }
-        else
-        {
-            /* Add the thread to the ready queue */
-            linked_list_add_tail(&unit->ready_q, node);
-        }
-
-        node = next_node;
-    }
-}
-
 static void schedule_main(void)
 {
     cpu_t             *cpu     = NULL;
@@ -478,7 +443,7 @@ static void schedule_main(void)
     sched_thread_t    *prev_th = NULL;
     sched_policy_t    *policy  = NULL;
     int               status = 0;
-    
+
     cpu    = cpu_current_get();
     unit   = cpu->sched;
     policy = unit->policy;
@@ -496,13 +461,16 @@ static void schedule_main(void)
         prev_th = &unit->idle;
     }
 
-    sched_wake_up_threads(unit);
+    /* Clear thread's running flag */
+    __atomic_and_fetch(&prev_th->flags, 
+                        ~THREAD_RUNNING, 
+                        __ATOMIC_SEQ_CST);
+
 
     status = policy->next_thread(&new_threads, 
                                  &new_threads_lock, 
                                  unit, 
                                  &next_th);
-
 
     /* If we don't have a task to execute, go to the idle task */
     if(status != 0)
@@ -514,6 +482,12 @@ static void schedule_main(void)
         next_th->unit = unit;
         unit->current = next_th;
     }
+
+    /* Mark the next thread as running */
+    __atomic_or_fetch(&next_th->flags, 
+                      THREAD_RUNNING, 
+                      __ATOMIC_SEQ_CST);
+
 
     /* Switch context */
     sched_context_switch(prev_th, next_th);

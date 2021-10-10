@@ -57,24 +57,27 @@ static int simple_next_thread
 
     /* Check sleeping threads */
 
-    th = linked_list_first(&unit->sleep_q);
-
-    while(th)
+    if(unit->flags & UNIT_THREADS_WAKE)
     {
-        next_th = linked_list_next(th);
+        th = linked_list_first(&unit->sleep_q);
 
-        thread = NODE_TO_THREAD(th);
-
-        if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
-            THREAD_SLEEPING))
+        while(th)
         {
-            linked_list_remove(&unit->sleep_q, th);
-            linked_list_add_tail(&unit->ready_q, th);
+            next_th = linked_list_next(th);
+
+            thread = NODE_TO_THREAD(th);
+
+            if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
+                THREAD_SLEEPING))
+            {
+                linked_list_remove(&unit->sleep_q, th);
+                linked_list_add_tail(&unit->ready_q, th);
+            }
+
+            th = next_th;
         }
-
-        th = next_th;
     }
-
+    
     th = linked_list_first(&unit->ready_q);
 
     if(th == NULL)
@@ -145,6 +148,8 @@ static int simple_update_time
         __atomic_or_fetch(&th->flags, 
                           THREAD_NEED_RESCHEDULE, 
                           __ATOMIC_SEQ_CST);
+
+          th->remain = 255 - th->prio;
     }
 
     return(0);
