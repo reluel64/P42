@@ -86,9 +86,7 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
         if(wait_ms != WAIT_FOREVER)
         {
             block_flags = THREAD_SLEEPING;
-            thread->to_sleep = wait_ms;
-            thread->slept = 0;
-            sched_sleep_thread(thread);
+            sched_sleep_thread(thread, wait_ms);
         }
         else
         {

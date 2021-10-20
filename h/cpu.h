@@ -37,4 +37,5 @@ void *cpu_ctx_init(void *th, void *exec_pt, void *exec_pv);
 int cpu_ctx_destroy(void *th);
 cpu_t *cpu_current_get(void);
 void cpu_resched(void);
+void cpu_signal_on(void);
 #endif

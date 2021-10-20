@@ -15,7 +15,7 @@
 #define CPU_AFFINITY_VECTOR     (0x8)
 
 #define UNIT_THREADS_WAKE        (1 << 0)
-
+#define UNIT_THREADS_UNBLOCK     (1 << 1)
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
@@ -181,7 +181,8 @@ void sched_unblock_thread
 
 void sched_sleep_thread
 (
-    sched_thread_t *th
+    sched_thread_t *th,
+    uint32_t timeout
 );
 
 void sched_wake_thread

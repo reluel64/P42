@@ -250,7 +250,7 @@ int platform_init(void)
     device_t *ioapic = NULL;
     device_t *apic_timer = NULL;
 
-    /*cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);*/
+    cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
 #if 1
     /* Mask the PIT8254 */
     apic_timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, 0);

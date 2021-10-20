@@ -79,6 +79,8 @@ __context_load:
 
     ; restore RFLAGS
     mov rax, qword [rsi + OFFSET(RFLAGS_INDEX)]
+    ; clear interrupt flag
+    and rax, ~(1 << 9) 
     push rax
     popfq
 

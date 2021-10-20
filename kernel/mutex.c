@@ -121,10 +121,8 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         if(wait_ms != WAIT_FOREVER)
         {
             /* Timeout specified - sleep the thread */
-            thread->to_sleep = wait_ms;
-            thread->slept = 0;
             block_flags = THREAD_SLEEPING;
-            sched_sleep_thread(thread);
+            sched_sleep_thread(thread, wait_ms);
         }
         else
         {

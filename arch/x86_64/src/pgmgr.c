@@ -1180,7 +1180,7 @@ int pgmgr_change_attrib
     status = pagemgr_fill_tables_cb(0, 
                                     len >> PAGE_SIZE_SHIFT, 
                                     &ld);
-
+    __write_cr3(__read_cr3());
     if(status || ld.error)
         return(-1);
 

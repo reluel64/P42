@@ -39,26 +39,36 @@ static int simple_next_thread
 
     th = linked_list_first(&unit->blocked_q);
 
-    while(th)
+    if(__atomic_fetch_and(&unit->flags, 
+                          ~UNIT_THREADS_UNBLOCK, 
+                         __ATOMIC_SEQ_CST) & 
+                         UNIT_THREADS_UNBLOCK)
+
     {
-        next_th = linked_list_next(th);
-
-        thread = NODE_TO_THREAD(th);
-
-        if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
-            THREAD_BLOCKED))
+        while(th)
         {
-            linked_list_remove(&unit->blocked_q, th);
-            linked_list_add_tail(&unit->ready_q, th);
+            next_th = linked_list_next(th);
+
+            thread = NODE_TO_THREAD(th);
+
+            if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
+                THREAD_BLOCKED))
+            {
+                linked_list_remove(&unit->blocked_q, th);
+                linked_list_add_tail(&unit->ready_q, th);
+            }
+
+            th = next_th;
         }
-
-        th = next_th;
     }
-
     /* Check sleeping threads */
 
-    if(unit->flags & UNIT_THREADS_WAKE)
+    if(__atomic_fetch_and(&unit->flags, 
+                          ~UNIT_THREADS_WAKE,
+                          __ATOMIC_SEQ_CST) & 
+                          UNIT_THREADS_WAKE)
     {
+        
         th = linked_list_first(&unit->sleep_q);
 
         while(th)
@@ -70,6 +80,7 @@ static int simple_next_thread
             if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_SLEEPING))
             {
+
                 linked_list_remove(&unit->sleep_q, th);
                 linked_list_add_tail(&unit->ready_q, th);
             }
@@ -77,6 +88,7 @@ static int simple_next_thread
             th = next_th;
         }
     }
+
     
     th = linked_list_first(&unit->ready_q);
 
@@ -103,8 +115,12 @@ static int simple_put_thread
     uint32_t          state = 0;
 
     unit = th->unit;
-    
+
     __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
+
+    /* The idle thread dioes not belong to any queue */
+    if(&unit->idle == th)
+        return(0);
 
    state = __atomic_load_n(&th->flags, __ATOMIC_SEQ_CST) & THREAD_STATE_MASK;
 
@@ -122,12 +138,13 @@ static int simple_put_thread
             lh = &unit->ready_q;
             break;
         default:
-            kprintf("UNKNOWN_STATE %x\n",state);
+            kprintf("%s %d\n",__FUNCTION__, __LINE__);
             while(1);
             break;
     }
 
     /* Add the thread in the corresponding queue */
+
     linked_list_add_tail(lh, &th->node);
 
     return(0);

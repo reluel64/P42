@@ -76,8 +76,6 @@ int context_init
     context[TH_INDEX]  = (virt_addr_t)th;
 
     /* Make sure we enable interrupts */
-    context[RFLAGS_INDEX]  = 1 << 9;
-
 
     return(0);
 }
@@ -89,7 +87,6 @@ void context_switch
 )
 {
     __context_switch(prev->context, next->context);
-
 }
 
 void context_unit_start

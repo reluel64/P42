@@ -65,16 +65,20 @@ static void kmain_sys_init(void)
     kprintf("starting APs\n");
     
     kprintf("Platform init\n");
+    platform_init();
     while(1)
     {
-        mtx_acquire(&mtx, WAIT_FOREVER);
+      //  mtx_acquire(&mtx, WAIT_FOREVER);
+             
         kprintf("XXXX %d\n",cpu_int_check());
         kprintf("TEST\n");
-        for(int i = 0; i < INT32_MAX / 2 - 1; i++);
-        kprintf("ENDED\n");
-        mtx_release(&mtx);
+        kprintf("XXXX %d\n",cpu_int_check());
+        sched_sleep(1000);
+       // for(int i = 0; i < INT32_MAX / 2 - 1; i++);
+      //  kprintf("ENDED\n");
+    //    mtx_release(&mtx);
     }
-    platform_init();
+    
 
    vga_print("Hello World\n");
 
@@ -110,9 +114,10 @@ static void kmain_sys_init2(void *arg)
 
     while(1)
     {
+
         mtx_acquire(&mtx, WAIT_FOREVER);;
         kprintf("TEST2 %x\n", arg);
-        for(int i = 0; i < INT32_MAX/2 - 1; i++);
+      //  for(int i = 0; i < INT32_MAX/2 - 1; i++);
         func2(90);
 
         mtx_release(&mtx);
@@ -167,8 +172,8 @@ void kmain()
     /* Prepare the initialization thread */
     thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 200);
     thread_start(&init_th);
-    thread_create_static(&init_th2, kmain_sys_init2,NULL, 0x1000, 0);
-    thread_start(&init_th2);
+//    thread_create_static(&init_th2, kmain_sys_init2,NULL, 0x1000, 0);
+//    thread_start(&init_th2);
 
     /* initialize the CPU driver and the BSP */
     if(cpu_init())

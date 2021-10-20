@@ -255,7 +255,10 @@ static int cpu_idt_setup(cpu_platform_driver_t *cpu_drv)
     return(0);
 }
 
-static virt_addr_t cpu_prepare_trampoline(void)
+static void cpu_prepare_trampoline
+(
+    virt_addr_t low_trampoline
+)
 {
     virt_size_t tr_size      = 0;
     uint8_t     *tr_code     = NULL;
@@ -266,17 +269,7 @@ static virt_addr_t cpu_prepare_trampoline(void)
     virt_addr_t *entry_pt    = NULL;
 
     tr_size = ALIGN_UP(_TRAMPOLINE_END - _TRAMPOLINE_BEGIN, PAGE_SIZE);
-
-    tr_code = (uint8_t*)vm_map(NULL,
-                                 VM_BASE_AUTO,
-                                 tr_size,
-                                 CPU_TRAMPOLINE_LOCATION_START,
-                                 VM_HIGH_MEM,
-                                 VM_ATTR_EXECUTABLE |
-                                 VM_ATTR_WRITABLE);
-
-    if(tr_code == 0)
-        return(0);
+    tr_code = (virt_addr_t*)low_trampoline;
 
     /* Save some common stuff so we will place it into the
      * relocated trampoline code
@@ -308,8 +301,6 @@ static virt_addr_t cpu_prepare_trampoline(void)
     pt_base [0] = __read_cr3();
     stack   [0] = (virt_addr_t)_BSP_STACK_BASE;
     entry_pt[0] = (virt_addr_t) cpu_entry_point;
-
-    return((virt_addr_t)tr_code);
 }
 
 static int cpu_bring_cpu_up
@@ -338,31 +329,32 @@ static int cpu_bring_cpu_up
     ipi.type      = IPI_INIT;
     ipi.dest_cpu  = cpu;
     
+    /* prepare cpu_on flag */
+    __atomic_store_n(&cpu_on, 0, __ATOMIC_SEQ_CST);
+
     intc_send_ipi(issuer, &ipi);
     
     /* Start-up SIPI */
     ipi.type = IPI_START_AP;
 
-    /* prepare cpu_on flag */
-    __atomic_store_n(&cpu_on, 0, __ATOMIC_RELEASE);
 
-    //sched_sleep(10);
+    sched_sleep(10);
     kprintf("BRINGING %d\n", cpu);
     /* Start up the CPU */
-    for(uint16_t attempt = 0; attempt < timeout / 10; attempt++)
+    for(uint16_t attempt = 0; attempt < timeout / 100; attempt++)
     {
         intc_send_ipi(issuer, &ipi);
   
         /* wait for about 10ms */
 
-        for(uint32_t i = 0; i < 10;i++)
+        for(uint32_t i = 0; i < 100;i++)
         {
-          //  sched_sleep(1);
-
-            if(__atomic_load_n(&cpu_on, __ATOMIC_ACQUIRE))
+            sched_sleep(1);
+            if(__atomic_load_n(&cpu_on, __ATOMIC_SEQ_CST))
             {
                 return(0);
             }
+
         }
     }
     return(-1);
@@ -436,16 +428,7 @@ int cpu_ap_start
         return(0);
     }
 
-    /* prepare trampoline code */
-    trampoline = cpu_prepare_trampoline();
-
-    if(trampoline == 0)
-    {
-        return(-1);
-    }
-
-    /* create identity mapping for the trampoline code */
-   virt_addr_t addr =  vm_map(NULL,CPU_TRAMPOLINE_LOCATION_START,
+    trampoline = vm_map(NULL,CPU_TRAMPOLINE_LOCATION_START,
                 PAGE_SIZE,
                 CPU_TRAMPOLINE_LOCATION_START,
                 0,
@@ -453,7 +436,14 @@ int cpu_ap_start
                 VM_ATTR_WRITABLE);
 
 
-           
+
+    if(trampoline == 0)
+    {
+        return(-1);
+    }
+
+    /* prepare trampoline code */
+    cpu_prepare_trampoline(trampoline);
 
     /* check if are going to use x2APIC */
     for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
@@ -559,7 +549,7 @@ static void cpu_entry_point(void)
 
     /* signal that the cpu is up and running */
     kprintf("CPU_STARTED\n");
-    __atomic_store_n(&cpu_on, 1, __ATOMIC_RELEASE);
+    
 
     cpu = devmgr_dev_data_get(cpu_dev);
 
@@ -568,6 +558,7 @@ static void cpu_entry_point(void)
 
     if(timer == NULL)
         timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
+
 
     sched_unit_init(timer, cpu);
 
@@ -580,6 +571,10 @@ static void cpu_entry_point(void)
 
 }
 
+void cpu_signal_on(void)
+{
+    __atomic_store_n(&cpu_on, 1, __ATOMIC_SEQ_CST);
+}
 
 static uint32_t cpu_get_domain
 (
@@ -703,8 +698,6 @@ static int pcpu_dev_init(device_t *dev)
         }
     }
 
-    cpu_int_unlock();
-
     return(0);
 }
 
@@ -799,7 +792,6 @@ cpu_t *cpu_current_get(void)
 
     if(int_state)
         cpu_int_lock();
-
 
     cpu_id = cpu_id_get();
     
