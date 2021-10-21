@@ -1218,9 +1218,10 @@ static int pagemgr_page_fault_handler(void *pv, isr_info_t *inf)
     fault_address = __read_cr2();
     int_frame = (isr_frame_t*)inf->iframe;
 
-    kprintf("ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x RFLAGS 0x%x\n",
-            fault_address,  \
-            error_code, \
+    kprintf("CPU %d: ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x RFLAGS 0x%x\n",
+            inf->cpu_id,   
+            fault_address, 
+            error_code,    
             int_frame->rip,
             int_frame->ss,
             int_frame->rflags);

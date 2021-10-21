@@ -58,9 +58,10 @@ extern virt_addr_t isr_ec_sz_end;
 #define _TRAMPOLINE_BEGIN ((virt_addr_t)&__start_ap_begin)
 #define _TRAMPOLINE_END ((virt_addr_t)&__start_ap_end)
 
-static volatile int cpu_on = 0;
 static spinlock_t lock;
+static volatile int cpu_on = 0;
 static void cpu_entry_point(void);
+
 
 static int pcpu_is_bsp(void)
 {
@@ -79,6 +80,7 @@ uint32_t cpu_id_get(void)
     uint32_t ecx = 0;
     uint32_t edx = 0;
 
+    
     if(!hi_leaf)
     {
         eax = 0x0;
@@ -269,7 +271,7 @@ static void cpu_prepare_trampoline
     virt_addr_t *entry_pt    = NULL;
 
     tr_size = ALIGN_UP(_TRAMPOLINE_END - _TRAMPOLINE_BEGIN, PAGE_SIZE);
-    tr_code = (virt_addr_t*)low_trampoline;
+    tr_code = (uint8_t*)low_trampoline;
 
     /* Save some common stuff so we will place it into the
      * relocated trampoline code
@@ -311,7 +313,7 @@ static int cpu_bring_cpu_up
 )
 {
     ipi_packet_t ipi;
-
+    uint32_t expected = 0;
     /* wipe the ipi garbage */
     memset(&ipi, 0, sizeof(ipi_packet_t));
 
@@ -330,30 +332,35 @@ static int cpu_bring_cpu_up
     ipi.dest_cpu  = cpu;
     
     /* prepare cpu_on flag */
-    __atomic_store_n(&cpu_on, 0, __ATOMIC_SEQ_CST);
-
+    kprintf("CPU_FLAG_PRE %d\n", cpu_on);
+    __atomic_and_fetch(&cpu_on, 0, __ATOMIC_SEQ_CST);
+    kprintf("CPU_FLAG_POST %d\n", cpu_on);
     intc_send_ipi(issuer, &ipi);
     
     /* Start-up SIPI */
     ipi.type = IPI_START_AP;
 
-
     sched_sleep(10);
-    kprintf("BRINGING %d\n", cpu);
+   
+
     /* Start up the CPU */
-    for(uint16_t attempt = 0; attempt < timeout / 100; attempt++)
+    for(uint16_t attempt = 0; attempt < 10; attempt++)
     {
         intc_send_ipi(issuer, &ipi);
   
         /* wait for about 10ms */
 
-        for(uint32_t i = 0; i < 100;i++)
+        for(uint32_t i = 0; i < timeout ;i++)
         {
-            sched_sleep(1);
-            if(__atomic_load_n(&cpu_on, __ATOMIC_SEQ_CST))
+            expected = cpu;
+            if(__atomic_compare_exchange_n(&cpu_on, &expected, cpu, 0,
+                __ATOMIC_SEQ_CST, 
+                __ATOMIC_SEQ_CST ))
             {
                 return(0);
             }
+            
+            sched_sleep(10);
 
         }
     }
@@ -435,8 +442,6 @@ int cpu_ap_start
                 VM_ATTR_EXECUTABLE |
                 VM_ATTR_WRITABLE);
 
-
-
     if(trampoline == 0)
     {
         return(-1);
@@ -482,8 +487,8 @@ int cpu_ap_start
                 }
                 else
                 {
-                    cpu_bring_cpu_up(dev, x2lapic->LocalApicId, timeout);
-                    started_cpu++;
+                    if(cpu_bring_cpu_up(dev, x2lapic->LocalApicId, timeout) == 0)
+                        started_cpu++;
                 }
             }
         }
@@ -504,12 +509,14 @@ int cpu_ap_start
                 }
                 else
                 {
-                    cpu_bring_cpu_up(dev, lapic->Id, timeout);
-                    started_cpu++;
+                    if(cpu_bring_cpu_up(dev, lapic->Id, timeout) == 0)
+                        started_cpu++;
                 }
             }
         }
     }
+
+    AcpiPutTable((ACPI_TABLE_HEADER*)madt);
 
     /* unmap the 1:1 trampoline */
     /*(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);*/
@@ -517,10 +524,13 @@ int cpu_ap_start
     /* clear the trampoline from the area */
     memset((void*)trampoline, 0, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
 
+    /* Clear the stack */
+    memset((void*)_BSP_STACK_BASE, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
+
     /* unmap the trampoline */
     vm_unmap(NULL, trampoline, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
 
-    AcpiPutTable((ACPI_TABLE_HEADER*)madt);
+    kprintf("Started CPUs %d\n",started_cpu);
 
     return(0);
 }
@@ -534,9 +544,9 @@ static void cpu_entry_point(void)
     cpu_id = cpu_id_get();
 
     /* Add cpu to the deivce manager */
+       
     if(!devmgr_dev_create(&cpu_dev))
     {
-
         devmgr_dev_name_set(cpu_dev,PLATFORM_CPU_NAME);
         devmgr_dev_type_set(cpu_dev, CPU_DEVICE_TYPE);
         devmgr_dev_index_set(cpu_dev, cpu_id);
@@ -548,7 +558,7 @@ static void cpu_entry_point(void)
     }
 
     /* signal that the cpu is up and running */
-    kprintf("CPU_STARTED\n");
+    kprintf("CPU %d STARTED\n", cpu_id);
     
 
     cpu = devmgr_dev_data_get(cpu_dev);
@@ -557,8 +567,10 @@ static void cpu_entry_point(void)
     timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
 
     if(timer == NULL)
+    {
+        kprintf("NO_APIC_TIMER\n");
         timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
-
+    }
 
     sched_unit_init(timer, cpu);
 
@@ -571,9 +583,9 @@ static void cpu_entry_point(void)
 
 }
 
-void cpu_signal_on(void)
+void cpu_signal_on(uint32_t id)
 {
-    __atomic_store_n(&cpu_on, 1, __ATOMIC_SEQ_CST);
+    __atomic_or_fetch(&cpu_on, id, __ATOMIC_SEQ_CST);
 }
 
 static uint32_t cpu_get_domain
@@ -730,13 +742,11 @@ static int pcpu_drv_init(driver_t *drv)
     cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
 
     cpu_drv->idt = (idt64_entry_t*)vm_alloc(NULL, VM_BASE_AUTO,
-                                               IDT_ALLOC_SIZE,
-                                               VM_HIGH_MEM,
-                                               VM_ATTR_WRITABLE);
-
+                                                  IDT_ALLOC_SIZE,
+                                                  VM_HIGH_MEM,
+                                                  VM_ATTR_WRITABLE);
     /* Setup the IDT */
     cpu_idt_setup(cpu_drv);
-
 
     /* make IDT read-only */
     vm_change_attr(NULL, (virt_addr_t)cpu_drv->idt,
@@ -775,7 +785,6 @@ static int pcpu_drv_init(driver_t *drv)
         {
             return(-1);
         }
-
     }
 
     return(0);

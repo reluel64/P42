@@ -168,7 +168,7 @@ int sched_unit_init
         kprintf("ERROR: CPU %x\n", cpu);
         return(-1);
     }
-
+    kprintf("================================================\n");
     kprintf("Initializing Scheduler for CPU %d\n",cpu->cpu_id);
 
     /* Allocate cleared memory for the unit */
@@ -383,7 +383,7 @@ static uint32_t sched_update_time
 }
 
 /******************************************************************************/
-extern  void cpu_signal_on(void);
+extern  void cpu_signal_on(uint32_t id);
 static void sched_idle_thread
 (
     void *pv
@@ -395,18 +395,25 @@ static void sched_idle_thread
     list_node_t        *c         = NULL;
     list_node_t        *n         = NULL;
 
-
+    int timer_enabled = 1;
     unit = (sched_exec_unit_t*)pv;
    
     kprintf("Entered idle loop on %d\n", unit->cpu->cpu_id);
-    uint32_t idle_cnt = 0;
 
-    cpu_signal_on();
+    /* Signal that the execution unit is up and running 
+     * so that the BSP can continue waking up other threads
+     */
+    
+    cpu_signal_on(unit->cpu->cpu_id);
+
+    if(unit->cpu->cpu_id > 0)
+        timer_dev_disable(unit->timer_dev);
 
     while(1)
     {
 
         cpu_halt();
+
 #if 0
         /* Begin cleaning the dead threads */
         spinlock_lock_int(&unit->lock);    

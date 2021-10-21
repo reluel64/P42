@@ -219,7 +219,7 @@ int timer_dev_disable(device_t *dev)
 int timer_dev_enable(device_t *dev)
 {
     timer_api_t *api = NULL;
-
+    
     if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
         return(-1);
 
@@ -303,7 +303,7 @@ int timer_dev_start
     spinlock_write_lock_int(&tm_dev->queue_lock);
     
     /* Add the timer to the queue */
-    linked_list_add_tail(&tm_dev->timer_dev, &t->node);
+    linked_list_add_tail(&tm_dev->timer_queue, &t->node);
     
     /* Release the queue */
     spinlock_write_unlock_int(&tm_dev->queue_lock);

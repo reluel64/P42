@@ -140,7 +140,6 @@ static int apic_timer_init(device_t *dev)
                             LVT_TIMER_REGISTER, 
                             &data, 
                             1);
-
     return(0);
 }
 

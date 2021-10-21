@@ -147,7 +147,7 @@ int devmgr_dev_add(device_t *dev, device_t *parent)
       }
 
     status = devmgr_dev_probe(dev);
-
+    
     devmgr_dev_add_to_parent(dev, parent);
  
     kprintf("PROBE_STATUS %d\n",status);
@@ -262,14 +262,20 @@ static int devmgr_dev_add_to_parent
 
     if(dev->parent != NULL)
         return(-1);
-       
+   
+    spinlock_write_lock_int(&dev_list_lock);
+   
     if(!linked_list_find_node(&parent->children, &dev->dev_node))
+    {
+        spinlock_write_unlock_int(&dev_list_lock);
         return(-1);
- 
+    }
     linked_list_add_tail(&parent->children, &dev->dev_node);
     
     dev->parent = parent;
 
+    spinlock_write_unlock_int(&dev_list_lock);
+    
     return(0);
 }
 
