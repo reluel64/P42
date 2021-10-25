@@ -346,14 +346,15 @@ static int cpu_bring_cpu_up
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < 10; attempt++)
     {
+       
         intc_send_ipi(issuer, &ipi);
-  
-        /* wait for about 10ms */
 
+        /* wait for about 10ms */
+ 
         for(uint32_t i = 0; i < timeout ;i++)
         {
             expected = cpu;
-            if(__atomic_compare_exchange_n(&cpu_on, &expected, cpu, 0,
+            if(__atomic_compare_exchange_n(&cpu_on, &expected, 0, 0,
                 __ATOMIC_SEQ_CST, 
                 __ATOMIC_SEQ_CST ))
             {
@@ -361,10 +362,14 @@ static int cpu_bring_cpu_up
             }
             
             sched_sleep(10);
-
         }
     }
     return(-1);
+}
+
+void cpu_signal_on(uint32_t id)
+{
+    __atomic_or_fetch(&cpu_on, id, __ATOMIC_SEQ_CST);
 }
 
 int cpu_issue_ipi
@@ -581,11 +586,6 @@ static void cpu_entry_point(void)
         cpu_halt();
     }
 
-}
-
-void cpu_signal_on(uint32_t id)
-{
-    __atomic_or_fetch(&cpu_on, id, __ATOMIC_SEQ_CST);
 }
 
 static uint32_t cpu_get_domain

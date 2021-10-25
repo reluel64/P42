@@ -3,7 +3,8 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <utils.h>
-
+#include <spinlock.h>
+static spinlock_t kprintf_lock ={.lock = 0, .int_lock_cnt = 0, .pre_lock_state = 0};
 void* memset(void* ptr, int value, size_t num)
 {
     uint8_t* start = (uint8_t*)ptr;
@@ -129,6 +130,7 @@ int kprintf(char *fmt,...)
     char ch = 0;
     char nbuf[64];
     uint64_t num = 0;
+     spinlock_lock_int(&kprintf_lock);
     while(fmt[0]!= '\0')
     {
         if(fmt[0] == '%')
@@ -176,6 +178,7 @@ int kprintf(char *fmt,...)
         fmt++;
     }
     va_end(lst);
+    spinlock_unlock_int(&kprintf_lock);
 }
 
 #if 0

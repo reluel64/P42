@@ -179,6 +179,12 @@ void isr_dispatcher(uint64_t index, virt_addr_t iframe)
     
     memset(&inf, 0, sizeof(isr_info_t));
     
+    if(index != 238)
+    {
+       vga_print("INTERRUPT\n");
+
+    }
+
     int_lst = &handlers[index];
 
     inf.iframe = iframe;

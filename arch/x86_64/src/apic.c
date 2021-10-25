@@ -331,6 +331,7 @@ static int apic_send_ipi
     /* Poll for IPI delivery status */
     do
     {
+        __pause();
         apic_drv->apic_read(apic_drv->vaddr, 
                             INTERRUPT_COMMAND_REGISTER, 
                             data, 
