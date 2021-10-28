@@ -332,8 +332,13 @@ int pfmgr_early_alloc_pf
     phys_size_t pf_ix       = 0;
     phys_size_t bmp_off     = 0;
     phys_size_t ret_pf      = 0;
-    int         stop        = 0;
+    int         cb_sts      = 0;
     pfmgr_free_range_t local_freer;
+    pfmgr_cb_data_t cb_dat = {.avail_bytes = 0,
+                              .phys_base  = 0,
+                              .used_bytes = 0
+                             };
+
 
     freer_phys = base.physf_start;
 
@@ -380,15 +385,23 @@ int pfmgr_early_alloc_pf
 
             if((bmp[0] & ((virt_addr_t)1 << pf_ix)) == 0)
             {
-                stop = !cb(cb_phys, 1, pv);
+                cb_dat.avail_bytes = PAGE_SIZE;
+                cb_dat.phys_base = cb_phys;
+                cb_dat.used_bytes = 0;
+                cb_sts = cb(&cb_dat, pv);
 
-                if(stop == 1)
+                /* If we got an error, do not mark the bitmap */
+                if(cb_sts < 0)
                     break;
 
                 bmp[0] |= ((virt_addr_t)1 << pf_ix);
 
                 local_freer.avail_pf--;
                 ret_pf++;
+
+                /* We're done, bail out */
+                if(cb_sts == 0)
+                    break;
             }
 
             pf_pos++;
@@ -401,7 +414,7 @@ int pfmgr_early_alloc_pf
         /* advance */
         freer_phys = (phys_addr_t)local_freer.hdr.next_range;
 
-        if(stop)
+        if(cb_sts == 0)
         {
             return(0);
         }
@@ -678,16 +691,19 @@ static int pfmgr_alloc
 {
     pfmgr_free_range_t *freer      = NULL;
     pfmgr_free_range_t *next_freer = NULL;
+    pfmgr_cb_data_t    cb_dat = {
+                                 .avail_bytes = 0,
+                                 .phys_base   = 0,
+                                 .used_bytes  = 0
+                                };
     phys_addr_t         addr       = 0;
-    phys_size_t         pf_ix      = 0;
-    phys_size_t         pf_pos     = 0;
-    phys_size_t         bmp_pos    = 0;
     phys_size_t         avail_pf   = 0;
     phys_size_t         req_pf     = 0;
     phys_size_t         used_pf    = 0;
     phys_addr_t         next_addr  = 0;
     int                 lkup_sts   = 0;
-   
+    int                 cb_status  = 0;
+
     freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
     req_pf = pf;
     
@@ -698,7 +714,7 @@ static int pfmgr_alloc
             if(flags & ALLOC_CB_STOP)
                 req_pf = freer->avail_pf;
             else
-                return(0);
+                return(-1);
         }
         
         next_freer = (pfmgr_free_range_t*)linked_list_next((list_node_t*)freer);
@@ -738,12 +754,22 @@ static int pfmgr_alloc
  
         if(avail_pf > 0)
         {       
-            used_pf = cb(addr, avail_pf, pv);
+            cb_dat.used_bytes  = 0;
+            cb_dat.phys_base   =  addr;
+            cb_dat.avail_bytes = avail_pf * PAGE_SIZE;
             
-            if(used_pf == 0)
-                return(0);
+            cb_status = cb(&cb_dat, pv);
+            
+            /* 
+             * If there is an error detected, we have to bail out
+             */
+
+            if(cb_status < 0)
+                return(-1);
+            
 
             /* decrease the required pfs */
+            used_pf = cb_dat.used_bytes / PAGE_SIZE;
             req_pf -= used_pf;
             
             if(pfmgr_mark_bmp(freer, addr, used_pf))
@@ -751,9 +777,14 @@ static int pfmgr_alloc
                 return(-1);
             }
 
-            next_addr = (addr - freer->hdr.base) / PAGE_SIZE + used_pf;
+            next_addr = (addr - freer->hdr.base  + 
+                        cb_dat.used_bytes);
 
-            freer->next_lkup = next_addr;
+            freer->next_lkup = next_addr / PAGE_SIZE;
+
+            /* We're done here */
+            if(cb_status == 0)
+                return(0);
             
         }
 
@@ -762,7 +793,7 @@ static int pfmgr_alloc
             break;
 
         /* advance the starting address - help the lookup */
-        addr += used_pf * PAGE_SIZE;
+        addr += cb_dat.used_bytes;
         
         /* If we got frames, try again on the same range */
         if(avail_pf != 0)
@@ -782,7 +813,7 @@ static int pfmgr_alloc
             return(-1);
     }
 
-    return(0);
+    return(-1);
 }
 
 /* pfmgr_free - obtains the free range using addr and pf count*/
@@ -835,14 +866,31 @@ static int pfmgr_free
     int         again              = 0;
     int         err                = 0;
     phys_addr_t next_addr          = 0;
+    pfmgr_cb_data_t cb_dat         = {.avail_bytes = 0, 
+                                      .used_bytes  = 0,
+                                      .phys_base   = 0
+                                     };
+
     do
     {
-        addr = 0;
-        to_free_pf = 0;
-        again = cb(&addr, &to_free_pf, pv);
+        cb_dat.avail_bytes  = 0;
+        cb_dat.used_bytes   = 0, 
+        cb_dat.phys_base    = 0;
+
+        again = cb(&cb_dat, pv);
+
+        to_free_pf = cb_dat.used_bytes / PAGE_SIZE;
+        addr       = cb_dat.phys_base;
         
+        if(again > 0 && cb_dat.used_bytes == 0)
+        {
+            kprintf("EMPTY_FOUND - skipping\n");
+            continue;
+        }
         /* Get the range */
-        if(pfmgr_addr_to_free_range(addr, to_free_pf, &freer) != 0)
+        if(pfmgr_addr_to_free_range(addr, 
+                                    to_free_pf, 
+                                    &freer) != 0)
         {
             kprintf("EXIT 0x%x - %d\n",addr, to_free_pf);
             /* WTF is this? */
@@ -862,7 +910,7 @@ static int pfmgr_free
             freer->next_lkup = next_addr;
 
 
-    }while(again);
+    }while(again > 0);
     
     return(err);
 }

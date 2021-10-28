@@ -12,9 +12,17 @@
 #define ALLOC_HIGHEST (1 << 2)
 #define ALLOC_ISA_DMA (1 << 3)
 #define ALLOC_CB_STOP (1 << 4)
+typedef struct pfmgr_cb_data_t pfmgr_cb_data_t;
 
-typedef phys_size_t (*alloc_cb)(phys_addr_t phys, phys_size_t count, void *pv);
-typedef int     (*free_cb) (phys_addr_t *phys, phys_size_t *count, void *pv);
+typedef phys_size_t (*alloc_cb)(pfmgr_cb_data_t *cb_dat, void *pv);
+typedef int     (*free_cb) (pfmgr_cb_data_t *cb_dat, void *pv);
+
+typedef struct pfmgr_cb_data_t
+{
+    phys_addr_t phys_base;
+    phys_size_t avail_bytes;
+    phys_size_t used_bytes;
+}pfmgr_cb_data_t;
 
 typedef struct pfmgr_t
 {
@@ -62,6 +70,7 @@ typedef struct pfmgr_busy_range_t
     pfmgr_range_header_t hdr;
     
 }pfmgr_busy_range_t;
+
 
 
 void     pfmgr_early_init(void);
