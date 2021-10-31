@@ -295,6 +295,10 @@ int vm_unmap
     virt_size_t len
 )
 {
+     if(ctx == NULL)
+        ctx = &kernel_ctx;
+    kprintf("UNMAP\n");
+   pagemgr_unmap(&ctx->pagemgr, vaddr, len);
    return(0);
 }
 

@@ -530,7 +530,7 @@ int cpu_ap_start
     memset((void*)trampoline, 0, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
 
     /* Clear the stack */
-    memset((void*)_BSP_STACK_BASE, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
+     memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
 
     /* unmap the trampoline */
     vm_unmap(NULL, trampoline, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);

@@ -66,6 +66,14 @@ static void kmain_sys_init(void)
     
     kprintf("Platform init\n");
     platform_init();
+
+    virt_addr_t addr = 0;
+   addr = vm_alloc(NULL,VM_BASE_AUTO, 1024ull*1024ull *1024ull * 8ull, 0, VM_ATTR_WRITABLE);
+    
+    kprintf("ADDR %x\n",addr);
+    
+    memset(addr, 0, 1024*1024 *2);
+   // vm_unmap(NULL, addr, 1024*2048);
     while(1)
     {
       //  mtx_acquire(&mtx, WAIT_FOREVER);

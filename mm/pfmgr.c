@@ -716,26 +716,26 @@ static int pfmgr_alloc
             else
                 return(-1);
         }
-        
+
         next_freer = (pfmgr_free_range_t*)linked_list_next((list_node_t*)freer);
-       
+
         if(freer->hdr.base  < LOW_MEMORY)
         {
             freer = next_freer;
             continue;
         }
-       
+               
         if(freer->next_lkup >= freer->total_pf)
             freer->next_lkup = 0;
 
         /* help the lookup a bit */
         addr = freer->hdr.base + freer->next_lkup * PAGE_SIZE;
         avail_pf   = req_pf;    
-      
+
         lkup_sts   = pfmgr_lkup_bmp_for_free_pf(freer, &addr, &avail_pf);
 
         used_pf    = 0;
-
+        
         /* Contiguous pages should be satisfied from one lookup */
         if((flags & ALLOC_CONTIG) && lkup_sts != 0)
         {
@@ -757,7 +757,7 @@ static int pfmgr_alloc
             cb_dat.used_bytes  = 0;
             cb_dat.phys_base   =  addr;
             cb_dat.avail_bytes = avail_pf * PAGE_SIZE;
-            
+
             cb_status = cb(&cb_dat, pv);
             
             /* 
@@ -781,11 +781,13 @@ static int pfmgr_alloc
                         cb_dat.used_bytes);
 
             freer->next_lkup = next_addr / PAGE_SIZE;
-
-            /* We're done here */
-            if(cb_status == 0)
-                return(0);
             
+            if(flags & ALLOC_CB_STOP)
+            {
+                /* We're done here */
+                if(cb_status == 0)
+                    return(0);
+            }
         }
 
         /* Check if we got everything from this shot */
@@ -809,7 +811,7 @@ static int pfmgr_alloc
 
     if(!(flags & ALLOC_CB_STOP))
     {
-        if(req_pf != 0)
+        if(req_pf > 0)
             return(-1);
     }
 
@@ -887,6 +889,10 @@ static int pfmgr_free
             kprintf("EMPTY_FOUND - skipping\n");
             continue;
         }
+
+        if(again == 0)
+            return(0);
+
         /* Get the range */
         if(pfmgr_addr_to_free_range(addr, 
                                     to_free_pf, 
