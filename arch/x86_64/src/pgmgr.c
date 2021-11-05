@@ -674,12 +674,13 @@ static phys_size_t pagemgr_free_levels_cb
     virt_addr_t        vend        = 0;
     uint8_t            init_base   = 0;
 
-    cb_dat->phys_base = 0;
-    cb_dat->used_bytes = 0;
     ld          = pv;
     ctx         = ld->ctx;
     vend        = ld->base + (ld->length - 1);
     next_pos    = ld->pos;
+
+    cb_dat->phys_base = 0;
+    cb_dat->used_bytes = 0;
 
     /* We're done here */
     if(ld->pos > vend)
@@ -701,7 +702,7 @@ static phys_size_t pagemgr_free_levels_cb
         kprintf("CURRENT_LEVEL_IS_ZERO\n");
         ld->curr_level = ctx->max_level;
     }
-kprintf("LD_POS %x VEND %x\n", ld->pos, vend);
+
     while((ld->pos - 1 <= vend))
     {
         if(ld->do_map || ld->level == NULL)
@@ -715,6 +716,7 @@ kprintf("LD_POS %x VEND %x\n", ld->pos, vend);
         entry = (ld->pos >> shift) & 0x1FF;
 
 #if 0
+if(ld->curr_level > 1)
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->curr_level, 
@@ -725,49 +727,11 @@ kprintf("LD_POS %x VEND %x\n", ld->pos, vend);
                 ld->pos,
                 (virt_size_t)1 << shift);
 #endif
-        /* 
-         * If we are ensuring levels, check if we have an 
-         * address so that we can dive in
-         * if we don't have an address, then save it.
-         * 
-         * If we are allocating pages, check if we have a PT and if we 
-         * don't have, bail out
-         */
-#if 1
-        if(ld->level[entry] & PAGE_PRESENT)
-        {
-            if(ld->flags & PGMGR_TOP_LEVEL)
-            {
-               
-                if(PAGE_MASK_ADDRESS(ld->level[entry]))
-                {
-                    if(pgmgr_level_is_empty((virt_addr_t*)ld->level))
-                    {
-                        kprintf("ld->addr %x\n",ld->pos);
-                    }
-                    kprintf("ADDRESS %x\n",ld->level[entry]);
-                    
-                    cb_dat->used_bytes += PAGE_SIZE;
-                  //  pgmgr_clear_pt(ld->ctx, ld->level[entry]);
-                }
 
-                ld->level[entry] |= (PAGE_PRESENT | PAGE_WRITABLE);
-                ld->do_map = 1;
-            }
-            else
-            {
-                if((ld->curr_level > PGMGR_MIN_PAGE_TABLE_LEVEL) && 
-                   (~ld->level[entry] & PAGE_TABLE_SIZE))
-                {
-                    ld->error = PGMGR_TABLE_NOT_ALLOCATED;
-                    kprintf("NOT_ALLOCATED\n");
-                    return(-1);
-                }
-            }
-        }
-#endif
-        /* If we are not at the bottom level, go DEEEPAH */
-
+         /* If we are not at the bottom level, go DEEEPAH 
+          * When we are freeing page structures, we must go the the min_level
+          * then make our way to the top
+          */
         if(ld->curr_level > ld->min_level)
         {  
             /* 
@@ -778,46 +742,31 @@ kprintf("LD_POS %x VEND %x\n", ld->pos, vend);
                (ld->flags & PGMGR_TOP_LEVEL))
             {
                 ld->curr_level--;
-                ld->addr = ld->level[entry];
+                ld->addr = PAGE_MASK_ADDRESS(ld->level[entry]);
                 ld->do_map = 1;
                 continue;
             }
         }
-
-        /* If we are not ensuring levels, then we most definetly
-         * are allocating 
-         */
-#if 1
-        if((ld->flags & PGMGR_BOTTOM_LEVEL))
+        
+        if(ld->flags & PGMGR_BOTTOM_LEVEL)
         {
             if(ld->level[entry] & PAGE_PRESENT)
             {
-                if(!init_base)
+                if(cb_dat->used_bytes == 0)
                 {
-
                     cb_dat->phys_base = PAGE_MASK_ADDRESS(ld->level[entry]);
-                    cb_dat->used_bytes += (virt_size_t)1 << shift;
-                    ld->level[entry] = 0;
-                    init_base = 1;
-                    kprintf("BASE %x\n",cb_dat->phys_base);
-                }
-                else if(PAGE_MASK_ADDRESS(ld->level[entry]) == 
-                        (cb_dat->phys_base + 
-                        cb_dat->used_bytes))
-                       
-                {
-                    cb_dat->used_bytes += (virt_size_t)1 << shift;
+                    cb_dat->used_bytes += PAGE_SIZE;
                     ld->level[entry] = 0;
                 }
-                else
+                else if(PAGE_MASK_ADDRESS(ld->level[entry] == 
+                       (cb_dat->phys_base + cb_dat->used_bytes)))
                 {
-
-                    kprintf("OUIT %x\n",PAGE_MASK_ADDRESS(ld->level[entry]));
-                    return(1);
+                    cb_dat->used_bytes += PAGE_SIZE;
+                    ld->level[entry] = 0;
                 }
             }
         }
-#endif
+
 
         next_pos += (virt_size_t)1 << shift;
  
@@ -830,6 +779,7 @@ kprintf("LD_POS %x VEND %x\n", ld->pos, vend);
 
         if(((next_pos >> shift) & 0x1FF) < entry)
         {
+            
             /* Calcuate how much we need to go up */
             while(ld->curr_level < ctx->max_level)
             {
@@ -852,49 +802,19 @@ kprintf("LD_POS %x VEND %x\n", ld->pos, vend);
                /* the upper levels should be the same so just calculate
                 * the address from the base remapping table 
                 */
+                
+                if(pgmgr_level_is_empty(ld->level))
+                {
+                    kprintf("LEVEL_IS_EMPTY %d\n", ld->curr_level);
+                }
+
                 ld->level = (virt_addr_t*) (pgmgr.remap_tbl + 
                             (ld->curr_level  << PAGE_SIZE_SHIFT));
-                
+
                 entry = (next_pos >> shift) & 0x1FF;
-                
-                /* 
-                 * If we are ensuring levels, check if we have an 
-                 * address so that we can dive in
-                 * if we don't have an address, then save it.
-                 * 
-                 * Otherwise if we are allocating pages, 
-                 * check if we have a PT and if we don't have, bail out
-                 */
-#if 0
-                if(!(ld->level[entry] & PAGE_PRESENT))
-                {
-                    if(ld->flags & PGMGR_ENSURE_LEVELS)
-                    {
-                        /* check if the upper level is allocated */
 
-                        if(!PAGE_MASK_ADDRESS(ld->level[entry]))
-                        {
-                            ld->level[entry] = cb_dat->phys_base + 
-                                               cb_dat->used_bytes;
-                            cb_dat->used_bytes += PAGE_SIZE;
-                            pgmgr_clear_pt(ld->ctx, ld->level[entry]);
-                        }
-
-                        ld->level[entry] |= (PAGE_PRESENT | PAGE_WRITABLE);
-                    }
-                    else
-                    {
-                        if((ld->curr_level > PGMGR_MIN_PAGE_TABLE_LEVEL) || 
-                           (~ld->level[entry] & PAGE_TABLE_SIZE))
-                        {
-                            ld->error = PGMGR_TABLE_NOT_ALLOCATED;
-                            return(-1);
-                        }
-                    }
-                }
-#endif
                 /* Store the level and go down again */
-                ld->addr = ld->level[entry];
+                ld->addr = PAGE_MASK_ADDRESS(ld->level[entry]);
                 ld->curr_level--;
                 
             }
@@ -1187,11 +1107,16 @@ int pagemgr_unmap
 
     
     PGMGR_FILL_LEVEL(&ld, ctx, vaddr, len, 1, 0, PGMGR_BOTTOM_LEVEL);
-        pagemgr_free_levels_cb(&cb_dat, &ld);
+    while(    pagemgr_free_levels_cb(&cb_dat, &ld) == 1)
+    {
+        kprintf("%x -> %x\n",cb_dat.phys_base, cb_dat.used_bytes);
+
+    }
+        kprintf("UPPER\n");
     memset(&cb_dat, 0, sizeof(cb_dat));
     PGMGR_FILL_LEVEL(&ld, ctx, vaddr, len, 2, 0, PGMGR_TOP_LEVEL);
 
-    pagemgr_free_levels_cb(&cb_dat, &ld);
+    while(pagemgr_free_levels_cb(&cb_dat, &ld)== 1);
 
 kprintf("BASE %x LENGTH %x\n",cb_dat.phys_base, cb_dat.used_bytes);
   

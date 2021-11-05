@@ -68,12 +68,12 @@ static void kmain_sys_init(void)
     platform_init();
 
     virt_addr_t addr = 0;
-   addr = vm_map(NULL,VM_BASE_AUTO, 1024ull* 1024ul*512, 0x1000, 0, VM_ATTR_WRITABLE);
+   addr = vm_map(NULL,VM_BASE_AUTO, 1024ull* 1024ul*8192ul, 0x1000, 0, VM_ATTR_WRITABLE);
     
     kprintf("ADDR %x\n",addr);
     
     
-    vm_unmap(NULL, addr, 1024ull* 1024ul*512);
+    vm_unmap(NULL, addr, 1024ull* 1024ul*8192ul);
     while(1)
     {
       //  mtx_acquire(&mtx, WAIT_FOREVER);
