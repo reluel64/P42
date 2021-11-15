@@ -3,7 +3,7 @@
  */
 
 #include <paging.h>
-#include <pagemgr.h>
+#include <pgmgr.h>
 #include <vm.h>
 #include <stddef.h>
 #include <utils.h>
@@ -55,7 +55,7 @@ int vm_extent_alloc_slot
         return(VM_FAIL);
     }
 
-    status = pgmgr_alloc(&ctx->pagemgr,
+    status = pgmgr_alloc(&ctx->pgmgr,
                         fext.base, 
                         VM_SLOT_SIZE, 
                         PAGE_WRITABLE);

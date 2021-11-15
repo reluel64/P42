@@ -4,7 +4,7 @@
 #include <defs.h>
 #include <stdint.h>
 #include <linked_list.h> 
-#include <pagemgr.h>
+#include <pgmgr.h>
 
 
 #define VM_ATTR_WRITABLE          PGMGR_WRITABLE
@@ -52,7 +52,7 @@ typedef struct vm_ctx_t
                           * we will keep the structures for the current context
                           * This must be available only in kernel context
                           */
-    pagemgr_ctx_t pagemgr;
+    pgmgr_ctx_t pgmgr;
     spinlock_t   lock;
     uint32_t     flags;
 }vm_ctx_t;

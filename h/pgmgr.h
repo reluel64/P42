@@ -1,5 +1,5 @@
-#ifndef pagemgr_h
-#define pagemgr_h
+#ifndef pgmgr_h
+#define pgmgr_h
 
 #include <stdint.h>
 #include <defs.h>
@@ -30,32 +30,32 @@
 #define PGMGR_WRITE_PROTECT   (1 << 11)
 
 
-typedef struct pagemgr_ctx_t
+typedef struct pgmgr_ctx_t
 {
      phys_addr_t pg_phys; /* physical location of the first
                            * level of paging
                            */ 
     spinlock_t  lock;
     uint8_t max_level;     /* paging level */
-}pagemgr_ctx_t;
+}pgmgr_ctx_t;
 
 
-int         pagemgr_init(pagemgr_ctx_t *ctx);
-void        pagemgr_boot_temp_map_init(void);
-int         pagemgr_install_handler(void);
+int         pgmgr_init(pgmgr_ctx_t *ctx);
+void        pgmgr_boot_temp_map_init(void);
+int         pgmgr_install_handler(void);
 uint64_t    page_manager_get_base(void);
 
-int         pagemgr_attr_change(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len, uint32_t attr);
-int         pagemgr_free(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
-int         pagemgr_unmap(pagemgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
-uint8_t     pagemgr_nx_support(void);
-uint8_t     pagemgr_pml5_support(void);
-int         pagemgr_per_cpu_init(void);
+int         pgmgr_attr_change(pgmgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len, uint32_t attr);
+int         pgmgr_free(pgmgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
+int         pgmgr_unmap(pgmgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
+uint8_t     pgmgr_nx_support(void);
+uint8_t     pgmgr_pml5_support(void);
+int         pgmgr_per_cpu_init(void);
 
 
 int pgmgr_alloc
 (
-    pagemgr_ctx_t *ctx,
+    pgmgr_ctx_t *ctx,
     virt_addr_t    virt,
     virt_size_t    length,
     uint32_t       attr
@@ -63,7 +63,7 @@ int pgmgr_alloc
 
 int pgmgr_map
 (
-    pagemgr_ctx_t *ctx,
+    pgmgr_ctx_t *ctx,
     virt_addr_t    virt,
     virt_size_t    length,
     phys_addr_t    phys, 

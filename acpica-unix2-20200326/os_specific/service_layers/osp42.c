@@ -686,7 +686,7 @@ AcpiOsUnmapMemory (
     if(mem_mgr_ready)
         acpi_unmap((virt_addr_t)where, length);
     else
-        pagemgr_boot_temp_unmap_big((virt_addr_t)where, length);
+        pgmgr_boot_temp_unmap_big((virt_addr_t)where, length);
 #endif
 
     return;

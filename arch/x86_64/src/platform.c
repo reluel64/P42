@@ -201,7 +201,7 @@ int platform_pre_init(void)
     init_serial();
 
     /* initialize temporary mapping */
-    pagemgr_boot_temp_map_init();
+    pgmgr_boot_temp_map_init();
 
     return(status);
 }
@@ -210,7 +210,7 @@ int platform_early_init(void)
 {
     /* install ISR handlers for the page manager */
  
-    if(pagemgr_install_handler())
+    if(pgmgr_install_handler())
         return(-1);
 
     /* Tell ACPI code that now the memory manager is up and running */

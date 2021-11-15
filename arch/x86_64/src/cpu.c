@@ -298,8 +298,8 @@ static void cpu_prepare_trampoline
     entry_pt = (virt_addr_t*)(((virt_addr_t)&__start_ap_entry_pt 
                                             - _TRAMPOLINE_BEGIN) + tr_code);
 
-    pml5_on [0] = pagemgr_pml5_support();
-    nx_on   [0] = pagemgr_nx_support();
+    pml5_on [0] = pgmgr_pml5_support();
+    nx_on   [0] = pgmgr_nx_support();
     pt_base [0] = __read_cr3();
     stack   [0] = (virt_addr_t)_BSP_STACK_BASE;
     entry_pt[0] = (virt_addr_t) cpu_entry_point;

@@ -128,7 +128,7 @@ int vm_init(void)
 
     memset(&kernel_ctx, 0, sizeof(vm_ctx_t));
     
-    if(pagemgr_init(&kernel_ctx.pagemgr) == -1)
+    if(pgmgr_init(&kernel_ctx.pgmgr) == -1)
         return(VM_FAIL);
 
     vm_base = (~vm_base) - (vm_max >> 1);
@@ -143,7 +143,7 @@ int vm_init(void)
    
     spinlock_init(&kernel_ctx.lock);
 
-    status = pgmgr_alloc(&kernel_ctx.pagemgr,
+    status = pgmgr_alloc(&kernel_ctx.pgmgr,
                           kernel_ctx.vm_base,
                           VM_SLOT_SIZE,
                           PAGE_WRITABLE);
@@ -191,7 +191,7 @@ int vm_init(void)
                       kernel_ctx.free_per_slot, 
                       &ext);
 
-    status = pgmgr_alloc(&kernel_ctx.pagemgr,
+    status = pgmgr_alloc(&kernel_ctx.pgmgr,
                         kernel_ctx.vm_base + VM_SLOT_SIZE,
                         VM_SLOT_SIZE,
                         PAGE_WRITABLE);
@@ -256,7 +256,7 @@ virt_addr_t vm_alloc
     /* Check if we also need to allocate physical space now */
     if(!(alloc_flags & VM_LAZY))
     {
-    status = pgmgr_alloc(&ctx->pagemgr,
+    status = pgmgr_alloc(&ctx->pgmgr,
                             addr,
                             len,
                             page_flags);
@@ -298,7 +298,7 @@ int vm_unmap
      if(ctx == NULL)
         ctx = &kernel_ctx;
     kprintf("UNMAP\n");
-   pagemgr_unmap(&ctx->pagemgr, vaddr, len);
+   pgmgr_unmap(&ctx->pgmgr, vaddr, len);
    return(0);
 }
 
@@ -351,7 +351,7 @@ virt_addr_t vm_map
     if(addr == 0)
         return(0);
  
-    status = pgmgr_map(&ctx->pagemgr,
+    status = pgmgr_map(&ctx->pgmgr,
                             addr,
                             len,
                             phys,

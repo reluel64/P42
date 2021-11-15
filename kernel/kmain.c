@@ -2,7 +2,7 @@
 
 #include <utils.h>
 #include <pfmgr.h>
-#include <pagemgr.h>
+#include <pgmgr.h>
 #include <vm.h>
 #include <gdt.h>
 #include <isr.h>
@@ -68,12 +68,13 @@ static void kmain_sys_init(void)
     platform_init();
 
     virt_addr_t addr = 0;
-   addr = vm_map(NULL,VM_BASE_AUTO, 1024ull* 1024ul*8192ul, 0x1000, 0, VM_ATTR_WRITABLE);
-    
+    virt_size_t alloc_sz = 1024 * 1024 *2 ;
+   addr = vm_alloc(NULL,VM_BASE_AUTO, alloc_sz, 0, VM_ATTR_WRITABLE);
+   
     kprintf("ADDR %x\n",addr);
+     memset(addr, 0, alloc_sz);
     
-    
-    vm_unmap(NULL, addr, 1024ull* 1024ul*8192ul);
+    vm_unmap(NULL, addr, alloc_sz );
     while(1)
     {
       //  mtx_acquire(&mtx, WAIT_FOREVER);

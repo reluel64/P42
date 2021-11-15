@@ -6,7 +6,7 @@
 #include <pfmgr.h>
 #include <utils.h>
 #include <memory_map.h>
-#include <pagemgr.h>
+#include <pgmgr.h>
 #include <vm.h>
 
 typedef struct pfmgr_init_t
@@ -357,8 +357,9 @@ int pfmgr_early_alloc_pf
         /* U Can't Touch This */
         if(local_freer.hdr.base < LOW_MEMORY)
         {
+             kprintf("LOW_MEMORY %x\n",freer_phys);
             freer_phys = (phys_addr_t)local_freer.hdr.next_range;
-            kprintf("LOW_MEMORY %x\n",freer_phys);
+           
             continue;
         }
 
