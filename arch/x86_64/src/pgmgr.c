@@ -79,6 +79,7 @@ typedef struct pgmgr_level_data_t
 
 #define PAGE_MASK_ADDRESS(x) (((x) & (~(ATTRIBUTE_MASK))))
 #define PGMGR_MIN_PAGE_TABLE_LEVEL (0x2)
+#define PGMGR_LEVEL_TO_STEP(lvl) (((virt_size_t)1 << PGMGR_LEVEL_TO_SHIFT((lvl))))
 #define PAGE_PATH_RESET(path)     ((path))->pml5_ix   = ~0; \
                                   ((path))->pml4_ix   = ~0; \
                                   ((path))->pdpt_ix   = ~0; \
@@ -214,8 +215,9 @@ static int pgemgr_pml5_is_enabled(void)
     uint32_t ebx = 0;
     uint32_t ecx = 0;
     uint32_t edx = 0;
-    int      enabled = 0;
     uint64_t cr4     = 0;
+    int      enabled = 0;
+
     eax = 0x7;
 
     /* Check if PML5 is available */
@@ -418,11 +420,18 @@ static phys_size_t pgmgr_alloc_levels_cb
     ctx         = ld->ctx;
     next_pos    = ld->pos;
     vend        = ld->base + ld->length - 1;
-
-
+    
+   /* Fix for a nasty issue where a level would be skipped */
+    if(ld->min_level > 1)
+    {   
+        vend = ALIGN_UP(vend, PGMGR_LEVEL_TO_STEP(ld->min_level));
+        vend -= 1;
+    }
+    
     /* We're done here */
     if(vend < ld->pos)
     {
+       
         ld->error = PGMGR_ERR_OK;
         return(0);
     }
@@ -433,10 +442,11 @@ static phys_size_t pgmgr_alloc_levels_cb
     {
         kprintf("CURRENT_LEVEL_IS_ZERO\n");
         ld->curr_level = ctx->max_level;
-        ld->addr = ctx->pg_phys;
+        ld->addr       = ctx->pg_phys;
+        ld->do_map     = 1;
     }
    
-    while((ld->pos < vend) &&
+    while((ld->pos < vend)                         && 
           (cb_dat->used_bytes < cb_dat->avail_bytes))
     {
 
@@ -450,8 +460,8 @@ static phys_size_t pgmgr_alloc_levels_cb
 
         shift = PGMGR_LEVEL_TO_SHIFT(ld->curr_level);
         entry = (ld->pos >> shift) & 0x1FF;
-
-#if 1
+        
+#if 0
         kprintf("Current_level %d -> %x - PHYS %x " \
                 "PHYS_SAVED %x ENTRY %d POS %x Increment %x\n",
                 ld->curr_level, 
@@ -499,7 +509,8 @@ static phys_size_t pgmgr_alloc_levels_cb
                                    PAGE_WRITABLE        | 
                                    PAGE_PRESENT;
              
-                cb_dat->used_bytes += (virt_size_t)1 << shift;
+                cb_dat->used_bytes += PAGE_SIZE;
+                pgmgr_clear_pt(ctx, ld->level[entry]);
             }
         }
         else if(ld->flags & PGMGR_ASSIGN_ADDRESS)
@@ -519,7 +530,7 @@ static phys_size_t pgmgr_alloc_levels_cb
             if(ld->level[entry] & PAGE_PRESENT)
             {
                 ld->level[entry] = PAGE_MASK_ADDRESS(ld->level[entry]) | 
-                                    ld->attr_mask                      |
+                                   ld->attr_mask                      |
                                    PAGE_PRESENT;
                  cb_dat->used_bytes += (virt_size_t)1 << shift;
             }
@@ -570,23 +581,22 @@ static phys_size_t pgmgr_alloc_levels_cb
                  * If we are ensuring levels, check if we have an 
                  * address so that we can dive in
                  * if we don't have an address, then save it.
-                 * 
-                 * Otherwise if we are allocating pages, 
-                 * check if we have a PT and if we don't have, bail out
                  */
-
-                if(~(ld->level[entry] & PAGE_PRESENT))
+                if(ld->flags & PGMGR_CREATE_LEVELS)
                 {
-                    /* check if the upper level is allocated */
-
-                    ld->level[entry] = cb_dat->phys_base + 
-                                       cb_dat->used_bytes;
-                    cb_dat->used_bytes += PAGE_SIZE;
-
-                    ld->level[entry] |= (PAGE_PRESENT | PAGE_WRITABLE);
-                    pgmgr_clear_pt(ld->ctx, ld->level[entry]);
+                    if(~ld->level[entry] & PAGE_PRESENT)
+                    {
+                        /* check if the upper level is allocated */
+                        ld->level[entry] = cb_dat->phys_base  + 
+                                           cb_dat->used_bytes + 
+                                           PAGE_PRESENT       + 
+                                           PAGE_WRITABLE;
+                        
+                        cb_dat->used_bytes += PAGE_SIZE;
+                        /* Make sure that the underlying table is clean */
+                        pgmgr_clear_pt(ctx, ld->level[entry]);
+                    }
                 }
-                
                 /* Store the level and go down again */
                 ld->addr = ld->level[entry];
                 ld->curr_level--;
@@ -623,7 +633,11 @@ static phys_size_t pgmgr_free_levels_cb
     uint8_t            shift       = 0;
     virt_addr_t        vend        = 0;
     phys_addr_t        base        = 0;
-
+    virt_addr_t       *up_level    = 0;
+    uint8_t            up_shift    = 0;
+    uint16_t           up_entry    = 0;
+    
+    
     ld          = pv;
     ctx         = ld->ctx;
     next_pos    = ld->pos;
@@ -652,7 +666,6 @@ static phys_size_t pgmgr_free_levels_cb
    
     while(ld->pos < vend)
     {
-
         if(ld->do_map || ld->level == NULL)
         {
             ld->level = (virt_addr_t*) _pgmgr_temp_map(ld->addr, 
@@ -695,25 +708,46 @@ static phys_size_t pgmgr_free_levels_cb
             ld->do_map = 1;
             continue;
         }
+        
 
-        base = PAGE_MASK_ADDRESS(ld->level[entry]);
-
-        if(cb_dat->used_bytes == 0)
+        if(ld->level[entry] & PAGE_PRESENT)
         {
-            cb_dat->phys_base = base;
-            cb_dat->used_bytes = (virt_size_t)1 << shift;
-            ld->level[entry] = 0;
+            base = PAGE_MASK_ADDRESS(ld->level[entry]);
+            
+            if(cb_dat->used_bytes == 0)
+            {
+                cb_dat->phys_base = base;
+                cb_dat->used_bytes = (virt_size_t)1 << shift;
+                ld->level[entry] = 0;
+            }
+            else if(base == (cb_dat->phys_base + cb_dat->used_bytes))
+            {
+                cb_dat->used_bytes += (virt_size_t)1 << shift;
+                ld->level[entry] = 0;
+            }
+            else
+            {
+                return(1);
+            }
         }
-        else if(base == (cb_dat->phys_base + cb_dat->used_bytes))
+        
+       // if(ld->flags & PGMGR_RELEASE_LEVELS)
         {
-            cb_dat->used_bytes += (virt_size_t)1 << shift;
-            ld->level[entry] = 0;
+            /* Before going up, let's see if the entry
+             * from the upper level that corresponds to this
+             * one can be freed
+             */
+            up_level = (virt_addr_t*) (pgmgr.remap_tbl + 
+                            ((ld->curr_level + 1)  << PAGE_SIZE_SHIFT));
+            up_shift = PGMGR_LEVEL_TO_SHIFT(ld->curr_level + 1);
+            up_entry = (ld->pos >> up_shift) & 0x1FF;
+          
+            if(pgmgr_level_is_empty(up_level))
+            {
+                kprintf("LEVEL IS EMPTY\n");
+            }
         }
-        else
-        {
-            return(1);
-        }
-
+        
         next_pos  += ((virt_size_t) 1 << shift);
         
         if(next_pos < ld->pos)
@@ -970,7 +1004,7 @@ int pgmgr_alloc
  
     if(ld.error || status)
     {
-        kprintf("Failed to allocate %d %d\n", status, ld.error);
+        kprintf("Failed to allocate %x %d\n", status, ld.error);
         spinlock_unlock_int(&ctx->lock);
         return(-1);
     }

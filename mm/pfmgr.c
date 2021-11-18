@@ -1042,7 +1042,6 @@ int pfmgr_show_free_memory(void)
     {
         free_mem += freer->avail_pf;
         total_mem += freer->total_pf;
-
         freer = (pfmgr_free_range_t*)linked_list_next(&freer->hdr.node);
     }
 

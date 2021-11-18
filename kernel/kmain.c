@@ -66,15 +66,15 @@ static void kmain_sys_init(void)
     
     kprintf("Platform init\n");
     platform_init();
-
+   pfmgr_show_free_memory();
     virt_addr_t addr = 0;
-    virt_size_t alloc_sz = 1024 * 1024 *2 ;
+    virt_size_t alloc_sz = 1024ul * 1024ul * 1024ul * 2ul;
    addr = vm_alloc(NULL,VM_BASE_AUTO, alloc_sz, 0, VM_ATTR_WRITABLE);
-   
+    pfmgr_show_free_memory();
     kprintf("ADDR %x\n",addr);
      memset(addr, 0, alloc_sz);
     
-    vm_unmap(NULL, addr, alloc_sz );
+    //vm_unmap(NULL, addr, alloc_sz );
     while(1)
     {
       //  mtx_acquire(&mtx, WAIT_FOREVER);
