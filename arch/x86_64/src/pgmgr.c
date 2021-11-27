@@ -415,7 +415,7 @@ static int pgmgr_level_entry_is_empty
 {
     virt_addr_t *vaddr = NULL;
     int ret = -1;
-    kprintf("CHECK\n");
+
     vaddr = (virt_addr_t*)_pgmgr_temp_map(addr, 
                                          PGMGR_LEVEL_ENTRY_PAGE(ctx->max_level));
     if(vaddr != NULL)
@@ -683,7 +683,7 @@ static phys_size_t pgmgr_free_levels_cb
 
     if(!ld->curr_level || !ld->addr)
     {
-        kprintf("CURRENT_LEVEL_IS_ZERO\n");
+      //  kprintf("CURRENT_LEVEL_IS_ZERO\n");
         ld->curr_level = ctx->max_level;
         ld->addr = ctx->pg_phys;
     }
@@ -732,8 +732,6 @@ static phys_size_t pgmgr_free_levels_cb
             ld->do_map = 1;
             continue;
         }
-        
-        
         
         if(ld->flags & PGMGR_RELEASE_LEVELS)
         {
@@ -793,6 +791,36 @@ static phys_size_t pgmgr_free_levels_cb
 
         if(((next_pos >> shift) & 0x1FF) < entry)
         {
+            #if 1
+            if(ld->flags & PGMGR_RELEASE_LEVELS)
+            {
+                up_shift = PGMGR_LEVEL_TO_SHIFT(ld->curr_level + 1);
+                up_entry = (ld->pos >> up_shift) & 0x1FF;
+                up_level =  (virt_addr_t*) (pgmgr.remap_tbl + 
+                                ((ld->curr_level + 1)  << PAGE_SIZE_SHIFT));
+                                
+                base = PAGE_MASK_ADDRESS(up_level[up_entry]);
+            
+                if(pgmgr_level_entry_is_empty(ctx, base) > 0)
+                {
+                    if(cb_dat->used_bytes == 0)
+                    {
+                        cb_dat->phys_base = base;
+                        cb_dat->used_bytes = PAGE_SIZE;
+                        up_level[up_entry] = 0;
+                    }
+                    else if(base == (cb_dat->phys_base + cb_dat->used_bytes))
+                    {
+                        cb_dat->used_bytes += PAGE_SIZE;
+                        up_level[up_entry] = 0;
+                    }
+                    else
+                    {
+                        return(1);
+                    }
+                }
+            }
+            #endif
             /* Calcuate how much we need to go up */
             while(ld->curr_level < ctx->max_level)
             {
@@ -1125,15 +1153,15 @@ int pgmgr_unmap
     int i = 1;
     
     PGMGR_FILL_LEVEL(&ld, ctx, vaddr, len, 1, 0, PGMGR_RELEASE_ADDRESS);
-    while(pgmgr_free_levels_cb(&cb_dat, &ld) != 0)
-        kprintf("BASE %x LEN %x\n",cb_dat.phys_base, cb_dat.used_bytes);
+    while(pgmgr_free_levels_cb(&cb_dat, &ld) > 0);
+       
         
         kprintf("UPPER\n");
     memset(&cb_dat, 0, sizeof(cb_dat));
     PGMGR_FILL_LEVEL(&ld, ctx, vaddr, len, 2, 0, PGMGR_RELEASE_LEVELS);
 
-    while(pgmgr_free_levels_cb(&cb_dat, &ld)!=0)
-        kprintf("BASE %x LENGTH %x\n",cb_dat.phys_base, cb_dat.used_bytes);
+    pfmgr->dealloc(pgmgr_free_levels_cb, &ld);
+
   
     return(0);
 }

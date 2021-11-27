@@ -295,10 +295,19 @@ int vm_unmap
     virt_size_t len
 )
 {
+    int status = 0;
+    
      if(ctx == NULL)
         ctx = &kernel_ctx;
-    kprintf("UNMAP\n");
+        
+  status =  vm_space_free(ctx, vaddr, len);
+   if(status != VM_OK)
+   {
+       kprintf("ERROR\n");
+       while(1);
+   }
    pgmgr_unmap(&ctx->pgmgr, vaddr, len);
+
    return(0);
 }
 

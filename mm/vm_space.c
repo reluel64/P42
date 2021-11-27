@@ -327,7 +327,7 @@ int vm_space_free
                              &rem_ext);
 
     free_ext.base = addr;
-    free_ext.length = addr;
+    free_ext.length = len;
     free_ext.flags = (req_ext.flags & VM_REGION_MASK);
 
 
