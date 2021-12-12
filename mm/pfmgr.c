@@ -451,6 +451,7 @@ static int pfmgr_lkup_bmp_for_free_pf
     phys_size_t pf_ret        = 0;
     phys_size_t req_pf        = 0;
     int         status        = -1;
+    uint8_t     stop          = 0;
     
     /* Check if there's anything interesting here */
     if(freer->avail_pf == 0)
@@ -479,7 +480,7 @@ static int pfmgr_lkup_bmp_for_free_pf
     pf_pos = (start_addr - hdr->base) / PAGE_SIZE;
     
 
-    while((pf_pos < freer->total_pf) && (req_pf > 0))
+    while((pf_pos < freer->total_pf) && (req_pf > 0) && !stop)
     {
         pf_ix       = pf_pos % PF_PER_ITEM;
         bmp_pos     = pf_pos / PF_PER_ITEM;
@@ -495,7 +496,8 @@ static int pfmgr_lkup_bmp_for_free_pf
          * Otherwise we must check every bit
          */
         
-        if((freer->bmp[bmp_pos] & mask) == 0)
+        if((mask_frames == PF_PER_ITEM) && 
+           (freer->bmp[bmp_pos] & mask) == 0)
         {
             if(pf_ret == 0)
                 start_addr = hdr->base + pf_pos * PAGE_SIZE;
@@ -506,24 +508,29 @@ static int pfmgr_lkup_bmp_for_free_pf
         }
         else
         {
-            mask = ((virt_addr_t)1 << (pf_ix)); 
-            if((freer->bmp[bmp_pos] & mask) == 0)
+            /* Slower path - check each page frame */
+            for(phys_size_t i = 0; i < mask_frames; i++)
             {
-                if(pf_ret == 0)
+                mask = ((virt_addr_t)1 << (pf_ix + i)); 
+                if((freer->bmp[bmp_pos] & mask) == 0)
                 {
-                    start_addr = hdr->base + pf_pos * PAGE_SIZE;
+                    if(pf_ret == 0)
+                    {
+                        start_addr = hdr->base + pf_pos * PAGE_SIZE;
+                    }
+                    pf_ret ++;
+                    req_pf --;
                 }
-                pf_ret ++;
-                req_pf --;
+                /* Stop looking if pf_ret > 0 */
+                else if(pf_ret > 0)
+                {
+                    stop = 1;
+                    break;
+                }
+                pf_pos++;
             }
-            /* Keep looking */
-            else if(pf_ret > 0)
-            {
-                break;
-            }
-            pf_pos++;
         }
-
+        
     }
 
     /* No page frame available */
@@ -560,7 +567,8 @@ static int pfmgr_mark_bmp
     phys_size_t pf_ix       = 0;
     phys_size_t mask        = 0;
     phys_size_t mask_frames = 0;
-
+    uint8_t     stop        = 0;
+    
     /* Calculate the starting position */
     pf_pos = (addr - freer->hdr.base) / PAGE_SIZE;
 
@@ -578,7 +586,8 @@ static int pfmgr_mark_bmp
 
         mask = ~(virt_size_t)0;
 
-        if((freer->bmp[bmp_pos] & mask) == 0)
+        if((mask_frames == PF_PER_ITEM) && 
+          (freer->bmp[bmp_pos] & mask) == 0)
         {
             freer->bmp[bmp_pos] |= mask;
             pf_pos += mask_frames ;
@@ -587,20 +596,25 @@ static int pfmgr_mark_bmp
         }
         else
         {
-
-            mask = ((virt_addr_t)1 << (pf_ix));
-
-            if((freer->bmp[bmp_pos] & mask) == 0)
+            /* Slower path - check each page frame */
+            for(phys_size_t i = 0; i < mask_frames; i++)
             {
-                freer->bmp[bmp_pos] |= mask;
-                pf--;
-                freer->avail_pf--;
+                mask = ((virt_addr_t)1 << (pf_ix + i));
+
+                if((freer->bmp[bmp_pos] & mask) == 0)
+                {
+                    freer->bmp[bmp_pos] |= mask;
+                    pf--;
+                    freer->avail_pf--;
+                }
+                else
+                {
+                    kprintf("FATAL: %s %d\n", __FUNCTION__,__LINE__);
+                    while(1);
+                    break;
+                }
+                pf_pos ++;
             }
-            else
-            {
-                break;
-            }
-            pf_pos ++;
         }
     }
 
@@ -631,7 +645,8 @@ static int pfmgr_clear_bmp
     phys_size_t pf_ix   = 0;
     phys_size_t mask    = 0;
     phys_size_t mask_frames = 0;
-
+    uint8_t     stop        = 0;
+    
     pf_pos = (addr - freer->hdr.base) / PAGE_SIZE;
 
     while((pf_pos < freer->total_pf)          && 
@@ -648,7 +663,8 @@ static int pfmgr_clear_bmp
        
         mask = ~(virt_size_t)0;
 
-        if((freer->bmp[bmp_pos] & mask))
+        if((mask_frames == PF_PER_ITEM) && 
+           (freer->bmp[bmp_pos] & mask))
         {
             freer->bmp[bmp_pos] &= ~mask;
             pf_pos += mask_frames ;
@@ -657,20 +673,25 @@ static int pfmgr_clear_bmp
         }
         else
         {
-            mask = ((virt_addr_t)1 << (pf_ix));     
+            for(phys_size_t i = 0; i < mask_frames; i++)
+            {
+                                
+                mask = ((virt_addr_t)1 << (pf_ix + i));
 
-            if((freer->bmp[bmp_pos] & mask))
-            {
-                freer->bmp[bmp_pos] &= ~mask;
-                pf--;
-                freer->avail_pf++;
+                if((freer->bmp[bmp_pos] & mask))
+                {
+                    freer->bmp[bmp_pos] &= ~mask;
+                    pf--;
+                    freer->avail_pf++;
+                }
+                else
+                {
+                    kprintf("FATAL: %s %d\n", __FUNCTION__,__LINE__);
+                    while(1);
+                    break;
+                }
+                pf_pos ++;
             }
-            else
-            {
-                break;
-            }
-            pf_pos ++;
-            
         }
     }
 
