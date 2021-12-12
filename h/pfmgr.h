@@ -14,7 +14,7 @@
 #define ALLOC_CB_STOP (1 << 4)
 typedef struct pfmgr_cb_data_t pfmgr_cb_data_t;
 
-typedef phys_size_t (*alloc_cb)(pfmgr_cb_data_t *cb_dat, void *pv);
+typedef int (*alloc_cb)(pfmgr_cb_data_t *cb_dat, void *pv);
 typedef int     (*free_cb) (pfmgr_cb_data_t *cb_dat, void *pv);
 
 typedef struct pfmgr_cb_data_t

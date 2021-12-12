@@ -24,6 +24,8 @@
 #define VM_PERMANENT (1 << 4) /* Memory cannot be swaped       */
 #define VM_LOCKED    (1 << 5) /* Memory cannot be freed        */
 #define VM_LAZY      (1 << 7) /* Memory will be alocated when needed */
+#define VM_LAZY_FREE (1 << 8) /* Free memory lazily            */
+
 
 #define VM_BASE_AUTO (~0ull)    /* Find the best memory from the either high
                                  * or low memory 

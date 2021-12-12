@@ -68,21 +68,27 @@ static void kmain_sys_init(void)
     platform_init();
     
     virt_addr_t addr = 0;
-    virt_size_t alloc_sz = 1024ul * 1024ul * 4096ul;
- 
+    virt_size_t alloc_sz = 1024ul * 1024ul * 4ul;
+  kprintf("BEFORE LOOP - ");
+        pfmgr_show_free_memory();
     while(1)
     {
       //  mtx_acquire(&mtx, WAIT_FOREVER);
-          
-              pfmgr_show_free_memory();
-   addr = vm_map(NULL,VM_BASE_AUTO, alloc_sz,0, 0, VM_ATTR_WRITABLE);
-  
-    pfmgr_show_free_memory();
-    kprintf("ADDR %x\n",addr);
-   //  memset(addr, 0, alloc_sz);
+     
+        kprintf("BEFORE - ");
+        pfmgr_show_free_memory();
+      //   vm_list_entries();
+        addr = vm_map(NULL,0xffff80003fe00000, alloc_sz, 0, 0, VM_ATTR_WRITABLE);
+        kprintf("--------------------------------------------------\n");
+        
+    //memset(addr, 0, alloc_sz);
+    kprintf("DONE\n");
     
-    vm_unmap(NULL, addr, alloc_sz );
-     pfmgr_show_free_memory();
+    
+        vm_unmap(NULL, 0xffff80003fe00000, alloc_sz );
+        kprintf("AFTER  - "); pfmgr_show_free_memory();
+        kprintf("+++++++++++++++++++++++++++++++++++++++++++++++\n");
+        //vm_list_entries();
              
       //  kprintf("XXXX %d\n",cpu_int_check());
       //  kprintf("TEST\n");
@@ -174,10 +180,10 @@ void kmain()
     /* initialize interrupt handler */
     if(isr_init())
         return;
-
+    
     /* Initialize basic platform functionality */
     platform_early_init();
- 
+
     /* Initialize base of the scheduler */
     sched_init();
 

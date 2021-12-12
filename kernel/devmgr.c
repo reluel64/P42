@@ -318,7 +318,7 @@ int devmgr_drv_init(driver_t *drv)
 
     if(drv == NULL)
         return(status);
-    
+
     if(drv->drv_init)
         status = drv->drv_init(drv);
 

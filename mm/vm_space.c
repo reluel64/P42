@@ -223,7 +223,7 @@ virt_addr_t vm_space_alloc
                                ctx->alloc_per_slot);
 
         /* status != 0? ...well..FUCK */
-        if(status != 0)
+        if(status != VM_OK)
         {
             /* 
              * Undo the changes
@@ -272,7 +272,8 @@ int vm_space_free
 (
     vm_ctx_t *ctx,
     virt_addr_t addr,
-    virt_size_t len
+    virt_size_t len,
+    uint32_t    flags
 )
 {
     vm_extent_t req_ext;
@@ -294,11 +295,10 @@ int vm_space_free
 
     memset(&req_ext, 0, sizeof(vm_extent_t));
 
-
     /* set up the request */
     req_ext.base = addr;
     req_ext.length = len;
-
+    
     status = vm_extent_extract(&ctx->alloc_mem, 
                                 ctx->alloc_per_slot,
                                 &req_ext);
@@ -328,8 +328,7 @@ int vm_space_free
 
     free_ext.base = addr;
     free_ext.length = len;
-    free_ext.flags = (req_ext.flags & VM_REGION_MASK);
-
+    free_ext.flags = (req_ext.flags & VM_REGION_MASK) ;
 
     vm_extent_insert(&ctx->alloc_mem,
                     ctx->alloc_per_slot,

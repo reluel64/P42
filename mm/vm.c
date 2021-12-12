@@ -299,15 +299,28 @@ int vm_unmap
     
      if(ctx == NULL)
         ctx = &kernel_ctx;
+     
+    spinlock_lock_int(&ctx->lock);
         
-  status =  vm_space_free(ctx, vaddr, len);
-   if(status != VM_OK)
-   {
-       kprintf("ERROR\n");
-       while(1);
-   }
-   pgmgr_unmap(&ctx->pgmgr, vaddr, len);
-
+    status =  vm_space_free(ctx, vaddr, len);
+    
+    if(status != VM_OK)
+    {
+        kprintf("%s %d ERROR\n",__FUNCTION__,__LINE__);
+        spinlock_unlock_int(&ctx->lock);
+        while(1);
+    }
+    
+    spinlock_unlock_int(&ctx->lock);
+    
+    status = pgmgr_unmap(&ctx->pgmgr, vaddr, len);
+       
+    if(status != 0)
+    {
+        kprintf("FAILED TO UNMAP\n");
+        return(-1);
+    }
+   
    return(0);
 }
 
@@ -319,7 +332,34 @@ int vm_free
     virt_size_t len
 )
 {
-    return(0);
+
+    int status = 0;
+    
+     if(ctx == NULL)
+        ctx = &kernel_ctx;
+     
+    spinlock_lock_int(&ctx->lock);
+        
+    status =  vm_space_free(ctx, vaddr, len);
+    
+    if(status != VM_OK)
+    {
+        kprintf("ERROR\n");
+        spinlock_unlock_int(&ctx->lock);
+        while(1);
+    }
+    
+    spinlock_unlock_int(&ctx->lock);
+    
+    status = pgmgr_free(&ctx->pgmgr, vaddr, len);
+       
+    if(status != 0)
+    {
+        kprintf("FAILED TO FREE\n");
+        return(-1);
+    }
+   
+   return(0);
 }
 
 virt_addr_t vm_map
@@ -366,7 +406,6 @@ virt_addr_t vm_map
                             phys,
                             page_flags);
     
-    kprintf("STATUS %x\n",status);
     if(status != 0)
     {
         spinlock_lock_int(&ctx->lock);

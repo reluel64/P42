@@ -209,7 +209,7 @@ int platform_pre_init(void)
 int platform_early_init(void)
 {
     /* install ISR handlers for the page manager */
- 
+
     if(pgmgr_install_handler())
         return(-1);
 

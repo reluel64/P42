@@ -37,7 +37,7 @@ int vm_extent_alloc_slot
     vm_extent_t alloc_ext;
 
     int          status = 0;
-
+    kprintf("+++++++++++++++++++++++++++++++++++++++++++\n");
     memset(&fext, 0, sizeof(vm_extent_t));
 
     /* we want free memory to come from the high memory area */
@@ -354,44 +354,44 @@ int vm_extent_split
     dst->base = 0;
     dst->length = 0;
 
-    if(vm_is_in_range(src->base, 
+    if(!vm_is_in_range(src->base, 
                        src->length, 
                        virt, 
                        len))
     {
-        dst->base = (virt + len) ;
-
-        dst->length  = (src->base + src->length)  - 
-                       (dst->base);
-
-        src->length  = virt - (src->base);
-
-        /* make sure the flags are the same regardless
-         * of what happens next 
-         */
-        dst->flags = src->flags;
-        dst->eflags = src->eflags;
-
-        if(dst->length == 0)
-        {
-            dst->base = 0;
-            return(0);
-        }
-
-        if(src->length == 0)
-        {
-            src->base = dst->base;
-            src->length = dst->length;
-
-            dst->base = 0;
-            dst->length = 0;
-
-            return(0);
-        }
-
-        return(1);
+        return(-1);
     }
     
-    return(-1);
-    
+    dst->base = (virt + len) ;
+
+    dst->length  = (src->base + src->length)  - 
+                   (dst->base);
+
+    src->length  = virt - (src->base);
+
+    /* make sure the flags are the same regardless
+     * of what happens next 
+     */
+    dst->flags = src->flags;
+    dst->eflags = src->eflags;
+
+    if(dst->length == 0)
+    {
+        dst->base = 0;
+        return(0);
+    }
+
+    if(src->length == 0)
+    {
+        src->base = dst->base;
+        src->length = dst->length;
+
+        dst->base = 0;
+        dst->length = 0;
+
+        return(0);
+    }
+
+    return(1);
+
 }
