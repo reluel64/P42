@@ -120,7 +120,9 @@ static void pfmgr_early_clear_bitmap
     virt_addr_t *bmp = NULL;
     phys_size_t zlen = 0;
     phys_size_t pos  = 0;
-    phys_size_t bmp_len = fmem->hdr.struct_len - sizeof(pfmgr_free_range_t);
+    phys_size_t bmp_len = 0;
+    
+    bmp_len = fmem->hdr.struct_len - sizeof(pfmgr_free_range_t);
 
     while(pos < bmp_len)
     {
@@ -228,11 +230,11 @@ static void pfmgr_init_free_callback
                            track_addr + offsetof(pfmgr_free_range_t, bmp),
                            _KERNEL_LMA, 
                            _KERNEL_IMAGE_LEN);
-                           kprintf("MARKED KERNEL\n");
+        kprintf("MARKED KERNEL %x -> %x\n",_KERNEL_LMA, _KERNEL_LMA_END);
     }
 
     if(pfmgr_in_range(e->base, e->length, base.physb_start, 
-                       base.busyr.count * sizeof(pfmgr_busy_range_t)))
+                      base.busyr.count * sizeof(pfmgr_busy_range_t)))
     {
         pfmgr_early_mark_bitmap(&local_freer,
                            track_addr + offsetof(pfmgr_free_range_t, bmp),
@@ -339,7 +341,6 @@ int pfmgr_early_alloc_pf
                               .used_bytes = 0
                              };
 
-
     freer_phys = base.physf_start;
 
     do
@@ -357,7 +358,7 @@ int pfmgr_early_alloc_pf
         /* U Can't Touch This */
         if(local_freer.hdr.base < LOW_MEMORY)
         {
-             kprintf("LOW_MEMORY %x\n",freer_phys);
+            kprintf("LOW_MEMORY %x\n",freer_phys);
             freer_phys = (phys_addr_t)local_freer.hdr.next_range;
            
             continue;
@@ -441,7 +442,6 @@ static int pfmgr_lkup_bmp_for_free_pf
 )
 {
     pfmgr_range_header_t *hdr = NULL;
-    phys_addr_t pf_count      = 0;
     phys_addr_t start_addr    = 0;
     phys_size_t pf_ix         = 0;
     phys_size_t pf_pos        = 0;
@@ -450,12 +450,11 @@ static int pfmgr_lkup_bmp_for_free_pf
     phys_size_t mask          = 0;
     phys_size_t pf_ret        = 0;
     phys_size_t req_pf        = 0;
-    uint8_t     stop          = 0;
     int         status        = -1;
-
+    
     /* Check if there's anything interesting here */
     if(freer->avail_pf == 0)
-        return(-1);
+        return(status);
     
     
     hdr        = &freer->hdr;
@@ -489,20 +488,13 @@ static int pfmgr_lkup_bmp_for_free_pf
         mask_frames = min(mask_frames, req_pf);
         /* Compute the mask */
 
-        if(mask_frames != PF_PER_ITEM)
-        {
-            mask = (1ull << mask_frames) - 1;
-            mask = (mask << pf_ix);
-        }
-        else
-        {
-            mask = ~(virt_addr_t)0;
-        }
-
+        mask = ~(virt_addr_t)0;
+        
         /* 
          * Check if we have PF_PER_ITEM from one shot 
          * Otherwise we must check every bit
          */
+        
         if((freer->bmp[bmp_pos] & mask) == 0)
         {
             if(pf_ret == 0)
@@ -514,37 +506,36 @@ static int pfmgr_lkup_bmp_for_free_pf
         }
         else
         {
-            for(phys_size_t i = 0; i < mask_frames; i++)
+            mask = ((virt_addr_t)1 << (pf_ix)); 
+            if((freer->bmp[bmp_pos] & mask) == 0)
             {
-                mask = ((virt_addr_t)1 << (pf_ix + i));     
-                
-                if((freer->bmp[bmp_pos] & mask) == 0)
+                if(pf_ret == 0)
                 {
-                    if(pf_ret == 0)
-                    {
-                        start_addr = hdr->base + pf_pos * PAGE_SIZE;
-                    }
-                    pf_ret ++;
-                    pf_pos ++;
-                    req_pf --;
+                    start_addr = hdr->base + pf_pos * PAGE_SIZE;
                 }
-                else
-                {
-                    break;
-                }
+                pf_ret ++;
+                req_pf --;
             }
-
-            if(pf_ret != 0)
+            /* Keep looking */
+            else if(pf_ret > 0)
+            {
                 break;
-            
+            }
             pf_pos++;
         }
+
     }
 
-    if(pf_ret != req_pf)
+    /* No page frame available */
+    if(pf_ret == 0)
         status = -1;
-    else
+    /* page frames available but not as required */
+    else if(pf_ret < req_pf)
         status = 0;
+    /* page frames available at least as required */
+    else
+        status = 1;
+        
 
     *start = start_addr;
     *pf    = pf_ret;
@@ -585,16 +576,7 @@ static int pfmgr_mark_bmp
 
         /* Compute the mask */
 
-        if(mask_frames != PF_PER_ITEM)
-        {
-            mask = (1ull << mask_frames) - 1;
-            mask = (mask << pf_ix);
-        }
-        else
-        {
-            mask = ~(virt_size_t)0;
-        }
-
+        mask = ~(virt_size_t)0;
 
         if((freer->bmp[bmp_pos] & mask) == 0)
         {
@@ -605,8 +587,20 @@ static int pfmgr_mark_bmp
         }
         else
         {
-            kprintf("%s %d: Wait, that's illegal\n",__FUNCTION__,__LINE__);
-            break;
+
+            mask = ((virt_addr_t)1 << (pf_ix));
+
+            if((freer->bmp[bmp_pos] & mask) == 0)
+            {
+                freer->bmp[bmp_pos] |= mask;
+                pf--;
+                freer->avail_pf--;
+            }
+            else
+            {
+                break;
+            }
+            pf_pos ++;
         }
     }
 
@@ -652,16 +646,7 @@ static int pfmgr_clear_bmp
 
         /* Compute the mask */
        
-       
-        if(mask_frames != PF_PER_ITEM)
-        {
-            mask = (1ull << mask_frames) - 1;
-            mask = (mask << pf_ix);
-        }
-        else
-        {
-            mask = ~(virt_size_t)0;
-        }
+        mask = ~(virt_size_t)0;
 
         if((freer->bmp[bmp_pos] & mask))
         {
@@ -672,8 +657,20 @@ static int pfmgr_clear_bmp
         }
         else
         {
-           kprintf("%s %d: Wait, that's illegal\n",__FUNCTION__,__LINE__);
-           break;
+            mask = ((virt_addr_t)1 << (pf_ix));     
+
+            if((freer->bmp[bmp_pos] & mask))
+            {
+                freer->bmp[bmp_pos] &= ~mask;
+                pf--;
+                freer->avail_pf++;
+            }
+            else
+            {
+                break;
+            }
+            pf_pos ++;
+            
         }
     }
 
@@ -690,8 +687,9 @@ static int pfmgr_alloc
     void *pv
 )
 {
-    pfmgr_free_range_t *freer      = NULL;
-    pfmgr_free_range_t *next_freer = NULL;
+    pfmgr_free_range_t *free_range = NULL;
+    list_node_t        *fnode      = NULL;
+    list_node_t        *next_fnode = NULL;
     pfmgr_cb_data_t    cb_dat = {
                                  .avail_bytes = 0,
                                  .phys_base   = 0,
@@ -704,62 +702,103 @@ static int pfmgr_alloc
     phys_addr_t         next_addr  = 0;
     int                 lkup_sts   = 0;
     int                 cb_status  = 0;
-
-    freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
+    virt_addr_t len = 0;
+    
+    fnode = linked_list_first(&base.freer);
     req_pf = pf;
     
-    while(freer)
+    while(fnode)
     {
+        free_range = (pfmgr_free_range_t*) fnode;
+        
         if(req_pf == 0)
         {
             if(flags & ALLOC_CB_STOP)
-                req_pf = freer->avail_pf;
+                req_pf = free_range->avail_pf;
             else
                 return(-1);
         }
 
-        next_freer = (pfmgr_free_range_t*)linked_list_next((list_node_t*)freer);
+        next_fnode = linked_list_next(fnode);
 
-        if(freer->hdr.base  < LOW_MEMORY)
+        /* Don't do stuff in the lower memory */
+        if(free_range->hdr.base  < LOW_MEMORY)
         {
-            freer = next_freer;
+            fnode = next_fnode;
             continue;
         }
-               
-        if(freer->next_lkup >= freer->total_pf)
-            freer->next_lkup = 0;
+        
+        /* next_lkup should always be smaller than total_pf
+         * if it happens otherwise, stop everything
+         */
+        if(free_range->next_lkup >= free_range->total_pf)
+        {
+            kprintf("%s %d -> next_lkup > total_pf\n",__FUNCTION__,__LINE__);
+            while(1);
+        }
+        
+        /* On contig allocations, we want to search the entire range so
+         * we start the lookup from the beginning 
+         */
+        if(flags & ALLOC_CONTIG)
+            free_range->next_lkup = 0;
+        
+        /* help the lookup a bit by starting the lookup from the previously
+         * known to be free address
+         */
+        addr = free_range->hdr.base + (free_range->next_lkup * PAGE_SIZE);
+        avail_pf   = req_pf;   
+        used_pf    = 0; 
 
-        /* help the lookup a bit */
-        addr = freer->hdr.base + freer->next_lkup * PAGE_SIZE;
-        avail_pf   = req_pf;    
+        /* Look for available page frames within range */
+        lkup_sts   = pfmgr_lkup_bmp_for_free_pf(free_range, 
+                                                &addr, 
+                                                &avail_pf);
 
-        lkup_sts   = pfmgr_lkup_bmp_for_free_pf(freer, &addr, &avail_pf);
-
-        used_pf    = 0;
+        /* Check if we've got anything from the lookup */
+        if(lkup_sts < 0)
+        {
+            /* Check if next_lkup > 0 and if it is, 
+             * try again with it set to 0 
+             */
+            if(free_range->next_lkup > 0)
+            {
+                kprintf("Look again\n");
+                free_range->next_lkup = 0;
+                addr                  = free_range->hdr.base;
+                avail_pf              = req_pf;
+                lkup_sts              = pfmgr_lkup_bmp_for_free_pf(free_range, 
+                                                                  &addr, 
+                                                                  &avail_pf);
+            }
+            
+            if(lkup_sts < 0)
+            {
+                fnode = next_fnode;
+                continue;   
+            }
+        }
+        
+        /* Always update the next lookup */
+        free_range->next_lkup = ((addr - free_range->hdr.base) / 
+                                PAGE_SIZE) + avail_pf;
         
         /* Contiguous pages should be satisfied from one lookup */
-        if((flags & ALLOC_CONTIG) && lkup_sts != 0)
+        if((flags & ALLOC_CONTIG) && lkup_sts < 1)
         {
-            /* Update the next lookup */
-            freer->next_lkup = (addr - freer->hdr.base) / PAGE_SIZE + avail_pf;
-            
-            if(avail_pf == 0)
-            {
-                /* reset next_lkup if contig is used */
-                freer->next_lkup = 0; 
-                freer = next_freer;
-            }
-
+            fnode = next_fnode;
             continue;
         }
- 
-        if(avail_pf > 0)
-        {       
-            cb_dat.used_bytes  = 0;
-            cb_dat.phys_base   =  addr;
-            cb_dat.avail_bytes = avail_pf * PAGE_SIZE;
 
+        if(avail_pf > 0)
+        {
+            cb_dat.used_bytes  = 0;
+            cb_dat.phys_base   = addr;
+            cb_dat.avail_bytes = avail_pf * PAGE_SIZE;
+            
+            kprintf("BASE %x AVAILABLE %x\n",cb_dat.phys_base, cb_dat.avail_bytes);
             cb_status = cb(&cb_dat, pv);
+            kprintf("ALLOC BASE 0x%x LEN 0x%x\n",addr, cb_dat.used_bytes);
             
             /* 
              * If there is an error detected, we have to bail out
@@ -767,47 +806,38 @@ static int pfmgr_alloc
 
             if(cb_status < 0)
                 return(-1);
-            
 
             /* decrease the required pfs */
+            len += cb_dat.used_bytes;
             used_pf = cb_dat.used_bytes / PAGE_SIZE;
             req_pf -= used_pf;
             
-            if(pfmgr_mark_bmp(freer, addr, used_pf))
+            if(pfmgr_mark_bmp(free_range, addr, used_pf))
             {
                 return(-1);
             }
 
-            next_addr = (addr - freer->hdr.base  + 
+            next_addr = (addr - free_range->hdr.base  + 
                         cb_dat.used_bytes);
 
-            freer->next_lkup = next_addr / PAGE_SIZE;
+            free_range->next_lkup = next_addr / PAGE_SIZE;
             
             if(flags & ALLOC_CB_STOP)
             {
                 /* We're done here */
                 if(cb_status == 0)
+                {
+                    kprintf("ALLOC_LENGTH %d\n",len);
                     return(0);
+                }
             }
         }
-
-        /* Check if we got everything from this shot */
-        if(lkup_sts == 0)
-            break;
-
-        /* advance the starting address - help the lookup */
-        addr += cb_dat.used_bytes;
         
         /* If we got frames, try again on the same range */
-        if(avail_pf != 0)
+        if(avail_pf > used_pf)
             continue;
 
-        if(flags & ALLOC_CONTIG)
-        {
-            freer->next_lkup = 0;
-        }
-        
-        freer = next_freer;
+        fnode = next_fnode;
     }
 
     if(!(flags & ALLOC_CB_STOP))
@@ -873,6 +903,7 @@ static int pfmgr_free
                                       .used_bytes  = 0,
                                       .phys_base   = 0
                                      };
+    virt_size_t len = 0;
 
     do
     {
@@ -884,16 +915,16 @@ static int pfmgr_free
 
         to_free_pf = cb_dat.used_bytes / PAGE_SIZE;
         addr       = cb_dat.phys_base;
+        len+=cb_dat.used_bytes;
+        
+        kprintf("FREED BASE 0x%x len 0x%x\n",addr,cb_dat.used_bytes);
         
         if(again > 0 && cb_dat.used_bytes == 0)
         {
             kprintf("EMPTY_FOUND - skipping\n");
             continue;
         }
-
-        if(again == 0)
-            return(0);
-
+       
         /* Get the range */
         if(pfmgr_addr_to_free_range(addr, 
                                     to_free_pf, 
@@ -901,7 +932,8 @@ static int pfmgr_free
         {
             kprintf("EXIT 0x%x - %d\n",addr, to_free_pf);
             /* WTF is this? */
-            return(-1);
+            err = -1;
+            break;
         }
 
         /* Clear free range */
@@ -919,6 +951,11 @@ static int pfmgr_free
 
     }while(again > 0);
     
+    kprintf("FREED_LENGTH %d\n",len);
+    
+    if(again < 0)
+        err = -1;
+        
     return(err);
 }
 
@@ -937,8 +974,6 @@ void pfmgr_early_init(void)
     pfmgr_interface.alloc = pfmgr_early_alloc_pf;
 
     kprintf("KERNEL_BEGIN 0x%x KERNEL_END 0x%x\n",_KERNEL_LMA, _KERNEL_LMA_END);
-
-   
 }
 
 /* pfmgr_init - initialize runtime structures for the page frame allocator */
@@ -1048,7 +1083,9 @@ int pfmgr_show_free_memory(void)
     free_mem *= PAGE_SIZE;
     total_mem *= PAGE_SIZE;
 
-    kprintf("FREE MEMORY %d TOTAL MEMORY %d\n",free_mem, total_mem);
+    kprintf("FREE MEMORY %d USED %d TOTAL MEMORY %d\n",free_mem, 
+                                                       total_mem - free_mem,  
+                                                       total_mem);
 
     return(0);
 }
