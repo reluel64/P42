@@ -210,7 +210,7 @@ static void pfmgr_init_free_callback
     
 
     local_freer.hdr.struct_len = track_len;
-    local_freer.total_pf       = (e->length - track_len) / PAGE_SIZE;
+    local_freer.total_pf       = BYTES_TO_PF(e->length - track_len);
     local_freer.avail_pf       = local_freer.total_pf;
 
     kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",
@@ -477,16 +477,16 @@ static int pfmgr_lkup_bmp_for_free_pf
         start_addr = ISA_DMA_MEMORY_LENGTH;
     }
 
-    pf_pos = (start_addr - hdr->base) / PAGE_SIZE;
+    pf_pos = BYTES_TO_PF(start_addr - hdr->base);
     
 
-    while((pf_pos < freer->total_pf) && (req_pf > 0) && !stop)
+    while((pf_pos < freer->total_pf) && (req_pf > pf_ret) && !stop)
     {
-        pf_ix       = pf_pos % PF_PER_ITEM;
-        bmp_pos     = pf_pos / PF_PER_ITEM;
+        pf_ix       = POS_TO_IX(pf_pos);
+        bmp_pos     = BMP_POS(pf_pos);
         mask        = 0;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
-        mask_frames = min(mask_frames, req_pf);
+        mask_frames = min(mask_frames, req_pf - pf_ret);
         /* Compute the mask */
 
         mask = ~(virt_addr_t)0;
@@ -494,32 +494,32 @@ static int pfmgr_lkup_bmp_for_free_pf
         /* 
          * Check if we have PF_PER_ITEM from one shot 
          * Otherwise we must check every bit
-         */
-        
+         */ 
         if((mask_frames == PF_PER_ITEM) && 
            (freer->bmp[bmp_pos] & mask) == 0)
         {
             if(pf_ret == 0)
-                start_addr = hdr->base + pf_pos * PAGE_SIZE;
+                start_addr = hdr->base + PF_TO_BYTES(pf_pos);
 
-            pf_ret += mask_frames;
-            pf_pos += mask_frames;
-            req_pf -= mask_frames;
+            pf_ret += PF_PER_ITEM;
+            pf_pos += PF_PER_ITEM;
         }
         else
         {
             /* Slower path - check each page frame */
             for(phys_size_t i = 0; i < mask_frames; i++)
             {
+                /* check if we might go over the total pf */
+                if((pf_pos >= freer->total_pf))
+                    break;
+                    
                 mask = ((virt_addr_t)1 << (pf_ix + i)); 
                 if((freer->bmp[bmp_pos] & mask) == 0)
                 {
                     if(pf_ret == 0)
-                    {
-                        start_addr = hdr->base + pf_pos * PAGE_SIZE;
-                    }
+                        start_addr = hdr->base + PF_TO_BYTES(pf_pos);
+                        
                     pf_ret ++;
-                    req_pf --;
                 }
                 /* Stop looking if pf_ret > 0 */
                 else if(pf_ret > 0)
@@ -530,7 +530,6 @@ static int pfmgr_lkup_bmp_for_free_pf
                 pf_pos++;
             }
         }
-        
     }
 
     /* No page frame available */
@@ -542,7 +541,7 @@ static int pfmgr_lkup_bmp_for_free_pf
     /* page frames available at least as required */
     else
         status = 1;
-        
+    
 
     *start = start_addr;
     *pf    = pf_ret;
@@ -570,14 +569,14 @@ static int pfmgr_mark_bmp
     uint8_t     stop        = 0;
     
     /* Calculate the starting position */
-    pf_pos = (addr - freer->hdr.base) / PAGE_SIZE;
+    pf_pos = BYTES_TO_PF(addr - freer->hdr.base);
 
     while((pf_pos < freer->total_pf) && 
           (freer->avail_pf > 0)      && 
           (pf > 0))
     {
-        pf_ix   = pf_pos % PF_PER_ITEM;
-        bmp_pos = pf_pos / PF_PER_ITEM;
+        pf_ix       = POS_TO_IX(pf_pos);
+        bmp_pos     = BMP_POS(pf_pos);
         mask        = 0;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, pf);
@@ -647,14 +646,14 @@ static int pfmgr_clear_bmp
     phys_size_t mask_frames = 0;
     uint8_t     stop        = 0;
     
-    pf_pos = (addr - freer->hdr.base) / PAGE_SIZE;
+    pf_pos = BYTES_TO_PF(addr - freer->hdr.base);
 
     while((pf_pos < freer->total_pf)          && 
           (freer->avail_pf < freer->total_pf) &&
           (pf > 0))
     {
-        pf_ix   = pf_pos % PF_PER_ITEM;
-        bmp_pos = pf_pos / PF_PER_ITEM;
+        pf_ix       = POS_TO_IX(pf_pos);
+        bmp_pos     = BMP_POS(pf_pos);
         mask        = 0;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, pf);
@@ -675,7 +674,6 @@ static int pfmgr_clear_bmp
         {
             for(phys_size_t i = 0; i < mask_frames; i++)
             {
-                                
                 mask = ((virt_addr_t)1 << (pf_ix + i));
 
                 if((freer->bmp[bmp_pos] & mask))
@@ -720,7 +718,6 @@ static int pfmgr_alloc
     phys_size_t         avail_pf   = 0;
     phys_size_t         req_pf     = 0;
     phys_size_t         used_pf    = 0;
-    phys_addr_t         next_addr  = 0;
     int                 lkup_sts   = 0;
     int                 cb_status  = 0;
     virt_addr_t len = 0;
@@ -731,7 +728,6 @@ static int pfmgr_alloc
     while(fnode)
     {
         free_range = (pfmgr_free_range_t*) fnode;
-        
         if(req_pf == 0)
         {
             if(flags & ALLOC_CB_STOP)
@@ -749,13 +745,17 @@ static int pfmgr_alloc
             continue;
         }
         
-        /* next_lkup should always be smaller than total_pf
+        /* next_lkup should not be bigger than total_fp
          * if it happens otherwise, stop everything
          */
-        if(free_range->next_lkup >= free_range->total_pf)
+        if(free_range->next_lkup > free_range->total_pf)
         {
-            kprintf("%s %d -> next_lkup > total_pf\n",__FUNCTION__,__LINE__);
+            kprintf("%s %d -> next_lkup (%x)> total_pf (%x)\n",__FUNCTION__,__LINE__ , free_range->next_lkup, free_range->total_pf);
             while(1);
+        }
+        else if (free_range->next_lkup == free_range->total_pf)
+        {
+            free_range->next_lkup = 0;
         }
         
         /* On contig allocations, we want to search the entire range so
@@ -767,15 +767,15 @@ static int pfmgr_alloc
         /* help the lookup a bit by starting the lookup from the previously
          * known to be free address
          */
-        addr = free_range->hdr.base + (free_range->next_lkup * PAGE_SIZE);
+        addr = free_range->hdr.base;
         avail_pf   = req_pf;   
         used_pf    = 0; 
-
+        kprintf("PRE_LKUP: %x -> %d\n",addr, avail_pf);   
         /* Look for available page frames within range */
         lkup_sts   = pfmgr_lkup_bmp_for_free_pf(free_range, 
                                                 &addr, 
                                                 &avail_pf);
-
+       kprintf("PRE_POST: %x -> %d\n",addr, avail_pf);                                      
         /* Check if we've got anything from the lookup */
         if(lkup_sts < 0)
         {
@@ -801,21 +801,21 @@ static int pfmgr_alloc
         }
         
         /* Always update the next lookup */
-        free_range->next_lkup = ((addr - free_range->hdr.base) / 
-                                PAGE_SIZE) + avail_pf;
-        
+        free_range->next_lkup = BYTES_TO_PF((addr - free_range->hdr.base)) +
+                                avail_pf;
+     
         /* Contiguous pages should be satisfied from one lookup */
         if((flags & ALLOC_CONTIG) && lkup_sts < 1)
         {
             fnode = next_fnode;
             continue;
         }
-
+    
         if(avail_pf > 0)
         {
             cb_dat.used_bytes  = 0;
             cb_dat.phys_base   = addr;
-            cb_dat.avail_bytes = avail_pf * PAGE_SIZE;
+            cb_dat.avail_bytes = PF_TO_BYTES(avail_pf);
             
             kprintf("BASE %x AVAILABLE %x\n",cb_dat.phys_base, cb_dat.avail_bytes);
             cb_status = cb(&cb_dat, pv);
@@ -830,18 +830,16 @@ static int pfmgr_alloc
 
             /* decrease the required pfs */
             len += cb_dat.used_bytes;
-            used_pf = cb_dat.used_bytes / PAGE_SIZE;
+            used_pf = BYTES_TO_PF(cb_dat.used_bytes);
             req_pf -= used_pf;
-            
+
             if(pfmgr_mark_bmp(free_range, addr, used_pf))
             {
                 return(-1);
             }
 
-            next_addr = (addr - free_range->hdr.base  + 
-                        cb_dat.used_bytes);
-
-            free_range->next_lkup = next_addr / PAGE_SIZE;
+            free_range->next_lkup = BYTES_TO_PF (addr - free_range->hdr.base  + 
+                                                 cb_dat.used_bytes);
             
             if(flags & ALLOC_CB_STOP)
             {
@@ -855,9 +853,10 @@ static int pfmgr_alloc
         }
         
         /* If we got frames, try again on the same range */
-        if(avail_pf > used_pf)
+        if(lkup_sts > 0)
+        {
             continue;
-
+        }
         fnode = next_fnode;
     }
 
@@ -883,7 +882,7 @@ static int pfmgr_addr_to_free_range
     pfmgr_free_range_t *freer      = NULL;
     pfmgr_free_range_t *next_freer = NULL;
 
-    length = pf * PAGE_SIZE;
+    length = PF_TO_BYTES(pf);
 
     freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
 
@@ -934,7 +933,7 @@ static int pfmgr_free
 
         again = cb(&cb_dat, pv);
 
-        to_free_pf = cb_dat.used_bytes / PAGE_SIZE;
+        to_free_pf = BYTES_TO_PF(cb_dat.used_bytes);
         addr       = cb_dat.phys_base;
         len+=cb_dat.used_bytes;
         
@@ -964,7 +963,7 @@ static int pfmgr_free
             err = -1;
         }
         
-        next_addr = (addr - freer->hdr.base) / PAGE_SIZE;
+        next_addr = BYTES_TO_PF(addr - freer->hdr.base);
      
         if(next_addr < freer->next_lkup)
             freer->next_lkup = next_addr;
