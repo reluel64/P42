@@ -484,12 +484,9 @@ static int pfmgr_lkup_bmp_for_free_pf
     {
         pf_ix       = POS_TO_IX(pf_pos);
         bmp_pos     = BMP_POS(pf_pos);
-        mask        = 0;
+        mask        = ~(virt_addr_t)0;;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, req_pf - pf_ret);
-        /* Compute the mask */
-
-        mask = ~(virt_addr_t)0;
         
         /* 
          * Check if we have PF_PER_ITEM from one shot 
@@ -577,13 +574,9 @@ static int pfmgr_mark_bmp
     {
         pf_ix       = POS_TO_IX(pf_pos);
         bmp_pos     = BMP_POS(pf_pos);
-        mask        = 0;
+        mask        = ~(virt_size_t)0;;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, pf);
-
-        /* Compute the mask */
-
-        mask = ~(virt_size_t)0;
 
         if((mask_frames == PF_PER_ITEM) && 
           (freer->bmp[bmp_pos] & mask) == 0)
@@ -654,13 +647,9 @@ static int pfmgr_clear_bmp
     {
         pf_ix       = POS_TO_IX(pf_pos);
         bmp_pos     = BMP_POS(pf_pos);
-        mask        = 0;
+        mask        =  ~(virt_size_t)0;;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, pf);
-
-        /* Compute the mask */
-       
-        mask = ~(virt_size_t)0;
 
         if((mask_frames == PF_PER_ITEM) && 
            (freer->bmp[bmp_pos] & mask))
@@ -750,7 +739,11 @@ static int pfmgr_alloc
          */
         if(free_range->next_lkup > free_range->total_pf)
         {
-            kprintf("%s %d -> next_lkup (%x)> total_pf (%x)\n",__FUNCTION__,__LINE__ , free_range->next_lkup, free_range->total_pf);
+            kprintf("%s %d -> next_lkup (%x)> total_pf (%x)\n",
+                    __FUNCTION__,
+                    __LINE__ , 
+                    free_range->next_lkup, 
+                    free_range->total_pf);
             while(1);
         }
         else if (free_range->next_lkup == free_range->total_pf)
