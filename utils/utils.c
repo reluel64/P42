@@ -153,10 +153,19 @@ int kprintf(char *fmt,...)
                     break;
                 }
                 case 'd':
+                 {
+                    num = va_arg(lst,int64_t);
+                    itoa((int64_t)num, nbuf, 10);
+                    for(int i = 0; nbuf[i]; i++)
+                    {
+                        write_serial(nbuf[i]);
+                    }
+                    break;
+                }
                 case 'x':
                 {
                     num = va_arg(lst,uint64_t);
-                    itoa(num, nbuf, fmt[1]== 'd'? 10 : 16);
+                    itoa(num, nbuf,  16);
                     for(int i = 0; nbuf[i]; i++)
                     {
                         write_serial(nbuf[i]);

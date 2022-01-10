@@ -68,7 +68,7 @@ static void kmain_sys_init(void)
     platform_init();
     
     virt_addr_t addr = 0;
-    virt_size_t alloc_sz = 1024ul * 1024ul * 4ul;
+    virt_size_t alloc_sz = 1024ul * 4ul * 1ul ;
   kprintf("BEFORE LOOP - ");
         pfmgr_show_free_memory();
     while(1)
@@ -78,14 +78,18 @@ static void kmain_sys_init(void)
         kprintf("BEFORE - ");
         pfmgr_show_free_memory();
       //   vm_list_entries();
-        addr = vm_map(NULL,0xffff80003fe00000, alloc_sz, 0, 0, VM_ATTR_WRITABLE);
+        addr = vm_alloc(NULL,VM_BASE_AUTO, alloc_sz, 0, VM_ATTR_WRITABLE);
+       
+       kprintf("ADDR %x\n",addr);
         kprintf("--------------------------------------------------\n");
+        kprintf("AFTER_ALLOC: ");
+        pfmgr_show_free_memory();
         
-    //memset(addr, 0, alloc_sz);
+    memset(addr, 0, alloc_sz);
     kprintf("DONE\n");
     
     
-        vm_unmap(NULL, 0xffff80003fe00000, alloc_sz );
+        vm_free(NULL, addr, alloc_sz );
         kprintf("AFTER  - "); pfmgr_show_free_memory();
         kprintf("+++++++++++++++++++++++++++++++++++++++++++++++\n");
         //vm_list_entries();
@@ -93,7 +97,7 @@ static void kmain_sys_init(void)
       //  kprintf("XXXX %d\n",cpu_int_check());
       //  kprintf("TEST\n");
     //    kprintf("XXXX %d\n",cpu_int_check());
-        sched_sleep(1000);
+        sched_sleep(100);
        // for(int i = 0; i < INT32_MAX / 2 - 1; i++);
       //  kprintf("ENDED\n");
     //    mtx_release(&mtx);

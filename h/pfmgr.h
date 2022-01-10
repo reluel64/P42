@@ -5,7 +5,7 @@
 #include <defs.h>
 #include <linked_list.h>
 #include <platform.h>
-#define PF_PER_ITEM (64)
+
 
 #define LOW_MEMORY   (0x100000)
 #define ALLOC_CONTIG  (1 << 0)
@@ -107,7 +107,7 @@ extern phys_addr_t _bss_end;
 #define _BOOT_PAGING_END    (((phys_addr_t)&BOOT_PAGING_END))
 #define _BOOT_PAGING_LENGTH (((phys_addr_t)&BOOT_PAGING_LENGTH))
 
-
+#define PF_PER_ITEM (64)
 #define BITMAP_SIZE_FOR_AREA(x)  (((x) / PAGE_SIZE) / 8)
 #define GIGA_BYTE(x) ((x) * 1024ull * 1024ull *1024ull)
 #define MEGA_BYTE(x) ((x) * 1024ull *1024ull)
@@ -116,9 +116,9 @@ extern phys_addr_t _bss_end;
 #define ISA_DMA_MEMORY_LENGTH MEGA_BYTE(16)
 #define ISA_DMA_MEMORY_BEGIN  MEGA_BYTE(1)
 #define REGION_COUNT(x) ((x) / sizeof(phys_mm_region_t))
-#define PAGES_TO_BYTES(x) ((x) * PAGE_SIZE)
-#define BYTES_TO_PAGES(x) ((x) / PAGE_SIZE)
-
-
+#define PF_TO_BYTES(x) ((x) << 12)
+#define BYTES_TO_PF(x) ((x) >> 12)
+#define POS_TO_IX(x) ((x) % PF_PER_ITEM)
+#define BMP_POS(x) ((x) >> 6)
 
 #endif

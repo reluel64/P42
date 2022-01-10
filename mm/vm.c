@@ -62,14 +62,11 @@ void vm_list_entries()
 
 }
 
-
-
 static int vm_setup_protected_regions
 (
     vm_ctx_t *ctx
 )
 {
-
     vm_slot_hdr_t *hdr = NULL;
     uint32_t   rsrvd_count = 0;
 
@@ -93,6 +90,7 @@ static int vm_setup_protected_regions
             .length =  VM_SLOT_SIZE,
             .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
         },
+        /* reserve tracking for allocated addresses */
         {
             .base   =  (virt_addr_t)linked_list_first(&ctx->alloc_mem),
             .length =  VM_SLOT_SIZE,
@@ -115,8 +113,6 @@ static int vm_setup_protected_regions
 
 int vm_init(void)
 {
-
-
     virt_addr_t           vm_base = 0;
     virt_addr_t           vm_max  = 0;
     uint32_t              offset  = 0;
@@ -211,7 +207,6 @@ int vm_init(void)
     vm_setup_protected_regions(&kernel_ctx);
     vm_list_entries();
 
-
     return(VM_OK);
 }
 
@@ -251,12 +246,10 @@ virt_addr_t vm_alloc
         return(0);
     }
 
-
-
     /* Check if we also need to allocate physical space now */
     if(!(alloc_flags & VM_LAZY))
     {
-    status = pgmgr_alloc(&ctx->pgmgr,
+        status = pgmgr_alloc(&ctx->pgmgr,
                             addr,
                             len,
                             page_flags);

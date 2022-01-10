@@ -763,12 +763,16 @@ static int pfmgr_alloc
         addr = free_range->hdr.base;
         avail_pf   = req_pf;   
         used_pf    = 0; 
+#if 0
         kprintf("PRE_LKUP: %x -> %d\n",addr, avail_pf);   
+#endif
         /* Look for available page frames within range */
         lkup_sts   = pfmgr_lkup_bmp_for_free_pf(free_range, 
                                                 &addr, 
                                                 &avail_pf);
+#if 0
        kprintf("PRE_POST: %x -> %d\n",addr, avail_pf);                                      
+#endif
         /* Check if we've got anything from the lookup */
         if(lkup_sts < 0)
         {
@@ -777,7 +781,6 @@ static int pfmgr_alloc
              */
             if(free_range->next_lkup > 0)
             {
-                kprintf("Look again\n");
                 free_range->next_lkup = 0;
                 addr                  = free_range->hdr.base;
                 avail_pf              = req_pf;
@@ -809,11 +812,13 @@ static int pfmgr_alloc
             cb_dat.used_bytes  = 0;
             cb_dat.phys_base   = addr;
             cb_dat.avail_bytes = PF_TO_BYTES(avail_pf);
-            
+#if 0            
             kprintf("BASE %x AVAILABLE %x\n",cb_dat.phys_base, cb_dat.avail_bytes);
+#endif
             cb_status = cb(&cb_dat, pv);
+#if 0
             kprintf("ALLOC BASE 0x%x LEN 0x%x\n",addr, cb_dat.used_bytes);
-            
+#endif            
             /* 
              * If there is an error detected, we have to bail out
              */
@@ -839,7 +844,9 @@ static int pfmgr_alloc
                 /* We're done here */
                 if(cb_status == 0)
                 {
+#if 0
                     kprintf("ALLOC_LENGTH %d\n",len);
+#endif
                     return(0);
                 }
             }
@@ -929,9 +936,9 @@ static int pfmgr_free
         to_free_pf = BYTES_TO_PF(cb_dat.used_bytes);
         addr       = cb_dat.phys_base;
         len+=cb_dat.used_bytes;
-        
+#if 0        
         kprintf("FREED BASE 0x%x len 0x%x\n",addr,cb_dat.used_bytes);
-        
+#endif    
         if(again > 0 && cb_dat.used_bytes == 0)
         {
             kprintf("EMPTY_FOUND - skipping\n");
