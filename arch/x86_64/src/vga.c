@@ -29,8 +29,7 @@ void vga_init()
                                 FB_PHYS_MEM,
                                 0,
                                 VM_ATTR_WRITABLE|
-                                VM_ATTR_STRONG_UNCACHED
-                                );
+                                VM_ATTR_STRONG_UNCACHED);
 
     vga.col = 0;
     vga.row = 0;

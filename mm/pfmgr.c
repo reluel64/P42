@@ -484,7 +484,7 @@ static int pfmgr_lkup_bmp_for_free_pf
     {
         pf_ix       = POS_TO_IX(pf_pos);
         bmp_pos     = BMP_POS(pf_pos);
-        mask        = ~(virt_addr_t)0;;
+        mask        = ~(virt_addr_t)0;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, req_pf - pf_ret);
         
@@ -750,21 +750,35 @@ static int pfmgr_alloc
         {
             free_range->next_lkup = 0;
         }
-        
-        /* On contig allocations, we want to search the entire range so
-         * we start the lookup from the beginning 
-         */
+
         if(flags & ALLOC_CONTIG)
+        {
+            /* Just a small check to see at least if we have the 
+             * enough available frames. We will check later 
+             * if they are contiguous
+             */ 
+            if(free_range->avail_pf < req_pf)
+            {
+                fnode = next_fnode;
+                continue;
+            }
+
+            /* On contig allocations, we want to search the entire range so
+             * we start the lookup from the beginning 
+             */
+
             free_range->next_lkup = 0;
-        
+        }
         /* help the lookup a bit by starting the lookup from the previously
          * known to be free address
          */
-        addr = free_range->hdr.base;
+        addr       = free_range->hdr.base + 
+                     PF_TO_BYTES(free_range->next_lkup);
         avail_pf   = req_pf;   
         used_pf    = 0; 
 #if 0
-        kprintf("PRE_LKUP: %x -> %d\n",addr, avail_pf);   
+        kprintf("BASE 0x%x %d\n",free_range->hdr.base, free_range->avail_pf);
+        kprintf("PRE_LKUP: 0x%x -> %d\n",addr, avail_pf);   
 #endif
         /* Look for available page frames within range */
         lkup_sts   = pfmgr_lkup_bmp_for_free_pf(free_range, 
@@ -827,7 +841,7 @@ static int pfmgr_alloc
                 return(-1);
 
             /* decrease the required pfs */
-            len += cb_dat.used_bytes;
+            len    += cb_dat.used_bytes;
             used_pf = BYTES_TO_PF(cb_dat.used_bytes);
             req_pf -= used_pf;
 
@@ -853,7 +867,7 @@ static int pfmgr_alloc
         }
         
         /* If we got frames, try again on the same range */
-        if(lkup_sts > 0)
+        if(lkup_sts >= 0)
         {
             continue;
         }
@@ -962,7 +976,7 @@ static int pfmgr_free
             kprintf("TO_FREE_PF 0x%x\n",addr);
             err = -1;
         }
-        
+
         next_addr = BYTES_TO_PF(addr - freer->hdr.base);
      
         if(next_addr < freer->next_lkup)
@@ -1025,7 +1039,7 @@ int pfmgr_init(void)
                                                phys,
                                                0,
                                                VM_ATTR_WRITABLE);
-        
+ 
         if(hdr == NULL)
             return(-1);
 

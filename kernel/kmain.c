@@ -68,7 +68,7 @@ static void kmain_sys_init(void)
     platform_init();
     
     virt_addr_t addr = 0;
-    virt_size_t alloc_sz = 1024ul * 4ul * 1ul ;
+    virt_size_t alloc_sz = 1024ul * 1024ul * 2048ul ;
   kprintf("BEFORE LOOP - ");
         pfmgr_show_free_memory();
     while(1)
@@ -78,14 +78,14 @@ static void kmain_sys_init(void)
         kprintf("BEFORE - ");
         pfmgr_show_free_memory();
       //   vm_list_entries();
-        addr = vm_alloc(NULL,VM_BASE_AUTO, alloc_sz, 0, VM_ATTR_WRITABLE);
+        addr = vm_alloc(NULL,VM_BASE_AUTO, alloc_sz,0, VM_ATTR_WRITABLE);
        
        kprintf("ADDR %x\n",addr);
         kprintf("--------------------------------------------------\n");
         kprintf("AFTER_ALLOC: ");
         pfmgr_show_free_memory();
         
-    memset(addr, 0, alloc_sz);
+    //memset(addr, 0, alloc_sz);
     kprintf("DONE\n");
     
     

@@ -44,7 +44,7 @@ typedef struct pgmgr_t
                         (ld)->do_map = 1;                           \
                         (ld)->attr_mask = (_attr);                  \
                         (ld)->iter_cb = (_cb);                      \
-                        (ld)->cb_status = PGMGR_CB_STS_OK
+                        (ld)->cb_status = 0
                         
 #define PAGE_MASK_ADDRESS(x) (((x) & (~(ATTRIBUTE_MASK))))
 #define PGMGR_MIN_PAGE_TABLE_LEVEL (0x2)
@@ -66,9 +66,11 @@ typedef struct pgmgr_t
 #define PGMGR_CB_RES_CHECK          (1 << 4)
 
 /* Return codes for the iter callbacks */
-#define PGMGR_CB_STS_ERROR              (-1)
-#define PGMGR_CB_STS_OK                 (0)
-#define PGMGR_CB_STS_AGAIN              (1)   
+
+#define PGMGR_CB_AGAIN (1 << 0)
+#define PGMGR_CB_ERROR (1 << 1)
+#define PGMGR_CB_BREAK (1 << 2)
+
 
 typedef struct pgmgr_iter_callback_data_t pgmgr_iter_callback_data_t;
 typedef struct pgmgr_level_data_t pgmgr_level_data_t;
@@ -93,7 +95,7 @@ typedef struct pgmgr_level_data_t
     uint8_t     do_map;
     phys_size_t attr_mask;
     uint32_t    cb_status;
-    uint32_t (*iter_cb)
+    void        (*iter_cb)
     (
         pgmgr_iter_callback_data_t *ic, 
         pgmgr_level_data_t *ld,
@@ -447,7 +449,7 @@ static int pgmgr_level_entry_is_empty
     return(ret);
 }
 
-static uint32_t pgmgr_iter_free_page
+static void pgmgr_iter_free_level
 (
     pgmgr_iter_callback_data_t *iter_dat,
     pgmgr_level_data_t *ld,
@@ -455,60 +457,10 @@ static uint32_t pgmgr_iter_free_page
     uint32_t op
 )
 {
-    uint32_t status = PGMGR_CB_STS_OK;
     phys_addr_t addr = 0;
-    ld->error  = PGMGR_ERR_OK;
-    switch(op)
-    {
-        case PGMGR_CB_LEVEL_GO_DOWN:
-            if(~ld->level[iter_dat->entry] & PAGE_PRESENT)
-            {
-                status = PGMGR_CB_STS_ERROR;
-                ld->error = PGMGR_ERR_TABLE_NOT_ALLOCATED;
-            }
-            break;
-
-        case PGMGR_CB_DO_REQUEST:
-            addr = PAGE_MASK_ADDRESS(ld->level[iter_dat->entry]);
-            
-            if(pfmgr_dat->used_bytes == 0)
-            {
-                pfmgr_dat->used_bytes += PAGE_SIZE;
-                pfmgr_dat->phys_base = addr;
-                ld->level[iter_dat->entry] = 0;
-            }
-            else if((pfmgr_dat->phys_base + pfmgr_dat->used_bytes) == addr)
-            {
-                pfmgr_dat->used_bytes+=PAGE_SIZE;
-                ld->level[iter_dat->entry] = 0;
-            }
-            else
-            {
-                status = PGMGR_CB_STS_AGAIN;
-            }
-            break;
-        case PGMGR_CB_NEXT_CHECK:
-            if((ld->length <= ld->offset) && 
-               (ld->length > (ld->offset - iter_dat->increment)))
-            {
-                status = PGMGR_CB_STS_AGAIN;
-            }
-            break;
-    }
-
-    return(status);
-}
-
-static uint32_t pgmgr_iter_free_level
-(
-    pgmgr_iter_callback_data_t *iter_dat,
-    pgmgr_level_data_t *ld,
-    pfmgr_cb_data_t *pfmgr_dat,
-    uint32_t op
-)
-{
-    uint32_t status = PGMGR_CB_STS_OK;
-    phys_addr_t addr = 0;
+    virt_addr_t *up_level = NULL;
+    uint8_t shift = 0;
+    uint16_t entry = 0;
 
     ld->error  = PGMGR_ERR_OK;
 
@@ -517,19 +469,21 @@ static uint32_t pgmgr_iter_free_level
         case PGMGR_CB_LEVEL_GO_DOWN:
             if(~ld->level[iter_dat->entry] & PAGE_PRESENT)
             {
-                status = PGMGR_CB_STS_ERROR;
+                ld->cb_status |= PGMGR_CB_ERROR;
                 ld->error = PGMGR_ERR_TABLE_NOT_ALLOCATED;
             }
+
+            ld->cb_status |= PGMGR_CB_AGAIN;
+
             break;
-#if 1
+
         case PGMGR_CB_DO_REQUEST:
         {
             if(ld->level[iter_dat->entry] & PAGE_PRESENT)
             {
                 addr = PAGE_MASK_ADDRESS(ld->level[iter_dat->entry]);
-                if(pgmgr_level_entry_is_empty(ld->ctx, addr))
+                if(pgmgr_level_entry_is_empty(ld->ctx, addr) > 0)
                 {
-                    kprintf("LEVEL_EMPTY - %x\n", addr);
                     if(pfmgr_dat->used_bytes == 0)
                     {
                         pfmgr_dat->used_bytes += PAGE_SIZE;
@@ -538,37 +492,69 @@ static uint32_t pgmgr_iter_free_level
                     }
                     else if((pfmgr_dat->phys_base + pfmgr_dat->used_bytes) == addr)
                     {
-                        pfmgr_dat->used_bytes+=PAGE_SIZE;
+                        pfmgr_dat->used_bytes += PAGE_SIZE;
                         ld->level[iter_dat->entry] = 0;
                     }
                     else
                     {
-                        status = PGMGR_CB_STS_AGAIN;
+                        ld->cb_status |= PGMGR_CB_BREAK;
                     }
                 }
             }
         }
-#endif
+
         break;
+
         case PGMGR_CB_LEVEL_GO_UP:
-            if(pgmgr_level_is_empty(ld->level))
-            {
-                kprintf("UPPER_LEVEL_EMPTY\n");
-            }
+           {
+               if(pgmgr_level_is_empty(ld->level))
+               {
+                    kprintf("ADDRESS %x\n",ld->base + ld->offset);
+                    shift = PGMGR_LEVEL_TO_SHIFT(ld->curr_level + 1);
+                    entry = (iter_dat->vaddr >> shift) & 0x1FF;
+                    up_level = (virt_addr_t*) (pgmgr.remap_tbl + 
+                                ((ld->curr_level + 1)  << PAGE_SIZE_SHIFT));
+
+                    addr = PAGE_MASK_ADDRESS(up_level[entry]);
+                    if(up_level[entry] & PAGE_PRESENT)
+                    {
+                        //kprintf("UP at level %d\n",ld->curr_level + 1);
+                       
+                        if(pfmgr_dat->used_bytes == 0)
+                        {
+                            pfmgr_dat->used_bytes = PAGE_SIZE;
+                            pfmgr_dat->phys_base = addr;
+                            up_level[entry] = 0;
+                        }
+                        else if(addr  ==
+                          (pfmgr_dat->phys_base + pfmgr_dat->used_bytes) )
+                          {
+                                pfmgr_dat->used_bytes += PAGE_SIZE;
+                                up_level[entry] = 0;
+                          }
+                          else
+                          {
+                              /* Let's try again */
+                              iter_dat->next_vaddr = iter_dat->vaddr;
+                              ld->offset -= iter_dat->increment;
+                              ld->cb_status |= PGMGR_CB_BREAK;
+                          }
+                    }
+               }
+           }
             break;
+
         case PGMGR_CB_NEXT_CHECK:
             if((ld->length <= ld->offset) && 
                (ld->length > (ld->offset - iter_dat->increment)))
             {
-                status = PGMGR_CB_STS_AGAIN;
+                ld->cb_status |= PGMGR_CB_AGAIN;
             }
             break;
     }
-
-    return(status);
 }
 
-static uint32_t pgmgr_iter_alloc_level
+static void pgmgr_iter_alloc_level
 (
     pgmgr_iter_callback_data_t *iter_dat,
     pgmgr_level_data_t *ld,
@@ -577,7 +563,7 @@ static uint32_t pgmgr_iter_alloc_level
 )
 {
     pgmgr_ctx_t *ctx = NULL;
-    uint32_t    status = PGMGR_CB_STS_OK;
+    
     virt_size_t len = 0;
     virt_addr_t new_offset = 0;
     ctx       = ld->ctx;
@@ -595,33 +581,95 @@ static uint32_t pgmgr_iter_alloc_level
                                              pfmgr_dat->used_bytes + 
                                              PAGE_PRESENT          + 
                                              PAGE_WRITABLE;
-
-                pfmgr_dat->used_bytes += PAGE_SIZE;
-               
+               // kprintf("Alloc level  - %x\n",ld->base + ld->offset);
                 /* Make sure that the underlying table is clean */
+                pfmgr_dat->used_bytes += PAGE_SIZE;
                 pgmgr_clear_pt(ctx, ld->level[iter_dat->entry]);
-                kprintf("ALLOC_LEVEL\n");
             }
+
+            if(op == PGMGR_CB_LEVEL_GO_DOWN)
+                ld->cb_status |= PGMGR_CB_AGAIN;
+           
             break;
 
         case PGMGR_CB_RES_CHECK:
             if(pfmgr_dat->avail_bytes <= pfmgr_dat->used_bytes)
-                status = PGMGR_CB_STS_AGAIN;
+                ld->cb_status |= PGMGR_CB_BREAK;
             break;
         
         case PGMGR_CB_NEXT_CHECK:
             if((ld->length <= ld->offset) && 
                (ld->length > (ld->offset - iter_dat->increment)))
             {
-                status = PGMGR_CB_STS_AGAIN;
+                ld->cb_status |= PGMGR_CB_AGAIN;
             }
             break;
     }
     
-    return(status);
 }
 
-static uint32_t pgmgr_iter_alloc_page
+/* 
+ * pgmgr_iter_free_page - frees / unmapsa page
+ */
+
+static void pgmgr_iter_free_page
+(
+    pgmgr_iter_callback_data_t *iter_dat,
+    pgmgr_level_data_t *ld,
+    pfmgr_cb_data_t *pfmgr_dat,
+    uint32_t op
+)
+{
+    phys_addr_t addr = 0;
+
+    ld->error  = PGMGR_ERR_OK;
+
+    switch(op)
+    {
+        case PGMGR_CB_LEVEL_GO_DOWN:
+            if(~ld->level[iter_dat->entry] & PAGE_PRESENT)
+            {
+                ld->cb_status |= PGMGR_CB_ERROR;
+                ld->error = PGMGR_ERR_TABLE_NOT_ALLOCATED;
+            }
+            else
+            {
+                ld->cb_status |= PGMGR_CB_AGAIN;
+            }
+            break;
+
+        case PGMGR_CB_DO_REQUEST:
+        
+            addr = PAGE_MASK_ADDRESS(ld->level[iter_dat->entry]);
+            
+            if(ld->level[iter_dat->entry] & PAGE_PRESENT)
+            {
+                if(pfmgr_dat->used_bytes == 0)
+                {
+                    pfmgr_dat->used_bytes += PAGE_SIZE;
+                    pfmgr_dat->phys_base = addr;
+                    ld->level[iter_dat->entry] = 0;
+                }
+                else if((pfmgr_dat->phys_base + pfmgr_dat->used_bytes) == addr)
+                {
+                    pfmgr_dat->used_bytes+=PAGE_SIZE;
+                    ld->level[iter_dat->entry] = 0;
+                }
+                else
+                {
+                    ld->cb_status |= PGMGR_CB_BREAK;
+                }
+            }
+
+            break;
+    }
+}
+
+
+/* 
+ * pgmgr_iter_alloc_page - allocates / maps a page
+ */
+static void pgmgr_iter_alloc_page
 (
     pgmgr_iter_callback_data_t *iter_dat,
     pgmgr_level_data_t *ld,
@@ -630,7 +678,6 @@ static uint32_t pgmgr_iter_alloc_page
 )
 {
     pgmgr_ctx_t        *ctx = NULL;
-    uint32_t           status = PGMGR_CB_STS_OK;
 
     ld->error  = PGMGR_ERR_OK;
 
@@ -640,7 +687,11 @@ static uint32_t pgmgr_iter_alloc_page
              if(~ld->level[iter_dat->entry] & PAGE_PRESENT)
              {
                  ld->error = PGMGR_ERR_TABLE_NOT_ALLOCATED;
-                 status = PGMGR_CB_STS_ERROR;
+                 ld->cb_status |= PGMGR_CB_ERROR;
+             }
+             else
+             {
+                 ld->cb_status = PGMGR_CB_AGAIN;
              }
              break;
         
@@ -651,26 +702,19 @@ static uint32_t pgmgr_iter_alloc_page
                                               pfmgr_dat->used_bytes) | 
                                               ld->attr_mask          | 
                                               PAGE_PRESENT;
-                kprintf("ALLOCATED_PAGE %x\n",pfmgr_dat->phys_base + 
-                                              pfmgr_dat->used_bytes);
+               
                 pfmgr_dat->used_bytes += PAGE_SIZE;
             }
             break;
 
         case PGMGR_CB_RES_CHECK:
             if(pfmgr_dat->avail_bytes <= pfmgr_dat->used_bytes)
-                status = PGMGR_CB_STS_AGAIN;
-            break;
-        
-        case PGMGR_CB_NEXT_CHECK:
-            status = PGMGR_CB_STS_AGAIN;
+                ld->cb_status = PGMGR_CB_BREAK;
             break;
     }
-
-    return(status);
 }
 
-static uint32_t pgmgr_iter_change_attribs
+static void pgmgr_iter_change_attribs
 (
     pgmgr_iter_callback_data_t *iter_dat,
     pgmgr_level_data_t *ld,
@@ -679,7 +723,6 @@ static uint32_t pgmgr_iter_change_attribs
 )
 {
     pgmgr_ctx_t        *ctx = NULL;
-    uint32_t           status = PGMGR_CB_STS_OK;
 
     ld->error  = PGMGR_ERR_OK;
     
@@ -689,7 +732,7 @@ static uint32_t pgmgr_iter_change_attribs
              if(~ld->level[iter_dat->entry] & PAGE_PRESENT)
              {
                  ld->error = PGMGR_ERR_TABLE_NOT_ALLOCATED;
-                 status = PGMGR_CB_STS_ERROR;
+                 ld->cb_status = PGMGR_CB_ERROR;
              }
              break;
 
@@ -703,11 +746,8 @@ static uint32_t pgmgr_iter_change_attribs
              
                 pfmgr_dat->used_bytes += PAGE_SIZE;
             }
-            
             break;
     }
-    
-    return(status);
 }
 
 static int pgmgr_iterate_levels
@@ -718,7 +758,6 @@ static int pgmgr_iterate_levels
 {
     pgmgr_level_data_t *ld        = NULL;
     pgmgr_ctx_t       *ctx        = NULL;
-    
     pgmgr_iter_callback_data_t it_dat = {
                                             .entry = 0,
                                             .increment = 0,
@@ -745,23 +784,22 @@ static int pgmgr_iterate_levels
     }
     
     while(ld->offset < ld->length || 
-          ld->cb_status == PGMGR_CB_STS_AGAIN)
+          ld->cb_status & PGMGR_CB_AGAIN)
     {
-        if(ld->cb_status == PGMGR_CB_STS_AGAIN)
-            ld->cb_status = PGMGR_CB_STS_OK;
-    
+        ld->cb_status = 0;
+
         it_dat.vaddr = ld->base + ld->offset;
 
         /* Check if there are resources available */
-        ld->cb_status = ld->iter_cb(&it_dat,
-                                ld,
-                                pfmgr_dat,
-                                PGMGR_CB_RES_CHECK);
+        ld->iter_cb(&it_dat,
+                    ld,
+                    pfmgr_dat,
+                    PGMGR_CB_RES_CHECK);
 
-        if(ld->cb_status  == PGMGR_CB_STS_ERROR)
+        if(ld->cb_status  & PGMGR_CB_ERROR)
             return(-1);
 
-        else if(ld->cb_status == PGMGR_CB_STS_AGAIN)
+        else if(ld->cb_status & PGMGR_CB_BREAK)
             break;
 
         /* Map the page table */
@@ -785,12 +823,12 @@ static int pgmgr_iterate_levels
             /* notify the callbnack the we have to go down 
              * so it notifies if we can continue or not
              */
-            ld->cb_status = ld->iter_cb(&it_dat,
-                                     ld,
-                                     pfmgr_dat,
-                                     PGMGR_CB_LEVEL_GO_DOWN);
+            ld->iter_cb(&it_dat,
+                         ld,
+                         pfmgr_dat,
+                         PGMGR_CB_LEVEL_GO_DOWN);
 
-            if(ld->cb_status == PGMGR_CB_STS_ERROR)
+            if(ld->cb_status & PGMGR_CB_ERROR)
                 return (-1);
 
             ld->level_phys = ld->level[it_dat.entry];
@@ -801,36 +839,32 @@ static int pgmgr_iterate_levels
         }
 
         /* do the actual request - allocate/free/change attrs */
-        ld->cb_status = ld->iter_cb(&it_dat, 
-                                    ld,
-                                    pfmgr_dat,
-                                    PGMGR_CB_DO_REQUEST);
+        ld->iter_cb(&it_dat, 
+                    ld,
+                    pfmgr_dat,
+                    PGMGR_CB_DO_REQUEST);
 
-        if(ld->cb_status == PGMGR_CB_STS_ERROR)
+        if(ld->cb_status & PGMGR_CB_ERROR)
             return(-1);
 
-        else if(ld->cb_status == PGMGR_CB_STS_AGAIN)
+        else if(ld->cb_status & PGMGR_CB_BREAK)
             break;
 
         ld->offset += it_dat.increment;
 
-        /* Ask the callback if we should continue */
-        ld->cb_status = ld->iter_cb(&it_dat, 
-                                ld,
-                                pfmgr_dat,
-                                PGMGR_CB_NEXT_CHECK);
+        /* Ask the callback if we should loop again */
+        ld->iter_cb(&it_dat, 
+                    ld,
+                    pfmgr_dat,
+                    PGMGR_CB_NEXT_CHECK);
 
         /* If the callback status is not PGMGR_CB_STS_AGAIN,
          * then we're done and we can exit
          */
 
-        if(ld->cb_status == PGMGR_CB_STS_ERROR)
+        if(ld->cb_status & PGMGR_CB_ERROR)
             return(-1);
-
- 
-        else if(ld->cb_status == PGMGR_CB_STS_OK)
-            break;
-
+            
          it_dat.next_vaddr = ld->base + ld->offset;
 
         /* Check if we need to switch the level */
@@ -839,19 +873,22 @@ static int pgmgr_iterate_levels
             /* Calcuate how much we need to go up */
             while(ld->curr_level < ctx->max_level)
             {                
-                ld->curr_level ++;
-                it_dat.shift = PGMGR_LEVEL_TO_SHIFT(ld->curr_level);
-
                 /* Tell the callback that we are going up so it may
                  * be able to free levels
                  */
-                ld->cb_status = ld->iter_cb(&it_dat, 
-                                       ld,
-                                       pfmgr_dat,
-                                       PGMGR_CB_LEVEL_GO_UP);
-
-                if(ld->cb_status == PGMGR_CB_STS_ERROR)
+                ld->iter_cb(&it_dat, 
+                            ld,
+                            pfmgr_dat,
+                            PGMGR_CB_LEVEL_GO_UP);
+                
+                if(ld->cb_status & PGMGR_CB_ERROR)
                     return(-1);
+                
+                if(ld->cb_status & PGMGR_CB_BREAK)
+                    break;
+
+                ld->curr_level ++;
+                it_dat.shift = PGMGR_LEVEL_TO_SHIFT(ld->curr_level);
 
                 /* If we might found the position, check if there 
                  * is a entry in the level. If it's not, then we will keep
@@ -865,6 +902,7 @@ static int pgmgr_iterate_levels
                  
                     ld->level_phys = 
                             ((virt_addr_t*)pgmgr.remap_tbl)[ld->curr_level];
+
                     ld->level = (virt_addr_t*) (pgmgr.remap_tbl + 
                                 (ld->curr_level  << PAGE_SIZE_SHIFT));                    
 
@@ -880,6 +918,9 @@ static int pgmgr_iterate_levels
                 ld->do_map = 1;
             }
         }
+
+        if(ld->cb_status & PGMGR_CB_BREAK)
+            break;
     }
     /* Keep going */
     return(1);
@@ -1049,6 +1090,7 @@ int pgmgr_alloc
  
     if(status || ld.error)
     {
+        kprintf("STATUS %x ERROR %x\n",status, ld.error);
         spinlock_unlock_int(&ctx->lock);
         return(-1);
     }
