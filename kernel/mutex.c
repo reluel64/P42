@@ -38,7 +38,7 @@ mutex_t *mtx_create(int options)
 
     if(ret_mtx != mtx)
             kfree(mtx);
-   
+
     return(ret_mtx);
 }
 
@@ -60,46 +60,45 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         expected = NULL;
 
         /* Try to become the owner of the mutex*/
-        if(__atomic_compare_exchange_n(&mtx->owner, 
-                                       &expected, 
-                                       thread, 
-                                       0, 
-                                       __ATOMIC_ACQUIRE, 
+        if(__atomic_compare_exchange_n(&mtx->owner,
+                                       &expected,
+                                       thread,
+                                       0,
+                                       __ATOMIC_ACQUIRE,
                                        __ATOMIC_RELAXED
                                        ))
         {
             /* set recursion level to 1 */
             __atomic_store_n(&mtx->rlevel, 1, __ATOMIC_RELEASE);
-        
+
             spinlock_unlock_int(&mtx->lock);
 
             return(0);
         }
 
         expected = thread;
-        
+
         /* Check if we already own the mutex */
-        if(__atomic_compare_exchange_n(&mtx->owner, 
-                                       &expected, 
-                                       thread, 
-                                       0, 
-                                       __ATOMIC_ACQUIRE, 
+        if(__atomic_compare_exchange_n(&mtx->owner,
+                                       &expected,
+                                       thread,
+                                       0,
+                                       __ATOMIC_ACQUIRE,
                                        __ATOMIC_RELAXED
                                        ))
         {
             /* if we are already the owner, increase the recursion level */
-
-
+            
             if(mtx->opts & MUTEX_RECUSRIVE)
                 __atomic_add_fetch(&mtx->rlevel, 1, __ATOMIC_ACQUIRE);
-                
+
             spinlock_unlock_int(&mtx->lock);
             return(0);
         }
 
 
         /* if we the thread has the sleeping flag set,
-         * then we already timed out so we will just exit 
+         * then we already timed out so we will just exit
          */
 
         if(block_flags == THREAD_SLEEPING)
@@ -114,7 +113,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
             spinlock_unlock_int(&mtx->lock);
             return(-1);
         }
-            
+
         thread->to_sleep = wait_ms;
 
         /* we are going to sleep */
@@ -133,7 +132,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
         /* Add it to the mutex pend queue */
         kprintf("BLOCKING %x\n",thread);
-        linked_list_add_tail(&mtx->pendq, &thread->pend_node); 
+        linked_list_add_tail(&mtx->pendq, &thread->pend_node);
 
         spinlock_unlock_int(&mtx->lock);
 
@@ -141,7 +140,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         sched_yield();
 
         spinlock_lock_int(&mtx->lock);
-        linked_list_remove(&mtx->pendq, &thread->pend_node); 
+        linked_list_remove(&mtx->pendq, &thread->pend_node);
     }
 
     return(0);
@@ -164,11 +163,11 @@ int mtx_release(mutex_t *mtx)
     expected = self;
 
     /* If we are not the owner, then get out */
-    if(!__atomic_compare_exchange_n(&mtx->owner, 
-                                       &expected, 
-                                       0, 
-                                       0, 
-                                       __ATOMIC_ACQUIRE, 
+    if(!__atomic_compare_exchange_n(&mtx->owner,
+                                       &expected,
+                                       0,
+                                       0,
+                                       __ATOMIC_ACQUIRE,
                                        __ATOMIC_RELAXED
                                        ))
     {
@@ -207,6 +206,6 @@ int mtx_release(mutex_t *mtx)
         sched_wake_thread(thread);
 
     spinlock_unlock_int(&mtx->lock);
-    
+
     return(0);
 }

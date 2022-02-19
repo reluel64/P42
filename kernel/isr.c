@@ -164,7 +164,11 @@ int isr_uninstall
     return(0);
 }
 
-void isr_dispatcher(uint64_t index, virt_addr_t iframe)
+void isr_dispatcher
+(
+    uint64_t index, 
+    virt_addr_t iframe
+)
 {
     int               status     = 0;
     isr_list_t        *int_lst   = NULL;

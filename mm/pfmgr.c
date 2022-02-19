@@ -358,9 +358,7 @@ int pfmgr_early_alloc_pf
         /* U Can't Touch This */
         if(local_freer.hdr.base < LOW_MEMORY)
         {
-            kprintf("LOW_MEMORY %x\n",freer_phys);
-            freer_phys = (phys_addr_t)local_freer.hdr.next_range;
-           
+            freer_phys = (phys_addr_t)local_freer.hdr.next_range;  
             continue;
         }
 
@@ -479,7 +477,6 @@ static int pfmgr_lkup_bmp_for_free_pf
 
     pf_pos = BYTES_TO_PF(start_addr - hdr->base);
     
-
     while((pf_pos < freer->total_pf) && (req_pf > pf_ret) && !stop)
     {
         pf_ix       = POS_TO_IX(pf_pos);
@@ -631,11 +628,11 @@ static int pfmgr_clear_bmp
     phys_size_t pf
 )
 {
-    phys_size_t length  = 0;
-    phys_size_t bmp_pos = 0;
-    phys_size_t pf_pos  = 0;
-    phys_size_t pf_ix   = 0;
-    phys_size_t mask    = 0;
+    phys_size_t length      = 0;
+    phys_size_t bmp_pos     = 0;
+    phys_size_t pf_pos      = 0;
+    phys_size_t pf_ix       = 0;
+    phys_size_t mask        = 0;
     phys_size_t mask_frames = 0;
     uint8_t     stop        = 0;
     
@@ -684,7 +681,7 @@ static int pfmgr_clear_bmp
 
     return(pf > 0 ? -1 : 0);
 }
-
+int pfmgr_show = 0;
 /* pfmgr_alloc - allocates page frames */
 
 static int pfmgr_alloc
@@ -852,13 +849,14 @@ static int pfmgr_alloc
 
             free_range->next_lkup = BYTES_TO_PF (addr - free_range->hdr.base  + 
                                                  cb_dat.used_bytes);
-            
+            if(pfmgr_show)
+            kprintf("BASE 0x%x USED 0x%x\n",addr, cb_dat.used_bytes);
             if(flags & ALLOC_CB_STOP)
             {
                 /* We're done here */
                 if(cb_status == 0)
                 {
-#if 0
+#if 1
                     kprintf("ALLOC_LENGTH %d\n",len);
 #endif
                     return(0);
@@ -958,6 +956,9 @@ static int pfmgr_free
             kprintf("EMPTY_FOUND - skipping\n");
             continue;
         }
+
+        if(again < 0)
+            break;
        
         /* Get the range */
         if(pfmgr_addr_to_free_range(addr, 
