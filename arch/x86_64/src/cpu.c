@@ -533,7 +533,7 @@ int cpu_ap_start
      memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
 
     /* unmap the trampoline */
-    vm_unmap(NULL, trampoline, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
+    vm_unmap(NULL, trampoline, PAGE_SIZE);
 
     kprintf("Started CPUs %d\n",started_cpu);
 
