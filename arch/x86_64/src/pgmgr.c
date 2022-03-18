@@ -610,11 +610,6 @@ static void pgmgr_iter_alloc_level
             if(pfmgr_dat->avail_bytes <= pfmgr_dat->used_bytes)
             {
                 ld->cb_status |= PGMGR_CB_BREAK;
-               
-                /* If we are at the edge but we have one more entry to 
-                 * allocate, set the PGMGR_CB_AGAIN flag so that we
-                 * can allocate memory for the remaining entry
-                 */
             }
              
             break;
@@ -864,7 +859,7 @@ static int pgmgr_iterate_levels
 
         if(ld->curr_level > ld->req_level)
         {
-            /* notify the callbnack the we have to go down 
+            /* notify the callback the we have to go down 
              * so it notifies if we can continue or not
              */
             ld->iter_cb(&it_dat,
