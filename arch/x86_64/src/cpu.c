@@ -419,6 +419,7 @@ int cpu_ap_start
 {
     int                    status      = 0;
     virt_addr_t            trampoline  = 0;
+    virt_size_t            tramp_size  = 0;
     device_t               *dev        = NULL;
     uint32_t               cpu_id      = 0;
     ACPI_TABLE_MADT        *madt       = NULL;
@@ -440,8 +441,10 @@ int cpu_ap_start
         return(0);
     }
 
+    tramp_size = ALIGN_UP( _TRAMPOLINE_END - _TRAMPOLINE_BEGIN, PAGE_SIZE);
+
     trampoline = vm_map(NULL,CPU_TRAMPOLINE_LOCATION_START,
-                PAGE_SIZE,
+                tramp_size,
                 CPU_TRAMPOLINE_LOCATION_START,
                 0,
                 VM_ATTR_EXECUTABLE |
@@ -527,13 +530,13 @@ int cpu_ap_start
     /*(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);*/
 
     /* clear the trampoline from the area */
-    memset((void*)trampoline, 0, _TRAMPOLINE_END - _TRAMPOLINE_BEGIN);
+    memset((void*)trampoline, 0, tramp_size);
 
     /* Clear the stack */
      memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
 
     /* unmap the trampoline */
-    vm_unmap(NULL, trampoline, PAGE_SIZE);
+    vm_unmap(NULL, trampoline, tramp_size);
 
     kprintf("Started CPUs %d\n",started_cpu);
 
