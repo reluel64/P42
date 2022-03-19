@@ -3,6 +3,7 @@
 #include <linked_list.h>
 #include <scheduler.h>
 #include <mutex.h>
+#include <utils.h>
 
 #define PEND_NODE_TO_THREAD(x) ((sched_thread_t*) \
                                 ((uint8_t*)(x) -  \

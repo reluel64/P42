@@ -1187,7 +1187,7 @@ pfmgr_show = 0;
        
     /* Setup attribute mask */
     pgmgr_attr_translate(&attr_mask, attr);
-   
+
     /* Do allocation */
     PGMGR_FILL_LEVEL(&ld, 
                      ctx, 
@@ -1202,7 +1202,7 @@ pfmgr_show = 0;
                           pgmgr_iterate_levels, 
                           &ld);
  
-    if(ld.error || status)
+    if(ld.error || status < 0)
     {
         kprintf("Failed to allocate %x %d\n", status, ld.error);
         spinlock_unlock_int(&ctx->lock);
@@ -1256,7 +1256,8 @@ int pgmgr_change_attrib
     status = pgmgr_iterate_levels(&cb_data, &ld);
 
     __write_cr3(__read_cr3());
-    if(status || ld.error)
+
+    if(status < 0 || ld.error)
         return(-1);
 
     return(0);
@@ -1304,7 +1305,7 @@ int pgmgr_free
     kprintf("FREEING_LEVELS\n");
     status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
 
-    if(status || ld.error)
+    if(status < 0 || ld.error)
     {
         status = -1;
     }
@@ -1373,7 +1374,8 @@ int pgmgr_unmap
 
     __write_cr3(__read_cr3());
      kprintf("FREE_LEVEL STATUS %x LD_ERR %x\n",status, ld.error);
-    if(status || ld.error)
+     
+    if(status < 0 || ld.error)
     {
         status = -1;
     }
@@ -1638,7 +1640,7 @@ int pgmgr_per_cpu_init(void)
 {
     virt_addr_t cr0 = 0;
     virt_addr_t cr3 = 0;
-
+    kprintf("PGMGR_PER_CPU_INIT\n");
     /* enable write protect*/
     cr0 = __read_cr0();
 
@@ -1657,6 +1659,6 @@ int pgmgr_per_cpu_init(void)
     
     /* wirte back and invalidate */
     __wbinvd();
-
+    kprintf("ENDING\n");
     return(0);
 }

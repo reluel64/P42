@@ -521,7 +521,7 @@ static int apic_drv_init(driver_t *drv)
                                   VM_ATTR_WRITABLE |
                                   VM_ATTR_STRONG_UNCACHED);
         
-        if(apic_drv->vaddr == 0)
+        if(apic_drv->vaddr == VM_INVALID_ADDRESS)
         {
             kfree(apic_drv);
             return(-1);

@@ -90,9 +90,16 @@ static void *acpi_map(phys_addr_t addr, phys_size_t size, uint32_t attr)
     size += diff; 
 
     if(size % PAGE_SIZE)
+    {
         size = ALIGN_UP(size, PAGE_SIZE);
+    }
 
     ret_addr = (virt_addr_t) vm_map(NULL, VM_BASE_AUTO, size, align_addr, 0, attr);
+    
+    if(ret_addr == VM_INVALID_ADDRESS)
+    {
+        return(NULL);
+    }
 
     ret_addr += diff;
     
@@ -113,8 +120,9 @@ static int acpi_unmap(virt_addr_t addr, virt_size_t size)
     size += diff; 
 
     if(size % PAGE_SIZE)
+    {
         size = ALIGN_UP(size, PAGE_SIZE);
-
+    }
     status = (virt_addr_t) vm_unmap(NULL, align_addr, size);
 
     return(status);

@@ -45,9 +45,7 @@ void        pgmgr_boot_temp_map_init(void);
 int         pgmgr_install_handler(void);
 uint64_t    page_manager_get_base(void);
 
-int         pgmgr_attr_change(pgmgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len, uint32_t attr);
-int         pgmgr_free(pgmgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
-int         pgmgr_unmap(pgmgr_ctx_t *ctx, virt_addr_t vaddr, virt_size_t len);
+
 uint8_t     pgmgr_nx_support(void);
 uint8_t     pgmgr_pml5_support(void);
 int         pgmgr_per_cpu_init(void);
@@ -80,4 +78,27 @@ virt_addr_t pgmgr_temp_map
     phys_addr_t phys, 
     uint16_t ix
 );
+
+int pgmgr_change_attrib
+(
+    pgmgr_ctx_t *ctx, 
+    virt_addr_t vaddr, 
+    virt_size_t len, 
+    uint32_t attr
+);
+
+int pgmgr_free
+(
+    pgmgr_ctx_t *ctx, 
+    virt_addr_t vaddr, 
+    virt_size_t len
+);
+
+int pgmgr_unmap
+(
+    pgmgr_ctx_t *ctx, 
+    virt_addr_t vaddr, 
+    virt_size_t len
+);
+
 #endif

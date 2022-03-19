@@ -43,6 +43,14 @@
 #define VM_NOMEM (-2)
 #define VM_NOENT (-3)
 
+#define VM_INVALID_ADDRESS ((virt_size_t) -1)
+
+#define VM_EXTENT_INIT {.base   = 0, \
+                        .length = 0, \
+                        .flags  = 0, \
+                        .data   = 0  \
+                       }
+
 /* Virtual memory context */
 typedef struct vm_ctx_t
 {
@@ -73,7 +81,7 @@ typedef struct vm_extent_t
          * protection type (R/W/X), caching type, etc.
          */ 
         void    *data;     /* extent specific data */
-        uint32_t eflags;    
+        uint32_t eflags;   
     };
 
 }vm_extent_t;
@@ -110,9 +118,10 @@ virt_addr_t vm_alloc
 int vm_change_attr
 (
     vm_ctx_t *ctx,
-    virt_addr_t addr,
-    virt_size_t size,
-    uint32_t mem_flags,
+    virt_addr_t vaddr,
+    virt_size_t len,
+    uint32_t  set_mem_flags,
+    uint32_t  clear_mem_flags,
     uint32_t *old_mem_flags
 );
 

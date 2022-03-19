@@ -4,6 +4,7 @@
 #include <devmgr.h>
 #include <intc.h>
 #include <isr.h>
+#include <utils.h>
 
 #define PIC1_COMMAND 0x20
 #define PIC1_DATA    0x21

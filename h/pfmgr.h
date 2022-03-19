@@ -76,6 +76,7 @@ typedef struct pfmgr_busy_range_t
 void     pfmgr_early_init(void);
 int      pfmgr_init(void);
 pfmgr_t *pfmgr_get(void);
+int pfmgr_show_free_memory(void);
 
 extern phys_addr_t KERNEL_LMA;
 extern phys_addr_t KERNEL_LMA_END;

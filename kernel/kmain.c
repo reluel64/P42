@@ -55,7 +55,7 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
     } return (vendor);
 }
 mutex_t mtx;
-static void kmain_sys_init(void)
+static void kmain_sys_init(void *arg)
 {
     int hr = 0;
     int min = 0;
@@ -78,6 +78,7 @@ static void kmain_sys_init(void)
         kprintf("BEFORE - ");
         pfmgr_show_free_memory();
       //   vm_list_entries();
+     // pgmgr_per_cpu_init();
         addr = vm_alloc(NULL,0xffff800040001000, alloc_sz,0, VM_ATTR_WRITABLE);
        
        kprintf("ADDR %x\n",addr);
@@ -86,8 +87,8 @@ static void kmain_sys_init(void)
         pfmgr_show_free_memory();
       
         
-   // memset(addr, 0, alloc_sz);
-    kprintf("DONE\n");
+        memset((void*)addr, 0, alloc_sz);
+        kprintf("DONE\n");
     
     
         vm_free(NULL, addr, alloc_sz );

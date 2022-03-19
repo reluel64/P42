@@ -44,7 +44,7 @@ int context_init
                     0,
                     VM_ATTR_WRITABLE);
 
-    if(stack == 0)
+    if(stack == VM_INVALID_ADDRESS)
     {
         kfree((void*)th->context);
         return(-1);

@@ -338,11 +338,10 @@ static int ioapic_device_init
                                       VM_ATTR_WRITABLE
                                       );
    
-    if(ioapic->virt_base == 0)
+    if(ioapic->virt_base == VM_INVALID_ADDRESS)
     {
         kfree(ioapic);
         return(-1);
-
     }
     
     /* save pointers of IOREGSEL and IOWIN */

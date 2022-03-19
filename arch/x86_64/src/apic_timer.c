@@ -9,7 +9,7 @@
 #include <i8254.h>
 #include <cpu.h>
 #include <platform.h>
-
+#include <utils.h>
 
 #define APIC_TIMER_INTERVAL_MS 1 /* 1ms */
 

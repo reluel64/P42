@@ -58,7 +58,7 @@ int vm_extent_alloc_slot
     status = pgmgr_alloc(&ctx->pgmgr,
                         fext.base, 
                         VM_SLOT_SIZE, 
-                        PAGE_WRITABLE);
+                        VM_ATTR_WRITABLE);
 
     if(status != 0)
     {

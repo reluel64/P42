@@ -450,7 +450,7 @@ int cpu_ap_start
                 VM_ATTR_EXECUTABLE |
                 VM_ATTR_WRITABLE);
 
-    if(trampoline == 0)
+    if(trampoline == VM_INVALID_ADDRESS)
     {
         return(-1);
     }
@@ -647,13 +647,14 @@ static int pcpu_dev_init(device_t *dev)
     cpu_platform_t        *pcpu           = NULL;
     cpu_platform_driver_t *pdrv           = NULL;
     uint32_t               cpu_id         = 0;
-
+    kprintf("INITIALIZING CPU DEVICE\n");
     cpu_int_lock();
-
+    
+    pgmgr_per_cpu_init();
+  
     drv    = devmgr_dev_drv_get(dev);
     pdrv   = devmgr_drv_data_get(drv);
     cpu_id = cpu_id_get();
- 
 
     cpu = kcalloc(sizeof(cpu_t), 1);
 
@@ -682,9 +683,7 @@ static int pcpu_dev_init(device_t *dev)
 
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
-
-    kprintf("IDT_SETUP\n");
-
+      
     if(!devmgr_dev_create(&apic_dev))
     {
         devmgr_dev_name_set(apic_dev, APIC_DRIVER_NAME);
@@ -748,15 +747,23 @@ static int pcpu_drv_init(driver_t *drv)
                                                   IDT_ALLOC_SIZE,
                                                   VM_HIGH_MEM,
                                                   VM_ATTR_WRITABLE);
+
+    if(cpu_drv->idt == (idt64_entry_t*)VM_INVALID_ADDRESS)
+    {
+        kprintf("Failed to allocate IDT\n");
+        while(1);
+    }
+  
     /* Setup the IDT */
     cpu_idt_setup(cpu_drv);
 
     /* make IDT read-only */
     vm_change_attr(NULL, (virt_addr_t)cpu_drv->idt,
                         IDT_ALLOC_SIZE,
-                        ~VM_ATTR_WRITABLE,
+                        0,
+                        VM_ATTR_WRITABLE,
                         NULL);
-
+ 
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);
 

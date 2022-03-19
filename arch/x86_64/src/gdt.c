@@ -71,13 +71,15 @@ int gdt_per_cpu_init(void *cpu_pv)
                                  VM_HIGH_MEM, 
                                  VM_ATTR_WRITABLE);
 
-    cpu = cpu_pv;
+    if(desc_mem == (uint8_t*)VM_INVALID_ADDRESS)
+    {
+        return(-1);
+    }
 
+    cpu = cpu_pv;
     gdt = (gdt_entry_t *)desc_mem;
     tss = (tss64_entry_t*)(desc_mem + GDT_TABLE_SIZE);
 
-    if (gdt == NULL || tss == NULL)
-        return (-1);
 
     memset(desc_mem, 0, DESC_MEM_ALLOC);
 

@@ -104,7 +104,7 @@ static int vm_setup_protected_regions
     for(uint32_t i = 0; i < rsrvd_count; i++)
     {
         kprintf("Reserving %x - %x\n", re[i].base, re[i].length);
-        if(vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags, 0) == 0)
+        if(vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags, 0) == VM_INVALID_ADDRESS)
         {
             kprintf("FAILED\n");
         }
@@ -142,7 +142,7 @@ int vm_init(void)
     status = pgmgr_alloc(&kernel_ctx.pgmgr,
                           kernel_ctx.vm_base,
                           VM_SLOT_SIZE,
-                          PAGE_WRITABLE);
+                          VM_ATTR_WRITABLE);
 
     if(status)
     {
@@ -151,7 +151,7 @@ int vm_init(void)
     }
 
     hdr = (vm_slot_hdr_t*) kernel_ctx.vm_base;
-
+    
     /* Clear the memory */
     memset(hdr,    0, VM_SLOT_SIZE);
 
@@ -177,7 +177,7 @@ int vm_init(void)
     vm_extent_insert(&kernel_ctx.free_mem, 
                      kernel_ctx.free_per_slot, 
                      &ext);
-
+ 
     /* Insert lower memory */
     ext.base   = 0;
     ext.length = ((vm_max >> 1) - ext.base) + 1;
@@ -190,7 +190,7 @@ int vm_init(void)
     status = pgmgr_alloc(&kernel_ctx.pgmgr,
                         kernel_ctx.vm_base + VM_SLOT_SIZE,
                         VM_SLOT_SIZE,
-                        PAGE_WRITABLE);
+                        VM_ATTR_WRITABLE);
 
     if(status)
     {
@@ -247,7 +247,7 @@ virt_addr_t vm_alloc
 
     spinlock_unlock_int(&ctx->lock);
     
-    if(addr == 0)
+    if(addr == VM_INVALID_ADDRESS)
     {
         return(0);
     }
@@ -279,13 +279,135 @@ virt_addr_t vm_alloc
 int vm_change_attr
 (
     vm_ctx_t *ctx,
-    virt_addr_t addr,
-    virt_size_t size,
-    uint32_t  mem_flags,
+    virt_addr_t vaddr,
+    virt_size_t len,
+    uint32_t  set_mem_flags,
+    uint32_t  clear_mem_flags,
     uint32_t *old_mem_flags
 )
 {
-    return(0);
+    int         status              = VM_OK;
+    virt_addr_t new_mem             = 0;
+    uint32_t    current_mem_flags   = 0;
+    uint32_t    current_alloc_flags = 0;
+    uint32_t    new_mem_flags       = 0;
+
+    if(ctx == NULL)
+    {
+        ctx = &kernel_ctx;
+    }
+
+    /* Check if we are aligned */
+    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
+    {
+        kprintf("%s %d - Not aligned\n",__FUNCTION__,__LINE__);
+        while(1);
+        return(VM_FAIL);
+    }
+    
+    /* acquire the spinlock of the context
+     * We would need to keep this spinlock
+     * until we change the vm space completely
+     */ 
+
+    spinlock_lock_int(&ctx->lock);
+
+    /* release the space that we want to change attributes to */
+    status = vm_space_free(ctx, 
+                           vaddr, 
+                           len, 
+                           &current_alloc_flags, 
+                           &current_mem_flags);
+    
+    new_mem_flags = (current_mem_flags & ~clear_mem_flags) & 
+                    (current_mem_flags | set_mem_flags);
+
+    kprintf("CURRENT FLAGS %x NEW_FLAGS %x CLEAR %x\n",current_mem_flags, new_mem_flags, clear_mem_flags);
+
+    if(status != 0)
+    {
+
+        spinlock_unlock_int(&ctx->lock);
+        while(1);
+        return(-1);
+    }
+
+    /* allocate it again with the new attributes */
+     new_mem = vm_space_alloc(ctx, 
+                              vaddr, 
+                              len, 
+                              current_alloc_flags, 
+                              new_mem_flags);
+                                 kprintf("FREED %x - %x\n",vaddr, len);
+     if(new_mem == VM_INVALID_ADDRESS)
+     {
+         /* If we failed to allocate it with the new attributes,
+          * try to restore its old status - this should merge it 
+          * back
+          */ 
+         kprintf("TRYING AGAIN\n");
+         new_mem = vm_space_alloc(ctx, 
+                                 vaddr,
+                                 len,
+                                 current_alloc_flags,
+                                 current_mem_flags);
+
+        if(status != VM_INVALID_ADDRESS)
+        {
+            kprintf("FAILED to restore memory to original status\n");
+            while(1);
+        }
+        return (VM_FAIL);
+     }
+     kprintf("CHANGING ATTRIBUTES\n");
+     /* Try to change the attributes */
+     status = pgmgr_change_attrib(&ctx->pgmgr, 
+                                 vaddr, 
+                                 len, 
+                                 new_mem_flags);
+     
+     /* If we failed, then we have to change it back */
+    if(status != 0)
+    {
+        /* restore attributes in the page */
+        pgmgr_change_attrib(&ctx->pgmgr,
+                           vaddr,
+                           len,
+                           current_mem_flags);
+         /* remove the memory with the 'new' attributes */
+       status = vm_space_free(ctx, 
+                              vaddr, 
+                              len, 
+                              NULL, 
+                              NULL);
+         
+        if(status != 0)
+        {
+            kprintf("OOPS...hanging\n");
+            while(1);
+        }
+
+        /* add back the memory with the 'old' attributes */
+        new_mem = vm_space_alloc(ctx, 
+                                vaddr,
+                                len,
+                                current_alloc_flags,
+                                current_mem_flags);
+        if(new_mem == VM_INVALID_ADDRESS)
+        {
+            kprintf("FAILED TO ADD BACK MEMORY\n");
+        }
+    }
+
+     spinlock_unlock_int(&ctx->lock);
+
+     /* if we're ok and the user wants the old flags, give it to them */
+    if((status == VM_OK) && (old_mem_flags != NULL))
+    {
+        *old_mem_flags = current_mem_flags;
+    }
+
+     return(status);
 }
 
 int vm_unmap
@@ -303,7 +425,7 @@ int vm_unmap
     /* vaddr and len must be page aligned */
     if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
     {
-        return(-1);
+        return(VM_FAIL);
     }
 
     spinlock_lock_int(&ctx->lock);
@@ -323,10 +445,10 @@ int vm_unmap
     if(status != 0)
     {
         kprintf("FAILED TO UNMAP\n");
-        return(-1);
+        return(VM_FAIL);
     }
    
-   return(0);
+   return(VM_OK);
 }
 
 
@@ -346,7 +468,7 @@ int vm_free
     /* Check if vaddr and len are page aligned */
     if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
     {
-       return(-1);
+       return(VM_FAIL);
     }
 
     spinlock_lock_int(&ctx->lock);
@@ -367,10 +489,10 @@ int vm_free
     if(status != 0)
     {
         kprintf("FAILED TO FREE\n");
-        return(-1);
+        return(VM_FAIL);
     }
    
-   return(0);
+   return(VM_OK);
 }
 
 virt_addr_t vm_map
@@ -388,7 +510,7 @@ virt_addr_t vm_map
     int int_status = 0;
     
     if(len % PAGE_SIZE || phys % PAGE_SIZE)
-        return(0);
+        return(VM_INVALID_ADDRESS);
 
     if(ctx == NULL)
         ctx = &kernel_ctx;
@@ -408,8 +530,8 @@ virt_addr_t vm_map
 
     spinlock_unlock_int(&ctx->lock);
 
-    if(addr == 0)
-        return(0);
+    if(addr == VM_INVALID_ADDRESS)
+        return(VM_INVALID_ADDRESS);
  
     status = pgmgr_map(&ctx->pgmgr,
                             addr,
@@ -422,7 +544,7 @@ virt_addr_t vm_map
         spinlock_lock_int(&ctx->lock);
         vm_space_free(ctx, addr, len, NULL, NULL);
         spinlock_unlock_int(&ctx->lock);
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
 
     return(addr);

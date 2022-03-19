@@ -26,9 +26,10 @@ virt_addr_t vm_space_alloc
     uint32_t eflags
 )
 {
-    vm_extent_t req_ext;
-    vm_extent_t rem_ext;
-    vm_extent_t alloc_ext;
+    vm_extent_t req_ext   = VM_EXTENT_INIT;
+    vm_extent_t rem_ext   = VM_EXTENT_INIT;
+    vm_extent_t alloc_ext = VM_EXTENT_INIT;
+
     int         status = 0;
 
     
@@ -41,7 +42,7 @@ virt_addr_t vm_space_alloc
     /* check if we're stupid or not */
         if((flags & VM_REGION_MASK) == VM_REGION_MASK)
         {
-            return(0);
+            return(VM_INVALID_ADDRESS);
         }
         else if((flags & VM_REGION_MASK) == 0)
         {
@@ -52,7 +53,7 @@ virt_addr_t vm_space_alloc
     if(((flags & VM_MEM_TYPE_MASK) == VM_MEM_TYPE_MASK) ||
         ((flags & VM_MEM_TYPE_MASK) == 0))
     {
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
     /* clear the extent */
     memset(&req_ext, 0, sizeof(vm_extent_t));
@@ -108,7 +109,7 @@ virt_addr_t vm_space_alloc
 
         kprintf("OOOPS...no memory\n");
         while(1);
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
     
     memset(&rem_ext, 0, sizeof(vm_extent_t));
@@ -146,7 +147,7 @@ virt_addr_t vm_space_alloc
                         ctx->free_per_slot,
                         &req_ext);
                         while(1);
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
 
     vm_extent_insert(&ctx->free_mem,
@@ -199,7 +200,7 @@ virt_addr_t vm_space_alloc
                         &alloc_ext,
                         &rem_ext);
 
-                return(0);
+                return(VM_INVALID_ADDRESS);
             }
 
             /* Ok, let's do this again, shall we? */
@@ -237,7 +238,7 @@ virt_addr_t vm_space_alloc
                     &alloc_ext,
                     &rem_ext);
                     
-            return(0);
+            return(VM_INVALID_ADDRESS);
         }
 
         /* Ok, let's do this again, shall we? */
@@ -264,7 +265,8 @@ virt_addr_t vm_space_alloc
                             &req_ext,
                             &alloc_ext,
                             &rem_ext);
-        return(0);
+
+        return(VM_INVALID_ADDRESS);
     }
 }
 
@@ -277,9 +279,10 @@ int vm_space_free
     uint32_t    *old_eflags
 )
 {
-    vm_extent_t req_ext;
-    vm_extent_t rem_ext;
-    vm_extent_t free_ext;
+    vm_extent_t req_ext  = VM_EXTENT_INIT;
+    vm_extent_t rem_ext  = VM_EXTENT_INIT;
+    vm_extent_t free_ext = VM_EXTENT_INIT;
+
     int         status = 0;
 
     if(addr == VM_BASE_AUTO)
