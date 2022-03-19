@@ -14,7 +14,9 @@ int vm_space_free
 (
     vm_ctx_t *ctx,
     virt_addr_t addr,
-    virt_size_t len
+    virt_size_t len,
+    uint32_t    *old_flags,
+    uint32_t    *old_eflags
 );
 
 #endif

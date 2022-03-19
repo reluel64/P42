@@ -273,7 +273,8 @@ int vm_space_free
     vm_ctx_t *ctx,
     virt_addr_t addr,
     virt_size_t len,
-    uint32_t    flags
+    uint32_t    *old_flags,
+    uint32_t    *old_eflags
 )
 {
     vm_extent_t req_ext;
@@ -397,6 +398,18 @@ int vm_space_free
         status = vm_extent_insert(&ctx->free_mem,
                                   ctx->free_per_slot,
                                   &free_ext);
+    }
+    
+    /* Save the old allocation flags */
+    if(old_flags != NULL)
+    {
+        *old_flags = req_ext.flags;
+    }
+
+    /* Save the old memory flags */
+    if(old_eflags != NULL)
+    {
+        *old_eflags   = req_ext.eflags;
     }
 
     return(status);

@@ -43,7 +43,7 @@
 #define VM_NOMEM (-2)
 #define VM_NOENT (-3)
 
-
+/* Virtual memory context */
 typedef struct vm_ctx_t
 {
     list_head_t free_mem;  /* free memory ranges */
@@ -59,8 +59,7 @@ typedef struct vm_ctx_t
     uint32_t     flags;
 }vm_ctx_t;
 
-
-
+/* Virtual memory extent */
 typedef struct vm_extent_t
 {
     virt_addr_t base;
@@ -69,13 +68,17 @@ typedef struct vm_extent_t
 
     union 
     {
+        /* In case the extent is representing allocated
+         * memory, then eflags would contain memory flags like
+         * protection type (R/W/X), caching type, etc.
+         */ 
         void    *data;     /* extent specific data */
         uint32_t eflags;    
     };
 
 }vm_extent_t;
 
-
+/* Virtual memory extent header */
 typedef struct vm_slot_hdr_t
 {
     list_node_t node;
@@ -92,7 +95,7 @@ virt_addr_t vm_map
     virt_size_t len, 
     phys_addr_t phys, 
     uint32_t alloc_flags,
-    uint32_t page_flags
+    uint32_t mem_flags
 );
 
 virt_addr_t vm_alloc
@@ -101,7 +104,7 @@ virt_addr_t vm_alloc
     virt_addr_t virt, 
     virt_size_t len, 
     uint32_t alloc_flags,
-    uint32_t page_flags
+    uint32_t mem_flags
 );
 
 int vm_change_attr
@@ -109,11 +112,9 @@ int vm_change_attr
     vm_ctx_t *ctx,
     virt_addr_t addr,
     virt_size_t size,
-    uint32_t pg_flags,
-    uint32_t *old_pg_flags
+    uint32_t mem_flags,
+    uint32_t *old_mem_flags
 );
-
-int vm_init(void);
 
 int vm_unmap
 (
@@ -128,5 +129,7 @@ int vm_free
     virt_addr_t vaddr, 
     virt_size_t len
 );
+
+int vm_init(void);
 
 #endif

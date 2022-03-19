@@ -1650,10 +1650,12 @@ int pgmgr_per_cpu_init(void)
     __wbinvd();
     __wrmsr(PAT_MSR, pgmgr.pat.pat);
     
+    /* Invalidate page table */
     cr3 = __read_cr3();
 
     __write_cr3(cr3);
     
+    /* wirte back and invalidate */
     __wbinvd();
 
     return(0);

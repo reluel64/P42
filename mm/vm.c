@@ -212,54 +212,61 @@ int vm_init(void)
 
 virt_addr_t vm_alloc
 (
-    vm_ctx_t *ctx, 
+    vm_ctx_t   *ctx, 
     virt_addr_t virt, 
     virt_size_t len, 
-    uint32_t alloc_flags,
-    uint32_t page_flags
+    uint32_t    alloc_flags,
+    uint32_t    mem_flags
 )
 {
     virt_addr_t addr = 0;
     int status = 0;
     int int_status = 0;
 
-    if(len % PAGE_SIZE)
+    if(((virt != VM_BASE_AUTO) && (virt % PAGE_SIZE)) || 
+        (len % PAGE_SIZE))
+    {
         return(0);
+    }
 
     if(ctx == NULL)
+    {
         ctx = &kernel_ctx;
+    }
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_ALLOCATED;
-    /* Allocate virtual memory */
+
     spinlock_lock_int(&ctx->lock);
-    
+
+    /* Allocate virtual space */    
     addr = vm_space_alloc(ctx, 
                           virt, 
                           len, 
                           alloc_flags, 
-                          page_flags);
+                          mem_flags);
 
     spinlock_unlock_int(&ctx->lock);
-
+    
     if(addr == 0)
     {
         return(0);
     }
 
     /* Check if we also need to allocate physical space now */
-    if(!(alloc_flags & VM_LAZY))
+    if(~alloc_flags & VM_LAZY)
     {
         status = pgmgr_alloc(&ctx->pgmgr,
                             addr,
                             len,
-                            page_flags);
+                            mem_flags);
     }
 
+    /* In case of error, free the allocated virtual space */
     if(status != 0)
     {
         spinlock_lock_int(&ctx->lock);
         
-        vm_space_free(ctx, addr, len);
+        vm_space_free(ctx, addr, len, NULL, NULL);
         
         spinlock_unlock_int(&ctx->lock);
         return(0);
@@ -274,8 +281,8 @@ int vm_change_attr
     vm_ctx_t *ctx,
     virt_addr_t addr,
     virt_size_t size,
-    uint32_t pg_flags,
-    uint32_t *old_pg_flags
+    uint32_t  mem_flags,
+    uint32_t *old_mem_flags
 )
 {
     return(0);
@@ -290,12 +297,17 @@ int vm_unmap
 {
     int status = 0;
     
-     if(ctx == NULL)
-        ctx = &kernel_ctx;
+    if(ctx == NULL)
+       ctx = &kernel_ctx;
      
+    /* vaddr and len must be page aligned */
+    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
+    {
+        return(-1);
+    }
+
     spinlock_lock_int(&ctx->lock);
-        
-    status =  vm_space_free(ctx, vaddr, len);
+    status =  vm_space_free(ctx, vaddr, len, NULL, NULL);
     
     if(status != VM_OK)
     {
@@ -328,12 +340,18 @@ int vm_free
 
     int status = 0;
     
-     if(ctx == NULL)
+    if(ctx == NULL)
         ctx = &kernel_ctx;
      
+    /* Check if vaddr and len are page aligned */
+    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
+    {
+       return(-1);
+    }
+
     spinlock_lock_int(&ctx->lock);
         
-    status =  vm_space_free(ctx, vaddr, len);
+    status =  vm_space_free(ctx, vaddr, len, NULL, NULL);
     
     if(status != VM_OK)
     {
@@ -361,8 +379,8 @@ virt_addr_t vm_map
     virt_addr_t virt, 
     virt_size_t len, 
     phys_addr_t phys, 
-    uint32_t alloc_flags,
-    uint32_t page_flags
+    uint32_t    alloc_flags,
+    uint32_t    mem_flags
 )
 {
     virt_addr_t addr = 0;
@@ -386,7 +404,7 @@ virt_addr_t vm_map
                           virt, 
                           len, 
                           alloc_flags, 
-                          page_flags);
+                          mem_flags);
 
     spinlock_unlock_int(&ctx->lock);
 
@@ -397,12 +415,12 @@ virt_addr_t vm_map
                             addr,
                             len,
                             phys,
-                            page_flags);
+                            mem_flags);
     
     if(status != 0)
     {
         spinlock_lock_int(&ctx->lock);
-        vm_space_free(ctx, addr, len);
+        vm_space_free(ctx, addr, len, NULL, NULL);
         spinlock_unlock_int(&ctx->lock);
         return(0);
     }
