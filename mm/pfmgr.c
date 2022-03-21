@@ -151,8 +151,10 @@ static void pfmgr_early_mark_bitmap
     phys_size_t pf_ix   = 0;
     phys_size_t pf_pos  = 0;
     phys_size_t pos     = 0;
-    
+
+#ifdef PFMGR_EARLY_DEBUG
     kprintf("bmp_phys %x\n",bmp_phys);
+#endif
 
     while(pos < len && fmem->avail_pf > 0)
     {
@@ -213,13 +215,16 @@ static void pfmgr_init_free_callback
     local_freer.total_pf       = BYTES_TO_PF(e->length - track_len);
     local_freer.avail_pf       = local_freer.total_pf;
 
+#ifdef PFMGR_EARLY_DEBUG
     kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",
             __FUNCTION__,
             e->base, 
             e->length, 
             e->base + e->length);
 
+
     kprintf("TRACKING START 0x%x LENGTH 0x%x\n",track_addr, track_len);
+#endif
 
     pfmgr_early_clear_bitmap(&local_freer, 
                               track_addr + offsetof(pfmgr_free_range_t, bmp));
@@ -230,7 +235,9 @@ static void pfmgr_init_free_callback
                            track_addr + offsetof(pfmgr_free_range_t, bmp),
                            _KERNEL_LMA, 
                            _KERNEL_IMAGE_LEN);
+#ifdef PFMGR_EARLY_DEBUG               
         kprintf("MARKED KERNEL %x -> %x\n",_KERNEL_LMA, _KERNEL_LMA_END);
+#endif
     }
 
     if(pfmgr_in_range(e->base, e->length, base.physb_start, 
@@ -240,7 +247,9 @@ static void pfmgr_init_free_callback
                            track_addr + offsetof(pfmgr_free_range_t, bmp),
                            base.physb_start, 
                            base.busyr.count * sizeof(pfmgr_busy_range_t));
+#ifdef PFMGR_EARLY_DEBUG
                            kprintf("MARKED BUSY RANGE\n");
+#endif
     }
 
     pfmgr_early_mark_bitmap(&local_freer,
@@ -248,8 +257,9 @@ static void pfmgr_init_free_callback
                        track_addr, 
                        track_len);
 
+#ifdef PFMGR_EARLY_DEBUG
     kprintf("MARKED FREE_RANGE\n");
-
+#endif
     /* Commit to memory */
     freer = (pfmgr_free_range_t*)pfmgr_early_map(track_addr);
     memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
@@ -307,11 +317,14 @@ static void pfmgr_init_busy_callback
                  sizeof(pfmgr_busy_range_t);
 
     base.busyr.count++;
+
+#ifdef PFMGR_EARLY_DEBUG
     kprintf("%s -  RANGE START 0x%x LENGTH 0x%x END 0x%x\n",
             __FUNCTION__,
             e->base, 
             e->length, 
             e->base + e->length);
+#endif
     
 }
 
@@ -607,6 +620,7 @@ static int pfmgr_mark_bmp
         }
     }
 
+#ifdef PFMGR_DEBUG
     if(pf > 0)
     {
         kprintf("PF %d pf_pos %d total_pf %d avail_pf %d\n", 
@@ -614,7 +628,7 @@ static int pfmgr_mark_bmp
                  freer->total_pf, 
                  freer->avail_pf);
     }
-
+#endif
     return(pf > 0 ? -1 : 0);
 }
 
@@ -706,7 +720,7 @@ static int pfmgr_alloc
     phys_size_t         used_pf    = 0;
     int                 lkup_sts   = 0;
     int                 cb_status  = 0;
-    virt_addr_t len = 0;
+    virt_addr_t         alloc_len = 0;
     
     fnode = linked_list_first(&base.freer);
     req_pf = pf;
@@ -823,11 +837,11 @@ static int pfmgr_alloc
             cb_dat.used_bytes  = 0;
             cb_dat.phys_base   = addr;
             cb_dat.avail_bytes = PF_TO_BYTES(avail_pf);
-#if 0            
+#ifdef PFMGR_DEBUG            
             kprintf("BASE %x AVAILABLE %x\n",cb_dat.phys_base, cb_dat.avail_bytes);
 #endif
             cb_status = cb(&cb_dat, pv);
-#if 0
+#ifdef PFMGR_DEBUG
             kprintf("ALLOC BASE 0x%x LEN 0x%x\n",addr, cb_dat.used_bytes);
 #endif            
             /* 
@@ -838,7 +852,7 @@ static int pfmgr_alloc
                 return(-1);
 
             /* decrease the required pfs */
-            len    += cb_dat.used_bytes;
+            alloc_len  += cb_dat.used_bytes;
             used_pf = BYTES_TO_PF(cb_dat.used_bytes);
             req_pf -= used_pf;
 
@@ -849,16 +863,15 @@ static int pfmgr_alloc
 
             free_range->next_lkup = BYTES_TO_PF (addr - free_range->hdr.base  + 
                                                  cb_dat.used_bytes);
-            if(pfmgr_show)
-            kprintf("BASE 0x%x USED 0x%x\n",addr, cb_dat.used_bytes);
+
             if(flags & ALLOC_CB_STOP)
             {
                 /* We're done here */
                 if(cb_status == 0)
                 {
-#if 1
-                    kprintf("ALLOC_LENGTH %d\n",len);
-#endif
+#ifdef PFMGR_DEBUG
+                    kprintf("ALLOC_LENGTH %d\n",alloc_len);
+#endif  
                     return(0);
                 }
             }
@@ -986,8 +999,10 @@ static int pfmgr_free
 
     }while(again > 0);
     
+#ifdef PFMGR_DEBUG
     kprintf("FREED_LENGTH %d\n",len);
-    
+#endif
+
     if(again < 0)
         err = -1;
         

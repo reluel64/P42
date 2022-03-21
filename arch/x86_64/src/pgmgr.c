@@ -57,7 +57,7 @@ typedef struct pgmgr_t
                         
 #define PAGE_MASK_ADDRESS(x)                 (((x) & (~(ATTRIBUTE_MASK))))
 #define PGMGR_MIN_PAGE_TABLE_LEVEL (0x2)
-#define PGMGR_LEVEL_TO_STEP(lvl)              (((virt_size_t)1 << \
+#define PGMGR_LEVEL_TO_STEP(lvl)            (((virt_size_t)1 << \
                                             PGMGR_LEVEL_TO_SHIFT((lvl))))
 #define PGMGR_CLEAR_PT_PAGE(max_level)      ((max_level) + 1)
 #define PGMGR_LEVEL_ENTRY_PAGE(max_level)   ((max_level) + 2)
@@ -911,6 +911,7 @@ static int pgmgr_iterate_levels
                             ld->offset  + 
                             it_dat.increment;
 
+        /* Check the next entery */
         ld->iter_cb(&it_dat,
                     ld,
                     pfmgr_dat,
@@ -1023,9 +1024,10 @@ static int pgmgr_setup_remap_table(pgmgr_ctx_t *ctx)
     uint16_t entry        = 0;
     uint8_t shift         = 0;
     int status            = 0;
-    
+
+#ifdef PGMGR_DEBUG
     kprintf("----Setting up remapping table----\n");
-    
+#endif    
     PGMGR_FILL_LEVEL(&lvl_dat, 
                      ctx, 
                      REMAP_TABLE_VADDR, 
@@ -1070,7 +1072,10 @@ static int pgmgr_setup_remap_table(pgmgr_ctx_t *ctx)
     }
 
     pgmgr.remap_tbl = REMAP_TABLE_VADDR;
+
+ #ifdef PGMGR_DEBUG
     kprintf("----Done setting up remapping table----\n");
+#endif
     return(0);
 }
 
@@ -1090,7 +1095,7 @@ int pgmgr_map
                                  };
     phys_addr_t attr_mask = 0;
     int status = 0;
-    kprintf("CREATING TABLES\n");
+ 
     /* Create the tables */
     PGMGR_FILL_LEVEL(&ld, 
                      ctx, 
@@ -1115,7 +1120,7 @@ int pgmgr_map
     }
     /* Setup attribute mask */
     pgmgr_attr_translate(&attr_mask, attr);
-    kprintf("MAPPING ADDRESS\n");
+    
     /* Do mapping */
     PGMGR_FILL_LEVEL(&ld, 
                      ctx, 
@@ -1170,14 +1175,12 @@ int pgmgr_alloc
                      pgmgr_iter_alloc_level);
 
     spinlock_lock_int(&ctx->lock);
-kprintf("ALLOC LEVELS\n");
-pfmgr_show = 0;
+
     status = pfmgr->alloc(0, 
                           ALLOC_CB_STOP, 
                           pgmgr_iterate_levels, 
                           &ld);
-    pfmgr_show = 0;
- kprintf("DONE ALLOC\n");
+
     if(status || ld.error)
     {
         kprintf("STATUS %x ERROR %x\n",status, ld.error);
@@ -1300,9 +1303,11 @@ int pgmgr_free
                      0, 
                      pgmgr_iter_free_level);
 
+#ifdef PGMGR_DEBUG
     kprintf("BEFORE_LEN %x AFTER LEN %x\n",len, ld.length);
 
     kprintf("FREEING_LEVELS\n");
+#endif
     status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
 
     if(status < 0 || ld.error)
@@ -1350,13 +1355,12 @@ int pgmgr_unmap
         pfmgr_dat.avail_bytes = 0;
         pfmgr_dat.phys_base   = 0;
         pfmgr_dat.used_bytes  = 0;
-        kprintf("STATUS %x LD_ERR %x\n",status, ld.error);
 
     }while((status > 0) && (ld.error == PGMGR_ERR_OK));
 
-    if(status || ld.error)
+    if(status < 0 || ld.error)
     {
-        kprintf("EXITING WITH ERROR\n");
+        kprintf("%s %d EXITING WITH ERROR\n",__FUNCTION__,__LINE__);
         status = -1;
         spinlock_unlock_int(&ctx->lock);
         return(status);
@@ -1373,7 +1377,7 @@ int pgmgr_unmap
     status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
 
     __write_cr3(__read_cr3());
-     kprintf("FREE_LEVEL STATUS %x LD_ERR %x\n",status, ld.error);
+    
      
     if(status < 0 || ld.error)
     {
@@ -1628,11 +1632,9 @@ static int pgmgr_per_cpu_invl_handler
 )
 {
     int status = 0;
-    
-    
-   // kprintf("INVALIDATING on CPU %d\n", cpu_id_get());
 
     __write_cr3(__read_cr3());
+    
     return(0);
 }
 

@@ -283,8 +283,10 @@ int mem_map_iter
  
         if(!has_numa)
         {
+#ifdef MEM_MAP_DEBUG
             kprintf("GETTING E820 MEMORY MAP WITHOUT NUMA\n");
             mem_map_show_e820();
+#endif
             for(phys_size_t i = 0; i < map_length; )
             {
                 mb_mem_map       = (multiboot_memory_map_t *)(mb_info->mmap_addr + i);

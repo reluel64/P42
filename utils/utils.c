@@ -4,53 +4,71 @@
 #include <stdint.h>
 #include <utils.h>
 #include <spinlock.h>
-static spinlock_t kprintf_lock ={.lock = 0, .int_lock_cnt = 0, .pre_lock_state = 0};
+
+static spinlock_t kprintf_lock = SPINLOCK_INIT;
+
 void* memset(void* ptr, int value, size_t num)
 {
-    uint8_t* start = (uint8_t*)ptr;
+    uintptr_t mem = (uintptr_t)ptr;
     size_t   pos = 0;
-    size_t wval = value;
-#if 0
-    wval = value & 0xff;
+    size_t   loops = 0;
+    uint64_t fill = 0;
 
-    for (int i = 1; i < sizeof(size_t); i++)
+    fill = value;
+
+    fill |= fill << 8  | fill << 16 | 
+            fill << 24 | fill << 32 | 
+            fill << 40 | fill << 48 |
+            fill << 56;
+
+    while(pos < num)
     {
-        wval |= (wval << 8 * i);
-    }
 
-    /* Zero unaligned memory byte by byte */
-    while ((size_t)start % 2 && pos < num)
-    {
-        start[0] = (uint8_t)value;
-        start++;
-        pos++;
-    }
+        if(((num - pos) >= sizeof(uint64_t)) && 
+            ((mem + pos) % sizeof(uint64_t)) == 0)
+        {
+            loops = ((num - pos) / sizeof(uint64_t));
 
-    while (num - pos >= sizeof(size_t))
-    {
-        *(size_t*)(&start[pos]) = wval;
-        pos += sizeof(size_t);
-    }
+            while(loops > 0)
+            {
+                *((uint64_t*)(mem + pos)) = fill;
+                pos += sizeof(uint64_t);
+                loops--;
+            }
+        }
 
-    while (num - pos >= sizeof(uint32_t))
-    {
-        *(uint32_t*)(&start[pos]) = (uint32_t)wval;
-        pos += sizeof(uint32_t);
-    }
-
-    while (num - pos >= sizeof(uint16_t))
-    {
-        *(uint16_t*)(&start[pos]) = (uint16_t)wval;
-        pos += sizeof(uint16_t);
-    }
+        else if(((num - pos) >= sizeof(uint32_t)) && 
+            ((mem + pos) % sizeof(uint32_t)) == 0)
+        {
+        
+            loops = (num - pos) / sizeof(uint32_t);
+            while(loops > 0)
+            {
+                *((uint32_t*)(mem + pos)) = (uint32_t)fill;
+                pos += sizeof(uint32_t);
+                loops --;
+            }
+        }
 
 
-#endif
-
-    while (num - pos >= sizeof(uint8_t))
-    {
-        *(uint8_t*)(&start[pos]) = (uint8_t)wval;
-        pos += sizeof(uint8_t);
+        else if(((num - pos) >= sizeof(uint16_t)) && 
+            ((mem + pos) % sizeof(uint16_t)) == 0)
+        {
+           
+            loops = (num - pos) / sizeof(uint16_t);
+            while(loops > 0)
+            {
+                *((uint16_t*)(mem + pos)) = (uint16_t)fill;
+                pos += sizeof(uint16_t);
+                loops--;
+            }
+            
+        }
+        else
+        {
+            *((uint8_t*)(mem + pos)) = (uint8_t)fill;
+            pos += sizeof(uint8_t);
+        }
     }
 
     return(ptr);
@@ -130,7 +148,9 @@ int kprintf(char *fmt,...)
     char ch = 0;
     char nbuf[64];
     uint64_t num = 0;
-     spinlock_lock_int(&kprintf_lock);
+    
+    spinlock_lock_int(&kprintf_lock);
+    
     while(fmt[0]!= '\0')
     {
         if(fmt[0] == '%')
@@ -153,6 +173,7 @@ int kprintf(char *fmt,...)
                     break;
                 }
                 case 'd':
+                case 'i':
                  {
                     num = va_arg(lst,int64_t);
                     itoa((int64_t)num, nbuf, 10);

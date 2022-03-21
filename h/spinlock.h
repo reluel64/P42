@@ -4,12 +4,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define SPINLOCK_INIT {.lock = 0, .int_lock_cnt = 0, .pre_lock_state = 0};
 typedef struct spinlock_t
 {
     volatile int lock;
     volatile uint32_t int_lock_cnt;
     volatile int pre_lock_state;
 }spinlock_t;
+
 
 
 void spinlock_init(spinlock_t *s);

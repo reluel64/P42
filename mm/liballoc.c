@@ -2,7 +2,7 @@
 #include <vm.h>
 #include <pgmgr.h>
 #include <pfmgr.h>
-
+#include <utils.h>
 /**  Durand's Amazing Super Duper Memory functions.  */
 
 #define VERSION 	"1.1"
@@ -17,7 +17,8 @@
 #define USE_CASE3
 #define USE_CASE4
 #define USE_CASE5
-
+#define printf kprintf
+#define DEBUG
 #if 1
 /** This macro will conveniently align our pointer upwards */
 #define ALIGN( ptr )													\
@@ -54,10 +55,9 @@
 #define LIBALLOC_DEAD	0xdeaddead
 
 #if defined DEBUG || defined INFO
-#include <stdio.h>
-#include <stdlib.h>
 
-#define FLUSH()		fflush( stdout )
+#define FLUSH(x)
+//#define FLUSH()		fflush( stdout )
 
 #endif
 
@@ -94,7 +94,7 @@ static struct liballoc_major* l_memRoot = NULL;	///< The root memory block acqui
 static struct liballoc_major* l_bestBet = NULL; ///< The major with the most free memory.
 
 static size_t l_pageSize = 4096;			///< The size of an individual page. Set up in liballoc_init.
-static size_t l_pageCount = 1;			///< The number of pages to request per chunk. Set up in liballoc_init.
+static size_t l_pageCount = 256;			///< The number of pages to request per chunk. Set up in liballoc_init.
 static unsigned long long l_allocated = 0;		///< Running total of allocated memory.
 static unsigned long long l_inuse = 0;		///< Running total of used memory.
 
@@ -286,7 +286,7 @@ void* PREFIX(malloc)(size_t req_size)
 #ifdef DEBUG
         printf("liballoc: initialization of liballoc " VERSION "\n");
 #endif
-        atexit(liballoc_dump);
+        
         FLUSH();
 #endif
 
@@ -875,7 +875,16 @@ void* liballoc_alloc(size_t pages)
 {
     void *v = NULL;
 
-    v = (void*)vm_alloc(NULL, VM_BASE_AUTO, pages * PAGE_SIZE, VM_HIGH_MEM, VM_ATTR_WRITABLE );
+    v = (void*)vm_alloc(NULL, 
+                       VM_BASE_AUTO, 
+                       pages * PAGE_SIZE, 
+                       VM_HIGH_MEM, 
+                       VM_ATTR_WRITABLE );
+
+    if(v == (void*)VM_INVALID_ADDRESS)
+    {
+        v = NULL;
+    }
 
     return(v);
 }
@@ -891,9 +900,9 @@ void* liballoc_alloc(size_t pages)
 int liballoc_free(void*p, size_t pages)
 {
     int ret = 0;
-#if 0
+    kprintf("FREEING MEMORY FROM LIBALLOC\n");
     ret = vm_free(NULL, (virt_addr_t)p, pages * PAGE_SIZE);
-    #endif
+ 
     return(ret);
 }
   
