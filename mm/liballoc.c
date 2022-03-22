@@ -18,7 +18,7 @@
 #define USE_CASE4
 #define USE_CASE5
 #define printf kprintf
-#define DEBUG
+
 #if 1
 /** This macro will conveniently align our pointer upwards */
 #define ALIGN( ptr )													\
@@ -103,8 +103,7 @@ static long long l_warningCount = 0;		///< Number of warnings encountered
 static long long l_errorCount = 0;			///< Number of actual errors
 static long long l_possibleOverruns = 0;	///< Number of possible overruns
 
-static spinlock_t lock = {.lock = 0
-                         };
+static spinlock_t lock = SPINLOCK_INIT;
 
 
 
@@ -146,7 +145,7 @@ static void* liballoc_memcpy(void* s1, const void* s2, size_t n)
 
 
 #if defined DEBUG || defined INFO
-static void liballoc_dump()
+ void liballoc_dump()
 {
 #ifdef DEBUG
     struct liballoc_major* maj = l_memRoot;

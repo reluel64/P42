@@ -26,7 +26,7 @@ typedef struct pgmgr_t
     isr_t fault_isr;
     isr_t inv_isr;
 }pgmgr_t;
-
+#define PGMGR_DEBUG
 /* for reference if in future we might want to also align the length */
 #if 0
  ALIGN_UP((_base) - (ld)->base,(virt_size_t)1 <<                   \
@@ -1207,7 +1207,8 @@ int pgmgr_alloc
  
     if(ld.error || status < 0)
     {
-        kprintf("Failed to allocate %x %d\n", status, ld.error);
+        kprintf("Failed to allocate %x %d LEN %x OFFSET %x\n", 
+                status, ld.error, ld.length, ld.offset);
         spinlock_unlock_int(&ctx->lock);
         return(-1);
     }
@@ -1288,8 +1289,11 @@ int pgmgr_free
 
     status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
     
-    if(status || ld.error)
+    if(status < 0 || ld.error)
     {
+#ifdef PGMGR_DEBUG
+        kprintf("FAILED TO RELEASE PAGES STATUS %x ERROR %x\n", status, ld.error);
+#endif
           __write_cr3(__read_cr3());
         spinlock_unlock_int(&ctx->lock);
         return(status);

@@ -18,7 +18,7 @@ typedef struct pfmgr_init_t
 
 static pfmgr_base_t base;
 static pfmgr_t pfmgr_interface;
-
+#define PFMGR_DEBUG
 #define TRACK_LEN(x) (ALIGN_UP((sizeof(pfmgr_free_range_t)) + \
                                BITMAP_SIZE_FOR_AREA((x)), PAGE_SIZE))
 
@@ -212,7 +212,8 @@ static void pfmgr_init_free_callback
     
 
     local_freer.hdr.struct_len = track_len;
-    local_freer.total_pf       = BYTES_TO_PF(e->length - track_len);
+    local_freer.total_pf       = BYTES_TO_PF(ALIGN_DOWN(e->length - track_len, 
+                                             PAGE_SIZE));
     local_freer.avail_pf       = local_freer.total_pf;
 
 #ifdef PFMGR_EARLY_DEBUG
@@ -549,7 +550,6 @@ static int pfmgr_lkup_bmp_for_free_pf
     else
         status = 1;
     
-
     *start = start_addr;
     *pf    = pf_ret;
  
@@ -573,7 +573,6 @@ static int pfmgr_mark_bmp
     phys_size_t pf_ix       = 0;
     phys_size_t mask        = 0;
     phys_size_t mask_frames = 0;
-    uint8_t     stop        = 0;
     
     /* Calculate the starting position */
     pf_pos = BYTES_TO_PF(addr - freer->hdr.base);
@@ -587,16 +586,18 @@ static int pfmgr_mark_bmp
         mask        = ~(virt_size_t)0;;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, pf);
-
+        mask_frames = min(mask_frames, freer->avail_pf);
+#if 1
         if((mask_frames == PF_PER_ITEM) && 
           (freer->bmp[bmp_pos] & mask) == 0)
         {
             freer->bmp[bmp_pos] |= mask;
             pf_pos += mask_frames ;
             pf     -= mask_frames;
-            freer->avail_pf-= mask_frames;
+            freer->avail_pf -= PF_PER_ITEM;
         }
         else
+        #endif
         {
             /* Slower path - check each page frame */
             for(phys_size_t i = 0; i < mask_frames; i++)
@@ -652,7 +653,8 @@ static int pfmgr_clear_bmp
     
     pf_pos = BYTES_TO_PF(addr - freer->hdr.base);
 
-    while((pf_pos < freer->total_pf)          && 
+    while(!stop                               && 
+          (pf_pos < freer->total_pf)          && 
           (freer->avail_pf < freer->total_pf) &&
           (pf > 0))
     {
@@ -661,10 +663,13 @@ static int pfmgr_clear_bmp
         mask        =  ~(virt_size_t)0;;
         mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
         mask_frames = min(mask_frames, pf);
+        mask_frames = min(mask_frames, freer->total_pf - freer->avail_pf);
+
 
         if((mask_frames == PF_PER_ITEM) && 
            (freer->bmp[bmp_pos] & mask))
         {
+            
             freer->bmp[bmp_pos] &= ~mask;
             pf_pos += mask_frames ;
             pf     -= mask_frames;
@@ -684,8 +689,7 @@ static int pfmgr_clear_bmp
                 }
                 else
                 {
-                    kprintf("FATAL: %s %d\n", __FUNCTION__,__LINE__);
-                    while(1);
+                    stop = 1;
                     break;
                 }
                 pf_pos ++;
@@ -695,6 +699,55 @@ static int pfmgr_clear_bmp
 
     return(pf > 0 ? -1 : 0);
 }
+
+uint64_t pgmgr_check_bitmap(pfmgr_free_range_t *freer)
+{
+    phys_size_t length      = 0;
+    phys_size_t bmp_pos     = 0;
+    phys_size_t pf_pos      = 0;
+    phys_size_t pf_ix       = 0;
+    phys_size_t mask        = 0;
+    phys_size_t mask_frames = 0;
+    uint8_t     stop        = 0;
+    uint64_t retval = 0;
+    pf_pos = 0;
+
+    while(!stop                               && 
+          (pf_pos < freer->total_pf))
+    {
+        pf_ix       = POS_TO_IX(pf_pos);
+        bmp_pos     = BMP_POS(pf_pos);
+        mask        =  ~(virt_size_t)0;;
+        mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
+        mask_frames = min(mask_frames, freer->total_pf - freer->avail_pf);
+
+
+        if((mask_frames == PF_PER_ITEM) && 
+           (freer->bmp[bmp_pos] & mask))
+        {
+           retval++;
+           pf_pos+=PF_PER_ITEM;
+        }
+        else
+        {
+            for(phys_size_t i = 0; i < mask_frames; i++)
+            {
+                mask = ((virt_addr_t)1 << (pf_ix + i));
+
+                if((freer->bmp[bmp_pos] & mask))
+                {
+                    retval++;
+                }
+                
+                pf_pos ++;
+            }
+        }
+    }
+
+    return(retval);
+}
+
+
 int pfmgr_show = 0;
 /* pfmgr_alloc - allocates page frames */
 
@@ -795,8 +848,8 @@ static int pfmgr_alloc
         lkup_sts   = pfmgr_lkup_bmp_for_free_pf(free_range, 
                                                 &addr, 
                                                 &avail_pf);
-#if 0
-       kprintf("PRE_POST: %x -> %d\n",addr, avail_pf);                                      
+#if 1
+       kprintf("PRE_POST: 0x%x -> 0x%x\n",addr, avail_pf);                                      
 #endif
         /* Check if we've got anything from the lookup */
         if(lkup_sts < 0)
@@ -855,7 +908,7 @@ static int pfmgr_alloc
             alloc_len  += cb_dat.used_bytes;
             used_pf = BYTES_TO_PF(cb_dat.used_bytes);
             req_pf -= used_pf;
-
+            kprintf("USED_PF %x\n",used_pf);
             if(pfmgr_mark_bmp(free_range, addr, used_pf))
             {
                 return(-1);
@@ -961,7 +1014,7 @@ static int pfmgr_free
         to_free_pf = BYTES_TO_PF(cb_dat.used_bytes);
         addr       = cb_dat.phys_base;
         len+=cb_dat.used_bytes;
-#if 0        
+#if 1        
         kprintf("FREED BASE 0x%x len 0x%x\n",addr,cb_dat.used_bytes);
 #endif    
         if(again > 0 && cb_dat.used_bytes == 0)
@@ -971,8 +1024,12 @@ static int pfmgr_free
         }
 
         if(again < 0)
+        {
+#ifdef PFMGR_DEBUG
+            kprintf("ERROR FROM THE CALLBACK\n");
+#endif
             break;
-       
+        }
         /* Get the range */
         if(pfmgr_addr_to_free_range(addr, 
                                     to_free_pf, 
@@ -984,10 +1041,12 @@ static int pfmgr_free
             break;
         }
 
+        kprintf("BUSY BITS 0x%x TOTAL BITS 0x%x AVAIL BITS 0x%x\n",pgmgr_check_bitmap(freer),freer->total_pf, freer->avail_pf);
+
         /* Clear free range */
         if(pfmgr_clear_bmp(freer, addr, to_free_pf) !=0)
         {
-            kprintf("TO_FREE_PF 0x%x\n",addr);
+            kprintf("Could not clear all the requested frames\n");
             err = -1;
         }
 
@@ -1099,7 +1158,7 @@ int pfmgr_init(void)
    
       phys = (phys_addr_t)hdr->next_range;
       linked_list_add_tail(&base.busyr, &hdr->node);
-    kprintf("NEXT_RANGE %x\n", hdr);
+
 
     }while(phys != 0);
 

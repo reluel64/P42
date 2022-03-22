@@ -259,6 +259,14 @@ virt_addr_t vm_alloc
                             addr,
                             len,
                             mem_flags);
+
+       if(status != 0)
+       {
+           kprintf("HHHHHHHHHHHHHHHHHHHHHHHHHHHHH\n");
+           pgmgr_free(&ctx->pgmgr,
+                      addr,
+                      len);
+       }
     }
 
     /* In case of error, free the allocated virtual space */
@@ -479,7 +487,7 @@ int vm_free
     {
         kprintf("ERROR\n");
         spinlock_unlock_int(&ctx->lock);
-        while(1);
+        return(VM_FAIL);
     }
     
     spinlock_unlock_int(&ctx->lock);
@@ -541,6 +549,10 @@ virt_addr_t vm_map
     
     if(status != 0)
     {
+        pgmgr_unmap(&ctx->pgmgr,
+                    addr,
+                    len);
+
         spinlock_lock_int(&ctx->lock);
         vm_space_free(ctx, addr, len, NULL, NULL);
         spinlock_unlock_int(&ctx->lock);
