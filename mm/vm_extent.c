@@ -54,11 +54,41 @@ int vm_extent_alloc_slot
     {
         return(VM_FAIL);
     }
+    /* Acquire backend for the page */
+    status = pgmgr_allocate_backend(&ctx->pgmgr,
+                                    fext.base,
+                                    VM_SLOT_SIZE,
+                                    NULL);
+    
+    if(status != 0)
+    {
+        kprintf("Failed to allocate extent\n");
+        return(VM_FAIL);
+    }
 
-    status = pgmgr_alloc(&ctx->pgmgr,
-                        fext.base, 
-                        VM_SLOT_SIZE, 
-                        VM_ATTR_WRITABLE);
+    /* Allocate the page */
+    status = pgmgr_allocate_pages(&ctx->pgmgr,
+                                  fext.base,
+                                  VM_SLOT_SIZE,
+                                  NULL,
+                                  VM_ATTR_WRITABLE);
+    
+    if(status != 0)
+    {
+        /* If we failed to allocate the page, then release the backend */
+        status = pgmgr_release_backend(&ctx->pgmgr, 
+                                       fext.base, 
+                                       VM_SLOT_SIZE, 
+                                       NULL);
+
+        if(status != 0)
+        {
+            kprintf("Failed to release backend\n");
+            while(1);
+        }
+        return(VM_FAIL);
+    }
+
 
     if(status != 0)
     {

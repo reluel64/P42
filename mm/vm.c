@@ -117,7 +117,8 @@ int vm_init(void)
     virt_addr_t           vm_max  = 0;
     uint32_t              offset  = 0;
     vm_slot_hdr_t         *hdr = NULL;
-    vm_extent_t           ext;
+    vm_extent_t           ext = VM_EXTENT_INIT;
+    virt_size_t           out_length = 0;
     int status            = 0;
 
     vm_max = cpu_virt_max();
@@ -139,14 +140,26 @@ int vm_init(void)
    
     spinlock_init(&kernel_ctx.lock);
 
-    status = pgmgr_alloc(&kernel_ctx.pgmgr,
-                          kernel_ctx.vm_base,
-                          VM_SLOT_SIZE,
-                          VM_ATTR_WRITABLE);
-
-    if(status)
+    status = pgmgr_allocate_backend(&kernel_ctx.pgmgr,
+                                    kernel_ctx.vm_base,
+                                    VM_SLOT_SIZE,
+                                    NULL);
+    
+    if(status != 0)
     {
-        kprintf("Failed to initialize VMM\n");
+        kprintf("Failed to allocate backend for Virtual Memory Manager\n");
+        while(1);
+    }
+
+    status = pgmgr_allocate_pages(&kernel_ctx.pgmgr,
+                                  kernel_ctx.vm_base,
+                                  VM_SLOT_SIZE,
+                                  NULL,
+                                  VM_ATTR_WRITABLE);
+    
+    if(status != 0)
+    {
+        kprintf("Failed to allocate free slot for Virtual Memory Manager\n");
         while(1);
     }
 
@@ -187,14 +200,27 @@ int vm_init(void)
                       kernel_ctx.free_per_slot, 
                       &ext);
 
-    status = pgmgr_alloc(&kernel_ctx.pgmgr,
-                        kernel_ctx.vm_base + VM_SLOT_SIZE,
-                        VM_SLOT_SIZE,
-                        VM_ATTR_WRITABLE);
-
-    if(status)
+    status = pgmgr_allocate_backend(&kernel_ctx.pgmgr,
+                                    kernel_ctx.vm_base,
+                                    VM_SLOT_SIZE,
+                                    NULL);
+    
+    if(status != 0)
     {
-        return(-1);
+        kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
+        while(1);
+    }
+
+    status = pgmgr_allocate_pages(&kernel_ctx.pgmgr,
+                                  kernel_ctx.vm_base + VM_SLOT_SIZE,
+                                  VM_SLOT_SIZE,
+                                  NULL,
+                                  VM_ATTR_WRITABLE);
+    
+    if(status != 0)
+    {
+        kprintf("Failed to allocate tracking slot for Virtual Memory Manager\n");
+        while(1);
     }
 
     hdr = (vm_slot_hdr_t*)(kernel_ctx.vm_base + VM_SLOT_SIZE);
@@ -220,6 +246,7 @@ virt_addr_t vm_alloc
 )
 {
     virt_addr_t addr = 0;
+    virt_size_t out_len = 0;
     int status = 0;
     int int_status = 0;
 
@@ -252,22 +279,64 @@ virt_addr_t vm_alloc
         return(0);
     }
 
+    /* Lock the page manager */
+    pgmgr_ctx_lock(&ctx->pgmgr);
+    
     /* Check if we also need to allocate physical space now */
     if(~alloc_flags & VM_LAZY)
     {
-        status = pgmgr_alloc(&ctx->pgmgr,
-                            addr,
-                            len,
-                            mem_flags);
+        status = pgmgr_allocate_backend(&ctx->pgmgr,
+                                        virt,
+                                        len,
+                                        &out_len);
 
-       if(status != 0)
-       {
-           kprintf("HHHHHHHHHHHHHHHHHHHHHHHHHHHHH\n");
-           pgmgr_free(&ctx->pgmgr,
-                      addr,
-                      len);
-       }
+        if(status != 0)
+        {
+            /* release what was allocated for backend */
+            status = pgmgr_release_backend(&ctx->pgmgr,
+                                          virt,
+                                          out_len,
+                                          NULL);
+        }
+        else
+        {
+          
+            status = pgmgr_allocate_pages(&ctx->pgmgr,
+                                          virt,
+                                          len,
+                                          &out_len,
+                                          mem_flags);
+
+            if(status != 0)
+            {
+                /* Release what was allocated */
+                status = pgmgr_release_pages(&ctx->pgmgr,
+                                    virt,
+                                    out_len,
+                                    NULL);
+
+                if(status != 0)
+                {
+                    kprintf("HALT: %s %s %d\n", __FILE__, __FUNCTION__ ,__LINE__);
+                    while(1);
+                }
+
+                /* release the backend */
+                status = pgmgr_release_backend(&ctx->pgmgr,
+                                               virt,
+                                               len,
+                                               NULL);
+                
+                if(status != 0)
+                {
+                    kprintf("HALT %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+                    while(1);
+                }
+            }
+        }
     }
+
+     pgmgr_ctx_unlock(&ctx->pgmgr);
 
     /* In case of error, free the allocated virtual space */
     if(status != 0)
@@ -278,6 +347,110 @@ virt_addr_t vm_alloc
         
         spinlock_unlock_int(&ctx->lock);
         return(0);
+    }
+
+    return(addr);
+}
+
+
+virt_addr_t vm_map
+(
+    vm_ctx_t *ctx, 
+    virt_addr_t virt, 
+    virt_size_t len, 
+    phys_addr_t phys, 
+    uint32_t    alloc_flags,
+    uint32_t    mem_flags
+)
+{
+    virt_addr_t addr = 0;
+    virt_size_t out_len = 0;
+    int status = 0;
+    int int_status = 0;
+    
+    if(len % PAGE_SIZE || phys % PAGE_SIZE)
+        return(VM_INVALID_ADDRESS);
+
+    if(ctx == NULL)
+        ctx = &kernel_ctx;
+
+
+    alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_MAPPED;
+
+    /* Allocate virtual memory */
+
+    spinlock_lock_int(&ctx->lock);
+
+    addr = vm_space_alloc(ctx, 
+                          virt, 
+                          len, 
+                          alloc_flags, 
+                          mem_flags);
+
+    spinlock_unlock_int(&ctx->lock);
+
+    if(addr == VM_INVALID_ADDRESS)
+        return(VM_INVALID_ADDRESS);
+ 
+    pgmgr_ctx_lock(&ctx->pgmgr);
+    status = pgmgr_allocate_backend(&ctx->pgmgr,
+                                        virt,
+                                        len,
+                                        &out_len);
+
+    if(status != 0)
+    {
+        /* release what was allocated for backend */
+        status = pgmgr_release_backend(&ctx->pgmgr,
+                                      virt,
+                                      out_len,
+                                      NULL);
+    }
+    else
+    {
+      
+        status = pgmgr_map_pages(&ctx->pgmgr,
+                                      virt,
+                                      len,
+                                      &out_len,
+                                      mem_flags,
+                                      phys);
+
+        if(status != 0)
+        {
+            /* Release what was allocated */
+            status = pgmgr_unmap_pages(&ctx->pgmgr,
+                                virt,
+                                out_len,
+                                NULL);
+
+            if(status != 0)
+            {
+                kprintf("HALT: %s %s %d\n", __FILE__, __FUNCTION__ ,__LINE__);
+                while(1);
+            }
+
+            /* release the backend */
+            status = pgmgr_release_backend(&ctx->pgmgr,
+                                           virt,
+                                           len,
+                                           NULL);
+            
+            if(status != 0)
+            {
+                kprintf("HALT %s %s %d\n", __FILE__, __FUNCTION__, __LINE__);
+                while(1);
+            }
+        }
+    }
+
+    if(status != 0)
+    {
+
+        spinlock_lock_int(&ctx->lock);
+        vm_space_free(ctx, addr, len, NULL, NULL);
+        spinlock_unlock_int(&ctx->lock);
+        return(VM_INVALID_ADDRESS);
     }
 
     return(addr);
@@ -426,7 +599,8 @@ int vm_unmap
 )
 {
     int status = 0;
-    
+    virt_size_t out_len = 0;
+
     if(ctx == NULL)
        ctx = &kernel_ctx;
      
@@ -446,10 +620,25 @@ int vm_unmap
         while(1);
     }
     
+    pgmgr_ctx_lock(&ctx->pgmgr);
     spinlock_unlock_int(&ctx->lock);
     
-    status = pgmgr_unmap(&ctx->pgmgr, vaddr, len);
-       
+    status = pgmgr_unmap_pages(&ctx->pgmgr,
+                                vaddr,
+                                len,
+                                NULL);
+
+    
+    if(status == 0)
+    {
+        status = pgmgr_release_backend(&ctx->pgmgr,
+                                        vaddr,
+                                        len,
+                                        NULL);
+    }
+    
+    pgmgr_ctx_unlock(&ctx->pgmgr);
+
     if(status != 0)
     {
         kprintf("FAILED TO UNMAP\n");
@@ -490,10 +679,23 @@ int vm_free
         return(VM_FAIL);
     }
     
+    pgmgr_ctx_lock(&ctx->pgmgr);
     spinlock_unlock_int(&ctx->lock);
     
-    status = pgmgr_free(&ctx->pgmgr, vaddr, len);
-       
+    status = pgmgr_release_pages(&ctx->pgmgr,
+                            vaddr,
+                            len,
+                            NULL);    
+    if(status == 0)
+    {
+        status = pgmgr_release_backend(&ctx->pgmgr,
+                                        vaddr,
+                                        len,
+                                        NULL);
+    }
+    
+    pgmgr_ctx_unlock(&ctx->pgmgr);
+
     if(status != 0)
     {
         kprintf("FAILED TO FREE\n");
@@ -501,63 +703,4 @@ int vm_free
     }
    
    return(VM_OK);
-}
-
-virt_addr_t vm_map
-(
-    vm_ctx_t *ctx, 
-    virt_addr_t virt, 
-    virt_size_t len, 
-    phys_addr_t phys, 
-    uint32_t    alloc_flags,
-    uint32_t    mem_flags
-)
-{
-    virt_addr_t addr = 0;
-    int status = 0;
-    int int_status = 0;
-    
-    if(len % PAGE_SIZE || phys % PAGE_SIZE)
-        return(VM_INVALID_ADDRESS);
-
-    if(ctx == NULL)
-        ctx = &kernel_ctx;
-
-
-    alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_MAPPED;
-
-    /* Allocate virtual memory */
-
-    spinlock_lock_int(&ctx->lock);
-
-    addr = vm_space_alloc(ctx, 
-                          virt, 
-                          len, 
-                          alloc_flags, 
-                          mem_flags);
-
-    spinlock_unlock_int(&ctx->lock);
-
-    if(addr == VM_INVALID_ADDRESS)
-        return(VM_INVALID_ADDRESS);
- 
-    status = pgmgr_map(&ctx->pgmgr,
-                            addr,
-                            len,
-                            phys,
-                            mem_flags);
-    
-    if(status != 0)
-    {
-        pgmgr_unmap(&ctx->pgmgr,
-                    addr,
-                    len);
-
-        spinlock_lock_int(&ctx->lock);
-        vm_space_free(ctx, addr, len, NULL, NULL);
-        spinlock_unlock_int(&ctx->lock);
-        return(VM_INVALID_ADDRESS);
-    }
-
-    return(addr);
 }
