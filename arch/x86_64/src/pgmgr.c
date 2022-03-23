@@ -33,102 +33,6 @@ typedef struct pgmgr_t
                                            PGMGR_LEVEL_TO_SHIFT((_req_level)));  
 #endif
 
-#define PGMGR_LEVEL_TO_SHIFT(x) (PT_SHIFT + (((x) - 1) << 3) + ((x) - 1))
-#define PGMGR_ENTRIES_PER_LEVEL (512)
-#define PGMGR_FILL_LEVEL(ld, context, _base,                                   \
-                        _length, _req_level, _attr, _cb)                       \
-                        (ld)->ctx        = (context);                          \
-                                                                               \
-                        (ld)->base       = ALIGN_DOWN((_base),                 \
-                                           (virt_size_t)1 <<                   \
-                                           PGMGR_LEVEL_TO_SHIFT((_req_level)));\
-                                                                               \
-                        (ld)->level      = NULL;                               \
-                        (ld)->length     = (_length) + ((_base)  - (ld)->base);\
-                        (ld)->offset     = (0);                                \
-                        (ld)->level_phys = (context)->pg_phys;                 \
-                        (ld)->req_level  = (_req_level);                       \
-                        (ld)->curr_level = (context)->max_level;               \
-                        (ld)->error      = 1;                                  \
-                        (ld)->do_map     = 1;                                  \
-                        (ld)->attr_mask  = (_attr);                            \
-                        (ld)->iter_cb    = (_cb);                              \
-                        (ld)->cb_status  = 0
-                        
-#define PAGE_MASK_ADDRESS(x)                 (((x) & (~(ATTRIBUTE_MASK))))
-#define PGMGR_MIN_PAGE_TABLE_LEVEL (0x2)
-#define PGMGR_LEVEL_TO_STEP(lvl)            (((virt_size_t)1 << \
-                                            PGMGR_LEVEL_TO_SHIFT((lvl))))
-#define PGMGR_CLEAR_PT_PAGE(max_level)      ((max_level) + 1)
-#define PGMGR_LEVEL_ENTRY_PAGE(max_level)   ((max_level) + 2)
-
-/* Error codes */
-#define PGMGR_ERR_OK                  (0)
-#define PGMGR_ERR_NO_FRAMES           (1 << 0)
-#define PGMGR_ERR_TABLE_NOT_ALLOCATED (1 << 1)
-#define PGMGR_ERR_TBL_CREATE_FAIL     (1 << 2)
-
-/* Flags for the iterator callback */
-#define PGMGR_CB_LEVEL_GO_DOWN      (1 << 0)
-#define PGMGR_CB_LEVEL_GO_UP        (1 << 1)
-#define PGMGR_CB_NEXT_ENTRY         (1 << 2)
-#define PGMGR_CB_DO_REQUEST         (1 << 3)
-#define PGMGR_CB_RES_CHECK          (1 << 4)
-
-/* Return codes for the iter callbacks */
-
-#define PGMGR_CB_STOP               (1 << 0)
-#define PGMGR_CB_ERROR              (1 << 1)
-#define PGMGR_CB_BREAK              (1 << 2)
-#define PGMGR_CB_FORCE_GO_UP        (1 << 3)
-
-#define PGMGR_MAX_TABLE_INDEX       (0x1FF)
-
-/* forward declarations */
-typedef struct pgmgr_iter_callback_data_t pgmgr_iter_callback_data_t;
-typedef struct pgmgr_level_data_t         pgmgr_level_data_t;
-
-typedef struct pgmgr_contig_find_t
-{
-    phys_addr_t base;
-    phys_size_t pf_count;
-    phys_size_t pf_req;
-}pgmgr_contig_find_t;
-
-typedef struct pgmgr_level_data_t
-{
-    pgmgr_ctx_t *ctx;
-    virt_addr_t base;
-    virt_addr_t *level;
-    virt_size_t length;
-    virt_size_t offset;
-    phys_addr_t level_phys;
-    uint8_t     req_level;
-    uint8_t     curr_level;
-    uint8_t     error;
-    uint8_t     do_map;
-    phys_size_t attr_mask;
-    uint32_t    cb_status;
-    void        (*iter_cb)
-    (
-        pgmgr_iter_callback_data_t *ic, 
-        pgmgr_level_data_t *ld,
-        pfmgr_cb_data_t *pfmgr_dat,
-        uint32_t op
-    );
-}pgmgr_level_data_t;
-
-typedef struct pgmgr_iter_callback_data_t
-{
-    /* Status for the iter callback */
-    virt_addr_t         vaddr;
-    uint16_t            entry;
-    uint8_t             shift;
-    virt_addr_t         next_vaddr;
-    virt_size_t         increment;
-}pgmgr_iter_callback_data_t;
-
-
 
 /* locals */
 static pgmgr_t pgmgr;
@@ -1599,22 +1503,40 @@ int pgmgr_temp_unmap
     return(_pgmgr_temp_unmap(vaddr));
 }
 
-static inline void pgmgr_invalidate(virt_addr_t addr)
+
+void pgmgr_invalidate
+(
+    pgmgr_ctx_t *ctx,
+    virt_addr_t vaddr,
+    virt_size_t len
+)
 {
-    /* For this CPU */
-    __invlpg(addr);
+    virt_addr_t cr3 = __read_cr3();
 
-    /* For other CPUs we should at least send IPI */
-    cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
+    if(cr3 == ctx->pg_phys)
+    {
+        if(len < PAGE_SIZE * PGMGR_UPDATE_ENTRIES_THRESHOLD)
+        {
+            for(virt_size_t i = 0; i < len; i+= PAGE_SIZE)
+            {
+                __invlpg(vaddr + i);
+            }
+        }
+        else
+        {
+            __write_cr3(cr3);
+        }
+    }
 
+     cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
 }
 
-static inline void pgmgr_invalidate_all(void)
+static inline void pgmgr_invalidate_all(void *pv, isr_info_t *inf)
 {
+   
     __write_cr3(__read_cr3());
-    cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
+   
 }
-
 
 
 static int pgmgr_page_fault_handler(void *pv, isr_info_t *inf)
@@ -1649,7 +1571,7 @@ static int pgmgr_per_cpu_invl_handler
 )
 {
     int status = 0;
-
+ //kprintf("INVALIDATE  on CPU %x\n",inf->cpu_id);
     __write_cr3(__read_cr3());
     
     return(0);

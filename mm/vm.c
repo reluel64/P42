@@ -338,6 +338,13 @@ virt_addr_t vm_alloc
             {
                 /* success */
                 ret_address = space_addr;
+
+                /* If we are successful, we have to update the 
+                 * changes
+                 */
+                pgmgr_invalidate(&ctx->pgmgr,
+                                     ret_address,
+                                     len);
             }
         }
     }
@@ -457,6 +464,13 @@ virt_addr_t vm_map
         else
         {
             ret_address = space_addr;
+
+            /* If we are successful, we have to update the 
+             * changes
+             */
+            pgmgr_invalidate(&ctx->pgmgr,
+                                 ret_address,
+                                 len);
         }
     }
 
@@ -655,14 +669,18 @@ int vm_unmap
                                 len,
                                 NULL);
 
-    
     if(status == 0)
     {
         status = pgmgr_release_backend(&ctx->pgmgr,
                                         vaddr,
                                         len,
                                         NULL);
+        
     }
+
+    pgmgr_invalidate(&ctx->pgmgr,
+                         vaddr,
+                         len);
     
     /* Release the pgmgr context */
     pgmgr_ctx_unlock(&ctx->pgmgr);
@@ -721,7 +739,10 @@ int vm_free
                                         len,
                                         NULL);
     }
-    
+    pgmgr_invalidate(&ctx->pgmgr,
+                         vaddr,
+                         len);
+
     pgmgr_ctx_unlock(&ctx->pgmgr);
 
     if(status != 0)

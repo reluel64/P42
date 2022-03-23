@@ -45,12 +45,7 @@ typedef union pat_t
     pat_bits_t fields;
 }__attribute__ ((packed)) pat_t;
 
-#define PML5_SHIFT  (48)
-#define PML4_SHIFT  (39)
-#define PDPT_SHIFT  (30)
-#define PDT_SHIFT   (21)
 #define PT_SHIFT    (12)
-
 
 #define ATTRIBUTE_MASK (0x8000000000000FFF)
 
