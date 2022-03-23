@@ -18,6 +18,7 @@ typedef struct pfmgr_init_t
 
 static pfmgr_base_t base;
 static pfmgr_t pfmgr_interface;
+static spinlock_t pfmgr_lock = SPINLOCK_INIT;
 
 #define TRACK_LEN(x) (ALIGN_UP((sizeof(pfmgr_free_range_t)) + \
                                BITMAP_SIZE_FOR_AREA((x)), PAGE_SIZE))
@@ -355,8 +356,9 @@ int pfmgr_early_alloc_pf
                               .used_bytes = 0
                              };
 
+    spinlock_lock_int(&pfmgr_lock);
     freer_phys = base.physf_start;
-
+   
     do
     {
         pf_pos = 0;
@@ -430,10 +432,13 @@ int pfmgr_early_alloc_pf
 
         if(cb_sts == 0)
         {
+            spinlock_unlock_int(&pfmgr_lock);
             return(0);
         }
         
     }while(freer_phys != 0);
+
+    spinlock_unlock_int(&pfmgr_lock);
 
     return(-1);
 }
@@ -745,6 +750,8 @@ static int pfmgr_alloc
     int                 lkup_sts   = 0;
     int                 cb_status  = 0;
     virt_addr_t         alloc_len = 0;
+
+    spinlock_lock_int(&pfmgr_lock);
     
     fnode = linked_list_first(&base.freer);
     req_pf = pf;
@@ -755,9 +762,14 @@ static int pfmgr_alloc
         if(req_pf == 0)
         {
             if(flags & ALLOC_CB_STOP)
+            {
                 req_pf = free_range->avail_pf;
+            }
             else
+            {
+                spinlock_unlock_int(&pfmgr_lock);
                 return(-1);
+            }
         }
 
         next_fnode = linked_list_next(fnode);
@@ -873,8 +885,10 @@ static int pfmgr_alloc
              */
 
             if(cb_status < 0)
+            {
+                spinlock_unlock_int(&pfmgr_lock);
                 return(-1);
-         
+            }
             /* decrease the required pfs */
             alloc_len  += cb_dat.used_bytes;
             used_pf = BYTES_TO_PF(cb_dat.used_bytes);
@@ -883,6 +897,7 @@ static int pfmgr_alloc
             if(pfmgr_mark_bmp(free_range, addr, used_pf))
             {
                 kprintf("Failed to mark all bitmap\n");
+                spinlock_unlock_int(&pfmgr_lock);
                 return(-1);
             }
 
@@ -897,6 +912,7 @@ static int pfmgr_alloc
 #ifdef PFMGR_DEBUG
                     kprintf("ALLOC_LENGTH %d\n",alloc_len);
 #endif  
+                    spinlock_unlock_int(&pfmgr_lock);
                     return(0);
                 }
             }
@@ -913,9 +929,14 @@ static int pfmgr_alloc
     if(!(flags & ALLOC_CB_STOP))
     {
         if(req_pf > 0)
+        {
+            spinlock_unlock_int(&pfmgr_lock);
             return(-1);
+        }
     }
-
+    
+    spinlock_unlock_int(&pfmgr_lock);
+    
     return(-1);
 }
 
@@ -974,7 +995,9 @@ static int pfmgr_free
                                       .phys_base   = 0
                                      };
     virt_size_t len = 0;
-
+    
+    spinlock_lock_int(&pfmgr_lock);
+    
     do
     {
         cb_dat.avail_bytes  = 0;
@@ -985,7 +1008,7 @@ static int pfmgr_free
 
         to_free_pf = BYTES_TO_PF(cb_dat.used_bytes);
         addr       = cb_dat.phys_base;
-        len+=cb_dat.used_bytes;
+        len       += cb_dat.used_bytes;
 
 #if PFMGR_DEBUG        
         kprintf("FREED BASE 0x%x len 0x%x\n",addr,cb_dat.used_bytes);
@@ -1035,7 +1058,9 @@ static int pfmgr_free
 
     if(again < 0)
         err = -1;
-        
+    
+    spinlock_unlock_int(&pfmgr_lock);
+    
     return(err);
 }
 
@@ -1043,12 +1068,16 @@ static int pfmgr_free
 void pfmgr_early_init(void)
 {
     pfmgr_init_t init;
+    
+    spinlock_lock_int(&pfmgr_lock);
 
     memset(&init, 0, sizeof(pfmgr_init_t));
     mem_map_iter(pfmgr_init_busy_callback, &init);
 
     memset(&init, 0, sizeof(pfmgr_init_t));
     mem_map_iter(pfmgr_init_free_callback, &init);
+
+    spinlock_unlock_int(&pfmgr_lock);
 
     memset(&pfmgr_interface, 0, sizeof(pfmgr_t));
     pfmgr_interface.alloc = pfmgr_early_alloc_pf;
@@ -1065,10 +1094,9 @@ int pfmgr_init(void)
     pfmgr_range_header_t *hdr = NULL;
     pfmgr_range_header_t temp_hdr;
     
-
     linked_list_init(&base.freer);
     kprintf("Initializing Page Frame Manager\n");
-
+    
     phys = base.physf_start;
 
     do
@@ -1087,8 +1115,10 @@ int pfmgr_init(void)
                                                VM_ATTR_WRITABLE);
  
         if(hdr == NULL)
+        {
+            spinlock_unlock_int(&pfmgr_lock);
             return(-1);
-
+        }
         phys = (phys_addr_t)hdr->next_range;
 
         linked_list_add_tail(&base.freer, &hdr->node);
@@ -1118,7 +1148,10 @@ int pfmgr_init(void)
                                                    VM_ATTR_WRITABLE);
 
             if(hdr == NULL)
+            {
+                spinlock_unlock_int(&pfmgr_lock);
                 return(-1);
+            }
         }
         else
         {
@@ -1135,6 +1168,7 @@ int pfmgr_init(void)
 
     pfmgr_interface.alloc   = pfmgr_alloc;
     pfmgr_interface.dealloc = pfmgr_free;
+    
     kprintf("Page frame manager is initialized\n");
     return(0);
 }
@@ -1151,6 +1185,8 @@ int pfmgr_show_free_memory(void)
     phys_size_t free_mem = 0;
     phys_size_t total_mem = 0;
     int region = 0;
+
+    
     kprintf("\nPhysical memory statistics:\n");
     freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
     
