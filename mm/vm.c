@@ -244,7 +244,7 @@ virt_addr_t vm_alloc
     uint32_t    mem_flags
 )
 {
-    virt_addr_t addr = 0;
+    virt_addr_t space_addr = 0;
     virt_addr_t ret_address = VM_INVALID_ADDRESS;
     virt_size_t out_len = 0;
 
@@ -267,7 +267,7 @@ virt_addr_t vm_alloc
     spinlock_lock_int(&ctx->lock);
 
     /* Allocate virtual space */    
-    addr = vm_space_alloc(ctx, 
+    space_addr = vm_space_alloc(ctx, 
                           virt, 
                           len, 
                           alloc_flags, 
@@ -275,7 +275,7 @@ virt_addr_t vm_alloc
 
     spinlock_unlock_int(&ctx->lock);
     
-    if(addr == VM_INVALID_ADDRESS)
+    if(space_addr == VM_INVALID_ADDRESS)
     {
         return(VM_INVALID_ADDRESS);
     }
@@ -287,7 +287,7 @@ virt_addr_t vm_alloc
     if(~alloc_flags & VM_LAZY)
     {
         status = pgmgr_allocate_backend(&ctx->pgmgr,
-                                        addr,
+                                        space_addr,
                                         len,
                                         &out_len);
 
@@ -295,15 +295,15 @@ virt_addr_t vm_alloc
         {
             /* release what was allocated for backend */
             status = pgmgr_release_backend(&ctx->pgmgr,
-                                          addr,
+                                          space_addr,
                                           out_len,
                                           NULL);
         }
         else
         {
-          
+            /* allocate pages */
             status = pgmgr_allocate_pages(&ctx->pgmgr,
-                                          addr,
+                                          space_addr,
                                           len,
                                           &out_len,
                                           mem_flags);
@@ -312,9 +312,9 @@ virt_addr_t vm_alloc
             {
                 /* Release what was allocated */
                 status = pgmgr_release_pages(&ctx->pgmgr,
-                                    addr,
-                                    out_len,
-                                    NULL);
+                                              space_addr,
+                                              out_len,
+                                              NULL);
 
                 if(status != 0)
                 {
@@ -324,7 +324,7 @@ virt_addr_t vm_alloc
 
                 /* release the backend */
                 status = pgmgr_release_backend(&ctx->pgmgr,
-                                               addr,
+                                               space_addr,
                                                len,
                                                NULL);
                 
@@ -336,7 +336,8 @@ virt_addr_t vm_alloc
             }
             else
             {
-                ret_address = addr;
+                /* success */
+                ret_address = space_addr;
             }
         }
     }
@@ -348,10 +349,9 @@ virt_addr_t vm_alloc
     {
         spinlock_lock_int(&ctx->lock);
         
-        vm_space_free(ctx, addr, len, NULL, NULL);
+        vm_space_free(ctx, space_addr, len, NULL, NULL);
         
         spinlock_unlock_int(&ctx->lock);
-        return(VM_INVALID_ADDRESS);
     }
 
     return(ret_address);
@@ -368,18 +368,21 @@ virt_addr_t vm_map
     uint32_t    mem_flags
 )
 {
-    virt_addr_t addr = 0;
+    virt_addr_t space_addr = 0;
     virt_size_t out_len = 0;
     virt_addr_t ret_address = VM_INVALID_ADDRESS;
     int status = 0;
     int int_status = 0;
     
     if(len % PAGE_SIZE || phys % PAGE_SIZE)
+    {
         return(VM_INVALID_ADDRESS);
+    }
 
     if(ctx == NULL)
+    {
         ctx = &kernel_ctx;
-
+    }
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_MAPPED;
 
@@ -387,21 +390,23 @@ virt_addr_t vm_map
 
     spinlock_lock_int(&ctx->lock);
 
-    addr = vm_space_alloc(ctx, 
-                          virt, 
-                          len, 
-                          alloc_flags, 
-                          mem_flags);
+    space_addr = vm_space_alloc(ctx, 
+                               virt, 
+                               len, 
+                               alloc_flags, 
+                               mem_flags);
 
     spinlock_unlock_int(&ctx->lock);
 
-    if(addr == VM_INVALID_ADDRESS)
+    if(space_addr == VM_INVALID_ADDRESS)
+    {
         return(VM_INVALID_ADDRESS);
- 
+    }
+
     pgmgr_ctx_lock(&ctx->pgmgr);
 
     status = pgmgr_allocate_backend(&ctx->pgmgr,
-                                        addr,
+                                        space_addr,
                                         len,
                                         &out_len);
 
@@ -409,7 +414,7 @@ virt_addr_t vm_map
     {
         /* release what was allocated for backend */
         status = pgmgr_release_backend(&ctx->pgmgr,
-                                      addr,
+                                      space_addr,
                                       out_len,
                                       NULL);
     }
@@ -417,7 +422,7 @@ virt_addr_t vm_map
     {
 
         status = pgmgr_map_pages(&ctx->pgmgr,
-                                      addr,
+                                      space_addr,
                                       len,
                                       &out_len,
                                       mem_flags,
@@ -427,7 +432,7 @@ virt_addr_t vm_map
         {
             /* Release what was allocated */
             status = pgmgr_unmap_pages(&ctx->pgmgr,
-                                addr,
+                                space_addr,
                                 out_len,
                                 NULL);
 
@@ -439,7 +444,7 @@ virt_addr_t vm_map
 
             /* release the backend */
             status = pgmgr_release_backend(&ctx->pgmgr,
-                                           addr,
+                                           space_addr,
                                            len,
                                            NULL);
             
@@ -451,7 +456,7 @@ virt_addr_t vm_map
         }
         else
         {
-            ret_address = addr;
+            ret_address = space_addr;
         }
     }
 
@@ -459,11 +464,11 @@ virt_addr_t vm_map
 
     if(ret_address == VM_INVALID_ADDRESS)
     {
-
         spinlock_lock_int(&ctx->lock);
-        vm_space_free(ctx, addr, len, NULL, NULL);
+
+        vm_space_free(ctx, space_addr, len, NULL, NULL);
+
         spinlock_unlock_int(&ctx->lock);
-        return(VM_INVALID_ADDRESS);
     }
 
     return(ret_address);
@@ -516,14 +521,16 @@ int vm_change_attr
     new_mem_flags = (current_mem_flags & ~clear_mem_flags) & 
                     (current_mem_flags | set_mem_flags);
 
-    kprintf("CURRENT FLAGS %x NEW_FLAGS %x CLEAR %x\n",current_mem_flags, new_mem_flags, clear_mem_flags);
+    kprintf("CURRENT FLAGS %x NEW_FLAGS %x CLEAR %x\n",current_mem_flags, 
+                                                       new_mem_flags, 
+                                                       clear_mem_flags);
 
     if(status != 0)
     {
 
         spinlock_unlock_int(&ctx->lock);
         while(1);
-        return(-1);
+        return(VM_FAIL);
     }
 
     /* allocate it again with the new attributes */
@@ -533,6 +540,7 @@ int vm_change_attr
                               current_alloc_flags, 
                               new_mem_flags);
                                  kprintf("FREED %x - %x\n",vaddr, len);
+
      if(new_mem == VM_INVALID_ADDRESS)
      {
          /* If we failed to allocate it with the new attributes,
@@ -553,7 +561,7 @@ int vm_change_attr
         }
         return (VM_FAIL);
      }
-     kprintf("CHANGING ATTRIBUTES\n");
+     
      /* Try to change the attributes */
      status = pgmgr_change_attrib(&ctx->pgmgr, 
                                  vaddr, 
@@ -623,7 +631,9 @@ int vm_unmap
         return(VM_FAIL);
     }
 
+    /* Lock the VM contexxt */
     spinlock_lock_int(&ctx->lock);
+
     status =  vm_space_free(ctx, vaddr, len, NULL, NULL);
     
     if(status != VM_OK)
@@ -633,6 +643,10 @@ int vm_unmap
         while(1);
     }
     
+
+    /* Lock the pgmgr context before releasing the 
+     * VM context
+     */
     pgmgr_ctx_lock(&ctx->pgmgr);
     spinlock_unlock_int(&ctx->lock);
     
@@ -650,6 +664,7 @@ int vm_unmap
                                         NULL);
     }
     
+    /* Release the pgmgr context */
     pgmgr_ctx_unlock(&ctx->pgmgr);
 
     if(status != 0)
