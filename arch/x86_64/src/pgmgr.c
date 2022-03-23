@@ -1079,149 +1079,278 @@ static int pgmgr_setup_remap_table(pgmgr_ctx_t *ctx)
     return(0);
 }
 
-int pgmgr_map
+int pgmgr_ctx_lock
+(
+    pgmgr_ctx_t *ctx
+)
+{
+    spinlock_lock_int(&ctx->lock);
+    return(0);
+}
+
+int pgmgr_ctx_unlock
+(
+    pgmgr_ctx_t *ctx
+)
+{
+    spinlock_unlock_int(&ctx->lock);
+    return(0);
+}
+
+int pgmgr_allocate_backend
 (
     pgmgr_ctx_t *ctx,
-    virt_addr_t virt,
-    virt_size_t length,
-    phys_addr_t phys, 
-    uint32_t    attr
+    virt_addr_t vaddr,
+    virt_size_t req_len,
+    virt_size_t *out_len
 )
 {
     pgmgr_level_data_t ld;
-    pfmgr_cb_data_t    cb_data = { .avail_bytes = 0,
-                                   .phys_base = 0,
-                                   .used_bytes = 0
-                                 };
-    phys_addr_t attr_mask = 0;
     int status = 0;
- 
+
     /* Create the tables */
     PGMGR_FILL_LEVEL(&ld, 
                      ctx, 
-                     virt, 
-                     length, 
+                     vaddr, 
+                     req_len, 
                      2, 
                      0, 
                      pgmgr_iter_alloc_level);
 
-    spinlock_lock_int(&ctx->lock);
-
     status = pfmgr->alloc(0, 
-                          ALLOC_CB_STOP, 
-                          pgmgr_iterate_levels, 
+                          ALLOC_CB_STOP,
+                          pgmgr_iterate_levels,
                           &ld);
-  
-    if(status || ld.error)
+
+    /* report how much did we actually built */
+    if(out_len)
     {
-        kprintf("STATUS %x LD %x\n",status,ld.error);
-        spinlock_unlock_int(&ctx->lock);
+        *out_len = ld.offset;
+    }
+
+    if(status < 0 || ld.error != PGMGR_ERR_OK)
+    {
+        kprintf("Backend build failed: Status %x Error %x\n",status, ld.error);
         return(-1);
     }
-    /* Setup attribute mask */
-    pgmgr_attr_translate(&attr_mask, attr);
-    
-    /* Do mapping */
+
+    return(0);
+}
+
+int pgmgr_release_backend
+(
+    pgmgr_ctx_t *ctx,
+    virt_addr_t vaddr,
+    virt_size_t req_len,
+    virt_size_t      *out_len
+)
+{
+    phys_addr_t attr_mask = 0;
+    pgmgr_level_data_t ld;
+    int status = 0;
+
+    /* Release pages */
     PGMGR_FILL_LEVEL(&ld, 
                      ctx, 
-                     virt, 
-                     length, 
+                     vaddr, 
+                     req_len, 
+                     2, 
+                     0, 
+                     pgmgr_iter_free_level);
+
+    status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
+
+    /* report how much did we actually allocated */
+    
+    if(out_len)
+    {
+        *out_len = ld.offset;
+    }
+
+    if(status < 0 || ld.error != PGMGR_ERR_OK)
+    {
+        kprintf("Release failed: Status %x Error %x\n",status, ld.error);
+        return(-1);
+    }
+
+    return(0);
+}
+
+int pgmgr_allocate_pages
+(
+    pgmgr_ctx_t *ctx,
+    virt_addr_t vaddr,
+    virt_size_t req_len,
+    virt_size_t      *out_len,
+    uint32_t    vm_attr
+)
+{
+    phys_addr_t attr_mask = 0;
+    pgmgr_level_data_t ld;
+    int status = 0;
+
+    pgmgr_attr_translate(&attr_mask, vm_attr);
+
+    /* Allocate pages */
+    PGMGR_FILL_LEVEL(&ld, 
+                     ctx, 
+                     vaddr, 
+                     req_len, 
                      1, 
                      attr_mask, 
                      pgmgr_iter_alloc_page);
 
-    cb_data.avail_bytes = length;
-    cb_data.phys_base   = phys;
-    status = pgmgr_iterate_levels(&cb_data, &ld);
+    status = pfmgr->alloc(0, 
+                          ALLOC_CB_STOP,
+                          pgmgr_iterate_levels,
+                          &ld);
 
-    if(status < 0 || ld.error)
+    /* report how much did we actually allocated */
+    
+    if(out_len)
     {
-        spinlock_unlock_int(&ctx->lock);
-        kprintf("Failed to map STATUS %d ERR %d \n", status, ld.error);
+        *out_len = ld.offset;
+    }
+
+    if(status < 0 || ld.error != PGMGR_ERR_OK)
+    {
+        kprintf("Allocation failed: Status %x Error %x\n",status, ld.error);
         return(-1);
     }
-    __write_cr3(__read_cr3());
-    if(__read_cr3() == ctx->pg_phys)
-    {
-        __write_cr3(ctx->pg_phys);
-    }
-
-    spinlock_unlock_int(&ctx->lock);
 
     return(0);
 }
-extern int pfmgr_show;
-int pgmgr_alloc
+
+int pgmgr_release_pages
 (
     pgmgr_ctx_t *ctx,
-    virt_addr_t    virt,
-    virt_size_t    length,
-    uint32_t       attr
+    virt_addr_t vaddr,
+    virt_size_t req_len,
+    virt_size_t      *out_len
+)
+{
+    phys_addr_t attr_mask = 0;
+    pgmgr_level_data_t ld;
+    int status = 0;
+
+    /* Release pages */
+    PGMGR_FILL_LEVEL(&ld, 
+                     ctx, 
+                     vaddr, 
+                     req_len, 
+                     1, 
+                     0, 
+                     pgmgr_iter_free_page);
+
+    status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
+
+    /* report how much did we actually allocated */
+    
+    if(out_len)
+    {
+        *out_len = ld.offset;
+    }
+
+    if(status < 0 || ld.error != PGMGR_ERR_OK)
+    {
+        kprintf("Release failed: Status %x Error %x\n",status, ld.error);
+        return(-1);
+    }
+
+    return(0);
+}
+
+int pgmgr_map_pages
+(
+    pgmgr_ctx_t *ctx,
+    virt_addr_t vaddr,
+    virt_size_t req_len,
+    virt_size_t      *out_len,
+    uint32_t    vm_attr,
+    phys_addr_t phys
 )
 {
     pgmgr_level_data_t ld;
     phys_addr_t attr_mask = 0;
-    
-    int int_status = 0;
+    pfmgr_cb_data_t mem = {.avail_bytes = 0, .phys_base = 0, .used_bytes = 0};
     int status = 0;
 
-    /* Create the tables */
+    pgmgr_attr_translate(&attr_mask, vm_attr);
+
+    /* Allocate pages */
     PGMGR_FILL_LEVEL(&ld, 
                      ctx, 
-                     virt, 
-                     length, 
-                     2, 
-                     0, 
-                     pgmgr_iter_alloc_level);
-
-    spinlock_lock_int(&ctx->lock);
-
-    status = pfmgr->alloc(0, 
-                          ALLOC_CB_STOP, 
-                          pgmgr_iterate_levels, 
-                          &ld);
-
-    if(status || ld.error)
-    {
-        kprintf("STATUS %x ERROR %x\n",status, ld.error);
-        spinlock_unlock_int(&ctx->lock);
-        return(-1);
-    }
-       
-    /* Setup attribute mask */
-    pgmgr_attr_translate(&attr_mask, attr);
-
-    /* Do allocation */
-    PGMGR_FILL_LEVEL(&ld, 
-                     ctx, 
-                     virt, 
-                     length, 
+                     vaddr, 
+                     req_len, 
                      1, 
-                     attr_mask,
+                     attr_mask, 
                      pgmgr_iter_alloc_page);
 
-    status = pfmgr->alloc(length >> PAGE_SIZE_SHIFT, 
-                          ALLOC_CB_STOP, 
-                          pgmgr_iterate_levels, 
-                          &ld);
- 
-    if(ld.error || status < 0)
+    mem.phys_base   = phys;
+    mem.avail_bytes = req_len;
+
+    status = pgmgr_iterate_levels(&mem, &ld);
+
+    if(out_len)
     {
-        kprintf("Failed to allocate %x %d LEN %x OFFSET %x\n", 
-                status, ld.error, ld.length, ld.offset);
-        spinlock_unlock_int(&ctx->lock);
+        *out_len = ld.offset;
+    }
+
+    if(status < 0 || ld.error != PGMGR_ERR_OK)
+    {
+        kprintf("Mapping failed: Status %x Error %x\n",status, ld.error);
         return(-1);
     }
-
-    if(__read_cr3() == ctx->pg_phys)
-    {
-        __write_cr3(ctx->pg_phys);
-    }
-
-    spinlock_unlock_int(&ctx->lock);
 
     return(0);
 }
+
+int pgmgr_unmap_pages
+(
+    pgmgr_ctx_t *ctx,
+    virt_addr_t vaddr,
+    virt_size_t req_len,
+    virt_size_t *out_len
+)
+{
+    pfmgr_cb_data_t mem = {.avail_bytes = 0, .phys_base = 0, .used_bytes = 0};
+    pgmgr_level_data_t ld;
+    int status = 0;
+
+    /* Unmap pages */
+    PGMGR_FILL_LEVEL(&ld, 
+                     ctx, 
+                     vaddr, 
+                     req_len, 
+                     1, 
+                     0, 
+                     pgmgr_iter_free_page);
+
+    do
+    {
+        status = pgmgr_iterate_levels(&mem, &ld);
+        mem.avail_bytes = 0;
+        mem.phys_base   = 0;
+        mem.used_bytes  = 0;
+
+    }while((status > 0) && (ld.error == PGMGR_ERR_OK));
+
+    /* report how much did we actually allocated */
+    
+    if(out_len)
+    {
+        *out_len = ld.offset;
+    }
+
+    if(status < 0 || ld.error != PGMGR_ERR_OK)
+    {
+        kprintf("Release failed: Status %x Error %x\n",status, ld.error);
+        return(-1);
+    }
+
+    return(0);
+}
+
 
 int pgmgr_change_attrib
 (
@@ -1267,140 +1396,13 @@ int pgmgr_change_attrib
     return(0);
 }
 
-int pgmgr_free
-(
-    pgmgr_ctx_t *ctx, 
-    virt_addr_t vaddr, 
-    virt_size_t len
-)
-{
-    pgmgr_level_data_t ld;
-    int status = -1;
-    
-    spinlock_lock_int(&ctx->lock);
-    
-    PGMGR_FILL_LEVEL(&ld, 
-                     ctx, 
-                     vaddr, 
-                     len, 
-                     1, 
-                     0, 
-                     pgmgr_iter_free_page);
-
-    status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
-    
-    if(status < 0 || ld.error)
-    {
-#ifdef PGMGR_DEBUG
-        kprintf("FAILED TO RELEASE PAGES STATUS %x ERROR %x\n", status, ld.error);
-#endif
-          __write_cr3(__read_cr3());
-        spinlock_unlock_int(&ctx->lock);
-        return(status);
-    }   
-
-    PGMGR_FILL_LEVEL(&ld, 
-                     ctx, 
-                     vaddr, 
-                     len, 
-                     2, 
-                     0, 
-                     pgmgr_iter_free_level);
-
-#ifdef PGMGR_DEBUG
-    kprintf("BEFORE_LEN %x AFTER LEN %x\n",len, ld.length);
-
-    kprintf("FREEING_LEVELS\n");
-#endif
-    status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
-
-    if(status < 0 || ld.error)
-    {
-        status = -1;
-    }
-    else
-    {
-        status = 0;
-    }
-    kprintf("DONE FREEING\n");
-
-      __write_cr3(__read_cr3());
-    spinlock_unlock_int(&ctx->lock);
- 
-    return(status);
-}
-
-int pgmgr_unmap
-(
-    pgmgr_ctx_t *ctx, 
-    virt_addr_t vaddr, 
-    virt_size_t len
-)
-{
-    pgmgr_level_data_t ld;
-    pfmgr_cb_data_t pfmgr_dat = {.avail_bytes = 0, 
-                                 .phys_base   = 0, 
-                                 .used_bytes  = 0
-                             };
-    int status = -1;
-
-    spinlock_lock_int(&ctx->lock);
-    
-    PGMGR_FILL_LEVEL(&ld, 
-                     ctx, 
-                     vaddr, 
-                     len, 
-                     1, 
-                     0, 
-                     pgmgr_iter_free_page);
-    do
-    {
-        status = pgmgr_iterate_levels(&pfmgr_dat, &ld);
-        pfmgr_dat.avail_bytes = 0;
-        pfmgr_dat.phys_base   = 0;
-        pfmgr_dat.used_bytes  = 0;
-
-    }while((status > 0) && (ld.error == PGMGR_ERR_OK));
-
-    if(status < 0 || ld.error)
-    {
-        kprintf("%s %d EXITING WITH ERROR\n",__FUNCTION__,__LINE__);
-        status = -1;
-        spinlock_unlock_int(&ctx->lock);
-        return(status);
-    }
-
-    PGMGR_FILL_LEVEL(&ld, 
-                     ctx, 
-                     vaddr, 
-                     len, 
-                     2, 
-                     0, 
-                     pgmgr_iter_free_level);
-    
-    status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
-
-    __write_cr3(__read_cr3());
-    
-     
-    if(status < 0 || ld.error)
-    {
-        status = -1;
-    }
-    else
-    {
-        status = 0;
-    }
-
-    spinlock_unlock_int(&ctx->lock);
-    
-    return(status);
-}
-
-
 static int pgmgr_map_kernel(pgmgr_ctx_t *ctx)
 {
     kprintf("Mapping kernel sections\n");
+
+    
+
+
     /* Map code section */
     pgmgr_map(ctx, (virt_addr_t)&_code, 
                    (virt_addr_t)&_code_end - (virt_addr_t)&_code, 
