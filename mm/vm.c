@@ -137,14 +137,13 @@ int vm_init(void)
 
     linked_list_init(&kernel_ctx.free_mem);
     linked_list_init(&kernel_ctx.alloc_mem);
-   
+
     spinlock_init(&kernel_ctx.lock);
 
     status = pgmgr_allocate_backend(&kernel_ctx.pgmgr,
                                     kernel_ctx.vm_base,
                                     VM_SLOT_SIZE,
                                     NULL);
-    
     if(status != 0)
     {
         kprintf("Failed to allocate backend for Virtual Memory Manager\n");
@@ -246,14 +245,16 @@ virt_addr_t vm_alloc
 )
 {
     virt_addr_t addr = 0;
+    virt_addr_t ret_address = VM_INVALID_ADDRESS;
     virt_size_t out_len = 0;
+
     int status = 0;
     int int_status = 0;
 
     if(((virt != VM_BASE_AUTO) && (virt % PAGE_SIZE)) || 
         (len % PAGE_SIZE))
     {
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
 
     if(ctx == NULL)
@@ -276,7 +277,7 @@ virt_addr_t vm_alloc
     
     if(addr == VM_INVALID_ADDRESS)
     {
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
 
     /* Lock the page manager */
@@ -286,7 +287,7 @@ virt_addr_t vm_alloc
     if(~alloc_flags & VM_LAZY)
     {
         status = pgmgr_allocate_backend(&ctx->pgmgr,
-                                        virt,
+                                        addr,
                                         len,
                                         &out_len);
 
@@ -294,7 +295,7 @@ virt_addr_t vm_alloc
         {
             /* release what was allocated for backend */
             status = pgmgr_release_backend(&ctx->pgmgr,
-                                          virt,
+                                          addr,
                                           out_len,
                                           NULL);
         }
@@ -302,7 +303,7 @@ virt_addr_t vm_alloc
         {
           
             status = pgmgr_allocate_pages(&ctx->pgmgr,
-                                          virt,
+                                          addr,
                                           len,
                                           &out_len,
                                           mem_flags);
@@ -311,7 +312,7 @@ virt_addr_t vm_alloc
             {
                 /* Release what was allocated */
                 status = pgmgr_release_pages(&ctx->pgmgr,
-                                    virt,
+                                    addr,
                                     out_len,
                                     NULL);
 
@@ -323,7 +324,7 @@ virt_addr_t vm_alloc
 
                 /* release the backend */
                 status = pgmgr_release_backend(&ctx->pgmgr,
-                                               virt,
+                                               addr,
                                                len,
                                                NULL);
                 
@@ -333,23 +334,27 @@ virt_addr_t vm_alloc
                     while(1);
                 }
             }
+            else
+            {
+                ret_address = addr;
+            }
         }
     }
 
      pgmgr_ctx_unlock(&ctx->pgmgr);
 
     /* In case of error, free the allocated virtual space */
-    if(status != 0)
+    if(ret_address == VM_INVALID_ADDRESS)
     {
         spinlock_lock_int(&ctx->lock);
         
         vm_space_free(ctx, addr, len, NULL, NULL);
         
         spinlock_unlock_int(&ctx->lock);
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
 
-    return(addr);
+    return(ret_address);
 }
 
 
@@ -365,6 +370,7 @@ virt_addr_t vm_map
 {
     virt_addr_t addr = 0;
     virt_size_t out_len = 0;
+    virt_addr_t ret_address = VM_INVALID_ADDRESS;
     int status = 0;
     int int_status = 0;
     
@@ -393,8 +399,9 @@ virt_addr_t vm_map
         return(VM_INVALID_ADDRESS);
  
     pgmgr_ctx_lock(&ctx->pgmgr);
+
     status = pgmgr_allocate_backend(&ctx->pgmgr,
-                                        virt,
+                                        addr,
                                         len,
                                         &out_len);
 
@@ -402,15 +409,15 @@ virt_addr_t vm_map
     {
         /* release what was allocated for backend */
         status = pgmgr_release_backend(&ctx->pgmgr,
-                                      virt,
+                                      addr,
                                       out_len,
                                       NULL);
     }
     else
     {
-      
+
         status = pgmgr_map_pages(&ctx->pgmgr,
-                                      virt,
+                                      addr,
                                       len,
                                       &out_len,
                                       mem_flags,
@@ -420,7 +427,7 @@ virt_addr_t vm_map
         {
             /* Release what was allocated */
             status = pgmgr_unmap_pages(&ctx->pgmgr,
-                                virt,
+                                addr,
                                 out_len,
                                 NULL);
 
@@ -432,7 +439,7 @@ virt_addr_t vm_map
 
             /* release the backend */
             status = pgmgr_release_backend(&ctx->pgmgr,
-                                           virt,
+                                           addr,
                                            len,
                                            NULL);
             
@@ -442,9 +449,15 @@ virt_addr_t vm_map
                 while(1);
             }
         }
+        else
+        {
+            ret_address = addr;
+        }
     }
 
-    if(status != 0)
+    pgmgr_ctx_unlock(&ctx->pgmgr);
+
+    if(ret_address == VM_INVALID_ADDRESS)
     {
 
         spinlock_lock_int(&ctx->lock);
@@ -453,7 +466,7 @@ virt_addr_t vm_map
         return(VM_INVALID_ADDRESS);
     }
 
-    return(addr);
+    return(ret_address);
 }
 
 
@@ -605,7 +618,7 @@ int vm_unmap
        ctx = &kernel_ctx;
      
     /* vaddr and len must be page aligned */
-    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
+    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE) || (vaddr == VM_INVALID_ADDRESS))
     {
         return(VM_FAIL);
     }
@@ -663,7 +676,7 @@ int vm_free
         ctx = &kernel_ctx;
      
     /* Check if vaddr and len are page aligned */
-    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
+    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE)|| (vaddr == VM_INVALID_ADDRESS))
     {
        return(VM_FAIL);
     }

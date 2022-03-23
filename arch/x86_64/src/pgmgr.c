@@ -1398,32 +1398,43 @@ int pgmgr_change_attrib
 
 static int pgmgr_map_kernel(pgmgr_ctx_t *ctx)
 {
+    int status = 0;
+
     kprintf("Mapping kernel sections\n");
-
     
+    status = pgmgr_allocate_backend(ctx, 
+                                    _KERNEL_VMA,
+                                    _KERNEL_VMA_END - _KERNEL_VMA,
+                                    NULL);
 
+    kprintf("BUILT BACKEND\n");
 
     /* Map code section */
-    pgmgr_map(ctx, (virt_addr_t)&_code, 
-                   (virt_addr_t)&_code_end - (virt_addr_t)&_code, 
-                   (virt_addr_t)&_code - _KERNEL_VMA, 
-                   PGMGR_EXECUTABLE);
+    pgmgr_map_pages(ctx, (virt_addr_t)&_code, 
+                         (virt_addr_t)&_code_end - (virt_addr_t)&_code, 
+                         NULL,
+                         PGMGR_EXECUTABLE,
+                         (virt_addr_t)&_code - _KERNEL_VMA );
     
     /* Map data sections */
-    pgmgr_map(ctx, (virt_addr_t)&_data, 
+    pgmgr_map_pages(ctx, (virt_addr_t)&_data, 
                    (virt_addr_t)&_data_end -  (virt_addr_t)&_data, 
-                   (virt_addr_t)&_data - _KERNEL_VMA, 
-                   PGMGR_WRITABLE);
+                   NULL,
+                   PGMGR_WRITABLE,
+                   (virt_addr_t)&_data - _KERNEL_VMA);
 
-    pgmgr_map(ctx, (virt_addr_t)&_rodata, 
+    pgmgr_map_pages(ctx, (virt_addr_t)&_rodata, 
                    (virt_addr_t)&_rodata_end - (virt_addr_t)&_rodata, 
-                   (virt_addr_t)&_rodata - _KERNEL_VMA, 
-                   0);
+                   NULL,
+                   0,
+                   (virt_addr_t)&_rodata - _KERNEL_VMA );
 
-    pgmgr_map(ctx, (virt_addr_t)&_bss, 
+    pgmgr_map_pages(ctx, (virt_addr_t)&_bss, 
                    (virt_addr_t)&_bss_end - (virt_addr_t)&_bss, 
-                   (virt_addr_t)&_bss - _KERNEL_VMA, 
-                   PGMGR_WRITABLE);
+                   NULL,
+                   PGMGR_WRITABLE,
+                   (virt_addr_t)&_bss - _KERNEL_VMA);
+
     kprintf("Done mapping kernel sections\n");
     return(0);
 }
@@ -1492,7 +1503,7 @@ int pgmgr_init(pgmgr_ctx_t *ctx)
     /* switch to the new page table */
     kprintf("CTX %x\n",ctx->pg_phys);
     __write_cr3(ctx->pg_phys);
-    kprintf("CR3 %x\n",ctx->pg_phys);
+
     /* Flush again */
     __wbinvd();
     
