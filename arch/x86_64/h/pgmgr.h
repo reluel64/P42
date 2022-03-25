@@ -33,14 +33,12 @@
 
 #define PGMGR_UPDATE_ENTRIES_THRESHOLD 1024
 
-
-
 #define PGMGR_LEVEL_TO_SHIFT(x) (PT_SHIFT + (((x) - 1) << 3) + ((x) - 1))
 #define PGMGR_ENTRIES_PER_LEVEL (512)
 #define PGMGR_FILL_LEVEL(ld, context, _base,                                   \
                         _length, _req_level, _attr, _cb)                       \
-                    do                                                     \
-                    {                                                      \
+                    do                                                         \
+                    {                                                          \
                         (ld)->ctx        = (context);                          \
                                                                                \
                         (ld)->base       = ALIGN_DOWN((_base),                 \

@@ -25,7 +25,6 @@ int vm_extent_insert
 
 int vm_extent_alloc_slot
 (
-    vm_ctx_t *ctx, 
     list_head_t *lh,
     uint32_t ext_per_slot
 );

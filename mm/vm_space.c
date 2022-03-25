@@ -181,8 +181,7 @@ virt_addr_t vm_space_alloc
         if(status == VM_NOMEM)
         {
             kprintf("%s %d\n", __FUNCTION__,__LINE__);
-            status = vm_extent_alloc_slot(ctx, 
-                                   &ctx->free_mem, 
+            status = vm_extent_alloc_slot(&ctx->free_mem, 
                                    ctx->free_per_slot);
             kprintf("%s %d\n", __FUNCTION__,__LINE__);
             /* status != 0? ...well..FUCK */
@@ -219,8 +218,7 @@ virt_addr_t vm_space_alloc
     if(status == VM_NOMEM)
     {
 
-        status = vm_extent_alloc_slot(ctx, 
-                               &ctx->alloc_mem, 
+        status = vm_extent_alloc_slot(&ctx->alloc_mem, 
                                ctx->alloc_per_slot);
 
         /* status != 0? ...well..FUCK */
@@ -347,8 +345,7 @@ int vm_space_free
 
         if(status == VM_NOMEM)
         {
-            status = vm_extent_alloc_slot(ctx, 
-                                  &ctx->alloc_mem,
+            status = vm_extent_alloc_slot(&ctx->alloc_mem,
                                   ctx->alloc_per_slot);
 
             if(status != 0)
@@ -381,8 +378,7 @@ int vm_space_free
     if(status == VM_NOMEM)
     {
         /* We have a remainder - insert it */
-        status = vm_extent_alloc_slot(ctx, 
-                               &ctx->free_mem,
+        status = vm_extent_alloc_slot(&ctx->free_mem,
                                ctx->free_per_slot);
 
         if(status != 0)

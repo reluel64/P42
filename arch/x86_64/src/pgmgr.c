@@ -1292,7 +1292,6 @@ int pgmgr_change_attrib
     /* Change the attributes */
     status = pgmgr_iterate_levels(&cb_data, &ld);
 
-    __write_cr3(__read_cr3());
 
     if(status < 0 || ld.error)
         return(-1);

@@ -6,7 +6,7 @@
 #include <pfmgr.h>
 #include <paging.h>
 
-static vm_ctx_t kernel_ctx;
+vm_ctx_t vm_kernel_ctx;
 
 void vm_list_entries()
 {
@@ -15,10 +15,10 @@ void vm_list_entries()
     vm_slot_hdr_t *hdr = NULL;
     vm_extent_t *e = NULL;
 
-    kprintf("FREE_DESC_PER_PAGE %d\n",kernel_ctx.free_per_slot);
-    kprintf("ALLOC_DESC_PER_PAGE %d\n",kernel_ctx.alloc_per_slot);
+    kprintf("FREE_DESC_PER_PAGE %d\n",vm_kernel_ctx.free_per_slot);
+    kprintf("ALLOC_DESC_PER_PAGE %d\n",vm_kernel_ctx.alloc_per_slot);
 
-    node = linked_list_first(&kernel_ctx.free_mem);
+    node = linked_list_first(&vm_kernel_ctx.free_mem);
 
     kprintf("----LISTING FREE RANGES----\n");
 
@@ -28,7 +28,7 @@ void vm_list_entries()
 
         next_node = linked_list_next(node);
 
-        for(uint16_t i = 0; i < kernel_ctx.free_per_slot; i++)
+        for(uint16_t i = 0; i < vm_kernel_ctx.free_per_slot; i++)
         {
             e  = &hdr->array[i];
 
@@ -39,7 +39,7 @@ void vm_list_entries()
         node = next_node;
     }
 
-    node = linked_list_first(&kernel_ctx.alloc_mem);
+    node = linked_list_first(&vm_kernel_ctx.alloc_mem);
 
     kprintf("----LISTING ALLOCATED RANGES----\n");
 
@@ -48,7 +48,7 @@ void vm_list_entries()
         next_node = linked_list_next(node);
         hdr = (vm_slot_hdr_t*)node;
 
-        for(uint16_t i = 0; i < kernel_ctx.alloc_per_slot; i++)
+        for(uint16_t i = 0; i < vm_kernel_ctx.alloc_per_slot; i++)
         {
             e  = &hdr->array[i];
             if(e->length != 0)
@@ -123,25 +123,25 @@ int vm_init(void)
 
     vm_max = cpu_virt_max();
 
-    memset(&kernel_ctx, 0, sizeof(vm_ctx_t));
+    memset(&vm_kernel_ctx, 0, sizeof(vm_ctx_t));
     
-    if(pgmgr_init(&kernel_ctx.pgmgr) == -1)
+    if(pgmgr_init(&vm_kernel_ctx.pgmgr) == -1)
         return(VM_FAIL);
 
     vm_base = (~vm_base) - (vm_max >> 1);
 
     kprintf("Initializing Virtual Memory Manager BASE - 0x%x\n",vm_base);
 
-    kernel_ctx.vm_base = vm_base;
-    kernel_ctx.flags   = VM_CTX_PREFER_HIGH_MEMORY;
+    vm_kernel_ctx.vm_base = vm_base;
+    vm_kernel_ctx.flags   = VM_CTX_PREFER_HIGH_MEMORY;
 
-    linked_list_init(&kernel_ctx.free_mem);
-    linked_list_init(&kernel_ctx.alloc_mem);
+    linked_list_init(&vm_kernel_ctx.free_mem);
+    linked_list_init(&vm_kernel_ctx.alloc_mem);
 
-    spinlock_init(&kernel_ctx.lock);
+    spinlock_init(&vm_kernel_ctx.lock);
 
-    status = pgmgr_allocate_backend(&kernel_ctx.pgmgr,
-                                    kernel_ctx.vm_base,
+    status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
+                                    vm_kernel_ctx.vm_base,
                                     VM_SLOT_SIZE,
                                     NULL);
     if(status != 0)
@@ -150,8 +150,8 @@ int vm_init(void)
         while(1);
     }
 
-    status = pgmgr_allocate_pages(&kernel_ctx.pgmgr,
-                                  kernel_ctx.vm_base,
+    status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
+                                  vm_kernel_ctx.vm_base,
                                   VM_SLOT_SIZE,
                                   NULL,
                                   VM_ATTR_WRITABLE);
@@ -162,32 +162,32 @@ int vm_init(void)
         while(1);
     }
 
-    hdr = (vm_slot_hdr_t*) kernel_ctx.vm_base;
+    hdr = (vm_slot_hdr_t*) vm_kernel_ctx.vm_base;
     
     /* Clear the memory */
     memset(hdr,    0, VM_SLOT_SIZE);
 
-    linked_list_add_head(&kernel_ctx.free_mem,  &hdr->node);
+    linked_list_add_head(&vm_kernel_ctx.free_mem,  &hdr->node);
 
     /* How many free entries can we store per slot */
-    kernel_ctx.free_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
+    vm_kernel_ctx.free_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
                                                sizeof(vm_extent_t);
 
     /* How many allocated entries can we store per slot */
-    kernel_ctx.alloc_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
+    vm_kernel_ctx.alloc_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
                                                 sizeof(vm_extent_t);
 
-    hdr->avail = kernel_ctx.free_per_slot;
+    hdr->avail = vm_kernel_ctx.free_per_slot;
 
     memset(&ext, 0, sizeof(vm_extent_t));
  
     /* Insert higher memory */
-    ext.base   = kernel_ctx.vm_base;
-    ext.length = (((uintptr_t)-1) - kernel_ctx.vm_base) + 1;
+    ext.base   = vm_kernel_ctx.vm_base;
+    ext.length = (((uintptr_t)-1) - vm_kernel_ctx.vm_base) + 1;
     ext.flags  = VM_HIGH_MEM;
 
-    vm_extent_insert(&kernel_ctx.free_mem, 
-                     kernel_ctx.free_per_slot, 
+    vm_extent_insert(&vm_kernel_ctx.free_mem, 
+                     vm_kernel_ctx.free_per_slot, 
                      &ext);
  
     /* Insert lower memory */
@@ -195,12 +195,12 @@ int vm_init(void)
     ext.length = ((vm_max >> 1) - ext.base) + 1;
     ext.flags  = VM_LOW_MEM;
 
-    vm_extent_insert(&kernel_ctx.free_mem, 
-                      kernel_ctx.free_per_slot, 
+    vm_extent_insert(&vm_kernel_ctx.free_mem, 
+                      vm_kernel_ctx.free_per_slot, 
                       &ext);
 
-    status = pgmgr_allocate_backend(&kernel_ctx.pgmgr,
-                                    kernel_ctx.vm_base,
+    status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
+                                    vm_kernel_ctx.vm_base,
                                     VM_SLOT_SIZE,
                                     NULL);
     
@@ -210,8 +210,8 @@ int vm_init(void)
         while(1);
     }
 
-    status = pgmgr_allocate_pages(&kernel_ctx.pgmgr,
-                                  kernel_ctx.vm_base + VM_SLOT_SIZE,
+    status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
+                                  vm_kernel_ctx.vm_base + VM_SLOT_SIZE,
                                   VM_SLOT_SIZE,
                                   NULL,
                                   VM_ATTR_WRITABLE);
@@ -222,14 +222,14 @@ int vm_init(void)
         while(1);
     }
 
-    hdr = (vm_slot_hdr_t*)(kernel_ctx.vm_base + VM_SLOT_SIZE);
+    hdr = (vm_slot_hdr_t*)(vm_kernel_ctx.vm_base + VM_SLOT_SIZE);
 
     memset(hdr,    0, VM_SLOT_SIZE);
 
-    linked_list_add_head(&kernel_ctx.alloc_mem, &hdr->node);
-    hdr->avail = kernel_ctx.alloc_per_slot;
+    linked_list_add_head(&vm_kernel_ctx.alloc_mem, &hdr->node);
+    hdr->avail = vm_kernel_ctx.alloc_per_slot;
 
-    vm_setup_protected_regions(&kernel_ctx);
+    vm_setup_protected_regions(&vm_kernel_ctx);
     vm_list_entries();
 
     return(VM_OK);
@@ -259,7 +259,7 @@ virt_addr_t vm_alloc
 
     if(ctx == NULL)
     {
-        ctx = &kernel_ctx;
+        ctx = &vm_kernel_ctx;
     }
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_ALLOCATED;
@@ -388,7 +388,7 @@ virt_addr_t vm_map
 
     if(ctx == NULL)
     {
-        ctx = &kernel_ctx;
+        ctx = &vm_kernel_ctx;
     }
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_MAPPED;
@@ -507,7 +507,7 @@ int vm_change_attr
 
     if(ctx == NULL)
     {
-        ctx = &kernel_ctx;
+        ctx = &vm_kernel_ctx;
     }
 
     /* Check if we are aligned */
@@ -637,7 +637,7 @@ int vm_unmap
     virt_size_t out_len = 0;
 
     if(ctx == NULL)
-       ctx = &kernel_ctx;
+       ctx = &vm_kernel_ctx;
      
     /* vaddr and len must be page aligned */
     if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE) || (vaddr == VM_INVALID_ADDRESS))
@@ -706,7 +706,7 @@ int vm_free
     int status = 0;
     
     if(ctx == NULL)
-        ctx = &kernel_ctx;
+        ctx = &vm_kernel_ctx;
      
     /* Check if vaddr and len are page aligned */
     if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE)|| (vaddr == VM_INVALID_ADDRESS))

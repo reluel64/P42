@@ -13,7 +13,7 @@
 #include <vm_extent.h>
 
 extern virt_size_t __max_linear_address(void);
-
+extern vm_ctx_t vm_kernel_ctx;
 static int vm_virt_is_present
 (
     virt_addr_t virt,
@@ -25,7 +25,6 @@ static int vm_virt_is_present
 
 int vm_extent_alloc_slot
 (
-    vm_ctx_t *ctx, 
     list_head_t *lh,
     uint32_t ext_per_slot
 )
@@ -46,8 +45,8 @@ int vm_extent_alloc_slot
     fext.flags  = VM_HIGH_MEM;
 
     /* extract a free slot that would fit our allocation*/ 
-    status = vm_extent_extract(&ctx->free_mem, 
-                                ctx->free_per_slot,  
+    status = vm_extent_extract(&vm_kernel_ctx.free_mem, 
+                                vm_kernel_ctx.free_per_slot,  
                                 &fext);
                 
     if(status < 0)
@@ -55,7 +54,7 @@ int vm_extent_alloc_slot
         return(VM_FAIL);
     }
     /* Acquire backend for the page */
-    status = pgmgr_allocate_backend(&ctx->pgmgr,
+    status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
                                     fext.base,
                                     VM_SLOT_SIZE,
                                     NULL);
@@ -67,7 +66,7 @@ int vm_extent_alloc_slot
     }
 
     /* Allocate the page */
-    status = pgmgr_allocate_pages(&ctx->pgmgr,
+    status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
                                   fext.base,
                                   VM_SLOT_SIZE,
                                   NULL,
@@ -76,7 +75,7 @@ int vm_extent_alloc_slot
     if(status != 0)
     {
         /* If we failed to allocate the page, then release the backend */
-        status = pgmgr_release_backend(&ctx->pgmgr, 
+        status = pgmgr_release_backend(&vm_kernel_ctx.pgmgr, 
                                        fext.base, 
                                        VM_SLOT_SIZE, 
                                        NULL);
@@ -111,9 +110,9 @@ int vm_extent_alloc_slot
     fext.length -= VM_SLOT_SIZE;
 
     /* insert the remaining free memory in the list */
-    vm_extent_insert(&ctx->free_mem, 
-                      ctx->free_per_slot, 
-                      &fext);
+    vm_extent_insert(&vm_kernel_ctx.free_mem, 
+                     vm_kernel_ctx.free_per_slot, 
+                     &fext);
     
     
     /* prepare to add the new slot to the allocated memory */
@@ -130,8 +129,8 @@ int vm_extent_alloc_slot
     
     /* insert the allocated memory into the list */
 
-    status = vm_extent_insert(&ctx->alloc_mem, 
-                      ctx->alloc_per_slot, 
+    status = vm_extent_insert(&vm_kernel_ctx.alloc_mem, 
+                      vm_kernel_ctx.alloc_per_slot, 
                       &alloc_ext);
     
     /* Plot twist - we don't have extents to store the 
@@ -140,9 +139,8 @@ int vm_extent_alloc_slot
     if(status == VM_NOMEM)
     {
         /* let's call the routine again. Yes, we're recursing */
-        status = vm_extent_alloc_slot(ctx, 
-                                    &ctx->alloc_mem, 
-                                    ctx->alloc_per_slot);
+        status = vm_extent_alloc_slot(&vm_kernel_ctx.alloc_mem, 
+                                      vm_kernel_ctx.alloc_per_slot);
 
         if(status != 0)
         {
@@ -151,9 +149,9 @@ int vm_extent_alloc_slot
         }
 
         /* Let's try again */
-        status = vm_extent_insert(&ctx->alloc_mem, 
-                      ctx->alloc_per_slot, 
-                      &alloc_ext);
+        status = vm_extent_insert(&vm_kernel_ctx.alloc_mem, 
+                                  vm_kernel_ctx.alloc_per_slot,       
+                                  &alloc_ext);
 
         if(status != 0)
         {
