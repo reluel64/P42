@@ -704,10 +704,6 @@ static int pgmgr_iterate_levels
     ld          = pv;
     ctx         = ld->ctx;
 
-    /* If the offset is bigger than the length, then we're done here
-     * However, if the callback requires the iteration to go one more time,
-     * we can skip the ckeck
-     */
     if((ld->length  <= ld->offset))
     {
         return(0);
@@ -913,6 +909,12 @@ static int pgmgr_iterate_levels
 
        /* calculate the next offset */
        ld->offset += it_dat.increment;
+    }
+   
+    /* All right, we're done */
+    if(ld->offset >= ld->length)
+    {
+        return(0);
     }
 
     /* Keep going */
