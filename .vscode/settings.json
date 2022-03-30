@@ -10,11 +10,11 @@
     "editor.useTabStops": false,
     "editor.insertSpaces": true,
     "editor.cursorSmoothCaretAnimation": true,
-    "editor.cursorBlinking": "smooth",
-    "editor.rulers": [
-        0,
-        80
-    ],
+    "editor.cursorBlinking": "blink",
+    "editor.guides.bracketPairs":true,
+   
+    "editor.guides.bracketPairsHorizontal":false,
+    "editor.rulers": [80],
 
     "files.autoSave": "afterDelay",
     "files.autoSaveDelay": 100,
@@ -23,9 +23,16 @@
         "platform.h": "c",
         "thread.h": "c",
         "scheduler.h": "c",
-        "mutex.h": "c"
+        "mutex.h": "c",
+        "cpu.h": "c",
+        "stdatomic.h": "c",
+        "apic_timer.h": "c",
+        "pagemgr.h": "c",
+        "paging.h": "c",
+        "vm.h": "c",
+        "pgmgr.h": "c",
+        "vm_extent.h": "c"
     },
-    
-  
-
+    "git.ignoreLimitWarning": true
+   
 }

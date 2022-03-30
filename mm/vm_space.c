@@ -106,9 +106,7 @@ virt_addr_t vm_space_alloc
 
     if(status < 0)
     {
-
         kprintf("OOOPS...no memory\n");
-        while(1);
         return(VM_INVALID_ADDRESS);
     }
     
@@ -180,10 +178,9 @@ virt_addr_t vm_space_alloc
         /* Hehe... no slots?...try to allocate */
         if(status == VM_NOMEM)
         {
-            kprintf("%s %d\n", __FUNCTION__,__LINE__);
             status = vm_extent_alloc_slot(&ctx->free_mem, 
                                    ctx->free_per_slot);
-            kprintf("%s %d\n", __FUNCTION__,__LINE__);
+
             /* status != 0? ...well..FUCK */
             if(status != 0)
             {

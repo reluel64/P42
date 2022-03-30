@@ -726,7 +726,7 @@ int vm_extent_merge
                     {
                         src_ext = &src_hdr->array[s_ix];
 
-                        /* skip empty extents */
+                        /* skip empty extents and ourselves */
                         
                         if((src_ext->length == 0) || (src_ext == dst_ext))
                             continue;
