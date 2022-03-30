@@ -811,7 +811,7 @@ int vm_extent_compact_all_hdr
             else
             {
                 memcpy(empty_ext, cursor, sizeof(vm_extent_t));
-                memset(empty_ext, 0, sizeof(vm_extent_t));
+                memset(cursor, 0, sizeof(vm_extent_t));
                 empty_ext = cursor;
                 status = VM_OK;
             }
@@ -859,7 +859,7 @@ int vm_extent_compact_hdr
         else
         {
             memcpy(empty_ext, cursor, sizeof(vm_extent_t));
-            memset(empty_ext, 0, sizeof(vm_extent_t));
+            memset(cursor, 0, sizeof(vm_extent_t));
             empty_ext = cursor;
             status = VM_OK;
         }
