@@ -54,7 +54,7 @@
 /* Virtual memory context */
 typedef struct vm_ctx_t
 {
-    list_head_t free_mem;  /* free memory ranges */
+    list_head_t free_mem;  /* free memory ranges*/
     list_head_t alloc_mem; /* allocated memory */
     uint16_t    free_per_slot;
     uint16_t    alloc_per_slot;
@@ -62,7 +62,8 @@ typedef struct vm_ctx_t
                           * we will keep the structures for the current context
                           * This must be available only in kernel context
                           */
-    pgmgr_ctx_t pgmgr;
+    pgmgr_ctx_t pgmgr;  /* backing page manager */
+    
     spinlock_t   lock;
     uint32_t     flags;
 }vm_ctx_t;
