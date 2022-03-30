@@ -27,13 +27,15 @@ void vm_list_entries()
         hdr = (vm_slot_hdr_t*)node;
 
         next_node = linked_list_next(node);
-
+        kprintf("============================================\n");
+        kprintf("HDR 0x%x AVAIL %x\n",hdr, hdr->avail);
+        kprintf("============================================\n");
         for(uint16_t i = 0; i < vm_kernel_ctx.free_per_slot; i++)
         {
             e  = &hdr->array[i];
 
             if(e->length != 0)
-                kprintf("BASE 0x%x LENGTH 0x%x FLAGS %x\n",e->base,e->length, e->flags);
+                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, e->base,e->length, e->flags, e->eflags);
         }
 
         node = next_node;
@@ -47,12 +49,14 @@ void vm_list_entries()
     {
         next_node = linked_list_next(node);
         hdr = (vm_slot_hdr_t*)node;
-
+        kprintf("============================================\n");
+        kprintf("HDR 0x%x AVAIL %x\n",hdr, hdr->avail);
+        kprintf("============================================\n");
         for(uint16_t i = 0; i < vm_kernel_ctx.alloc_per_slot; i++)
         {
             e  = &hdr->array[i];
             if(e->length != 0)
-                kprintf("BASE 0x%x LENGTH 0x%x FLAGS %x\n",e->base,e->length, e->flags);
+                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, e->base,e->length, e->flags, e->eflags);
         }
 
         node = next_node;
@@ -347,6 +351,10 @@ virt_addr_t vm_alloc
                                      len);
             }
         }
+    }
+    else
+    {
+        ret_address = space_addr;
     }
 
      pgmgr_ctx_unlock(&ctx->pgmgr);
@@ -704,7 +712,8 @@ int vm_free
 {
 
     int status = 0;
-    
+    uint32_t old_flags = 0;
+
     if(ctx == NULL)
         ctx = &vm_kernel_ctx;
      
@@ -716,7 +725,7 @@ int vm_free
 
     spinlock_lock_int(&ctx->lock);
         
-    status =  vm_space_free(ctx, vaddr, len, NULL, NULL);
+    status =  vm_space_free(ctx, vaddr, len, &old_flags, NULL);
     
     if(status != VM_OK)
     {
@@ -725,26 +734,33 @@ int vm_free
         return(VM_FAIL);
     }
     
-    pgmgr_ctx_lock(&ctx->pgmgr);
-    spinlock_unlock_int(&ctx->lock);
-    
-    status = pgmgr_release_pages(&ctx->pgmgr,
-                            vaddr,
-                            len,
-                            NULL);    
-    if(status == 0)
+    if(~old_flags & VM_LAZY)
     {
-        status = pgmgr_release_backend(&ctx->pgmgr,
-                                        vaddr,
-                                        len,
-                                        NULL);
+        pgmgr_ctx_lock(&ctx->pgmgr);
+        spinlock_unlock_int(&ctx->lock);
+        
+        status = pgmgr_release_pages(&ctx->pgmgr,
+                                vaddr,
+                                len,
+                                NULL);    
+        if(status == 0)
+        {
+            status = pgmgr_release_backend(&ctx->pgmgr,
+                                            vaddr,
+                                            len,
+                                            NULL);
+        }
+        pgmgr_invalidate(&ctx->pgmgr,
+                             vaddr,
+                             len);
+
+        pgmgr_ctx_unlock(&ctx->pgmgr);
     }
-    pgmgr_invalidate(&ctx->pgmgr,
-                         vaddr,
-                         len);
-
-    pgmgr_ctx_unlock(&ctx->pgmgr);
-
+    else
+    {
+        spinlock_unlock_int(&ctx->lock);
+    }
+    
     if(status != 0)
     {
         kprintf("FAILED TO FREE\n");
