@@ -33,7 +33,7 @@ typedef struct sched_thread_t    sched_thread_t;
 typedef struct sched_policy_t
 {
     char *policy_name;
-
+    void *policy_data;
     int (*next_thread)
     (
         list_head_t       *new_th_list,
@@ -59,6 +59,8 @@ typedef struct sched_policy_t
         sched_exec_unit_t *th_unit,
         sched_thread_t *th
     );
+
+    
 
 }sched_policy_t;
 
@@ -94,11 +96,6 @@ typedef struct sched_exec_unit_t
     list_node_t      node;         /* node in units list */
     cpu_t            *cpu;         /* cpu structure that is tied to the scheduler 
                                     * execution unit 
-                                    */
-    
-    list_head_t       ready_q;      /* queue of ready threads on the current CPU     */
-    list_head_t       blocked_q;    /* queue of blocked threads                      */
-    list_head_t       sleep_q;      /* queue of sleeping threads                     */
     list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t    idle;         /* our dearest idle task                         */

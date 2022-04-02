@@ -27,6 +27,7 @@ int vm_extent_merge
     uint32_t ext_per_slot
 );
 
+/* allocate tracking slot */
 
 int vm_extent_alloc_slot
 (
@@ -62,6 +63,7 @@ int vm_extent_alloc_slot
                                     fext.base,
                                     VM_SLOT_SIZE,
                                     NULL);
+
 
     
     if(status != 0)
@@ -176,6 +178,8 @@ int vm_extent_alloc_slot
 
     return(VM_OK);
 }
+
+/* release a tracking slog */
 
 int vm_extent_release_slot
 (
@@ -386,6 +390,8 @@ static inline int vm_is_in_range
 
 #endif
 
+/* insert an extent into a slot */
+
 int vm_extent_insert
 (
     list_head_t *lh,
@@ -461,6 +467,8 @@ int vm_extent_insert
 
     return(VM_NOMEM);
 }
+
+/* extract an extent from the slot */
 
 int vm_extent_extract
 (
@@ -579,7 +587,7 @@ int vm_extent_extract
 
 }
 
-/* vm_split_block - split a block 
+/* vm_extent_split - split an extent 
  * and return the remaining block size
  * */
 
@@ -636,6 +644,7 @@ int vm_extent_split
     return(1);
 }
 
+/* Join two extents */
 
 int vm_extent_join
 (
@@ -673,6 +682,8 @@ int vm_extent_join
 
     return(VM_FAIL);
 }
+
+/* Merge extents accross headers */
 
 int vm_extent_merge
 (
@@ -767,6 +778,8 @@ int vm_extent_merge
     return(status);
 }
 
+/* Compact extents inside all headers */
+
 int vm_extent_compact_all_hdr
 (
     list_head_t *lh,
@@ -823,6 +836,8 @@ int vm_extent_compact_all_hdr
     return(status);
 }
 
+/* Compact extents inside a header */
+
 int vm_extent_compact_hdr
 (
     vm_slot_hdr_t *hdr,
@@ -867,3 +882,20 @@ int vm_extent_compact_hdr
 
     return(status);
 }
+#if 0
+int vm_extent_defragment
+(
+    list_head_t *lh,
+    uint32_t    ext_per_slot
+)
+{
+    vm_slot_hdr_t *src_hdr = NULL;
+    vm_slot_hdr_t *dst_hdr = NULL;
+    vm_extent_t   *src_ext = NULL;
+    vm_extent_t   *dst_ext = NULL;
+    list_node_t   *src_ln  = NULL;
+    list_node_t   *dst_ln  = NULL;
+
+
+}
+#endif

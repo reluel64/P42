@@ -66,40 +66,42 @@ static void kmain_sys_init(void *arg)
     
     kprintf("Platform init\n");
     platform_init();
-    
+    virt_size_t alloc_sz = 1024 * 1024 * 1024;
     virt_addr_t addr = 0;
-virt_size_t alloc_sz = 1024ul * 1024ul * 24576ul ;
+
   kprintf("BEFORE LOOP - ");
-        pfmgr_show_free_memory();
+       
     while(1)
     {
       //  mtx_acquire(&mtx, WAIT_FOREVER);
      
-        kprintf("BEFORE - ");
-        pfmgr_show_free_memory();
+ 
       //   vm_list_entries();
      // pgmgr_per_cpu_init();
-        addr = vm_alloc(NULL,0xffff800040001000, alloc_sz,0, VM_ATTR_WRITABLE);
-       
-       kprintf("ADDR %x\n",addr);
-        kprintf("--------------------------------------------------\n");
-        kprintf("AFTER_ALLOC: ");
-        pfmgr_show_free_memory();
-      
-       // memset((void*)addr, 0xAA, alloc_sz);
 
-        kprintf("DONE\n");
-    
-    
-        vm_free(NULL, addr, alloc_sz );
-        kprintf("AFTER  - "); pfmgr_show_free_memory();
-        kprintf("+++++++++++++++++++++++++++++++++++++++++++++++\n");
-        //vm_list_entries();
+
+    for(int i  = 0; i < 1000; i++)
+    {
+
+#if 1    
+      addr = vm_alloc(NULL,0xffff800040001000 + alloc_sz , alloc_sz,VM_LAZY, VM_ATTR_WRITABLE);
+
+
+        kprintf("DONE %x\n", addr);
+
+        vm_free(NULL,addr, alloc_sz);
+        alloc_sz += 1024 *1024;
+        kprintf("AGAIN\n");
+#endif
+    }
+        //vm_free(NULL, addr, alloc_sz );
+     
+        vm_list_entries();
              
       //  kprintf("XXXX %d\n",cpu_int_check());
       //  kprintf("TEST\n");
     //    kprintf("XXXX %d\n",cpu_int_check());
-        sched_sleep(100);
+        sched_sleep(100000);
        // for(int i = 0; i < INT32_MAX / 2 - 1; i++);
       //  kprintf("ENDED\n");
     //    mtx_release(&mtx);

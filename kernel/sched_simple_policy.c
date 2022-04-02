@@ -8,6 +8,14 @@
 #include <linked_list.h>
 #include <spinlock.h>
 
+
+typedef struct simple_policy_unit_t
+{
+    list_head_t       ready_q;      /* queue of ready threads on the current CPU     */
+    list_head_t       blocked_q;    /* queue of blocked threads                      */
+    list_head_t       sleep_q;      /* queue of sleeping threads                     */
+}simple_policy_unit_t;
+
 static int simple_next_thread
 (
     list_head_t *new_th_list,
@@ -19,6 +27,8 @@ static int simple_next_thread
     list_node_t *th        = NULL;
     list_node_t *next_th   = NULL;
     sched_thread_t *thread = NULL;
+    simple_policy_unit_t  *policy_unit = NULL;
+
     
     /* Check if we have threads that need first execution 
      * and if there are, add one of them to the ready queue
@@ -30,14 +40,14 @@ static int simple_next_thread
     if(th)
     {
         linked_list_remove(new_th_list, th);
-        linked_list_add_tail(&unit->ready_q, th);
+        linked_list_add_tail(&policy_unit->ready_q, th);
     }
 
     spinlock_unlock_int(new_th_lock);
 
     /* Check blocked threads */
 
-    th = linked_list_first(&unit->blocked_q);
+    th = linked_list_first(&policy_unit->blocked_q);
 
     if(__atomic_fetch_and(&unit->flags, 
                           ~UNIT_THREADS_UNBLOCK, 
@@ -54,8 +64,8 @@ static int simple_next_thread
             if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_BLOCKED))
             {
-                linked_list_remove(&unit->blocked_q, th);
-                linked_list_add_tail(&unit->ready_q, th);
+                linked_list_remove(&policy_unit->blocked_q, th);
+                linked_list_add_tail(&policy_unit->ready_q, th);
             }
 
             th = next_th;
@@ -69,7 +79,7 @@ static int simple_next_thread
                           UNIT_THREADS_WAKE)
     {
         
-        th = linked_list_first(&unit->sleep_q);
+        th = linked_list_first(&policy_unit->sleep_q);
 
         while(th)
         {
@@ -81,8 +91,8 @@ static int simple_next_thread
                 THREAD_SLEEPING))
             {
 
-                linked_list_remove(&unit->sleep_q, th);
-                linked_list_add_tail(&unit->ready_q, th);
+                linked_list_remove(&policy_unit->sleep_q, th);
+                linked_list_add_tail(&policy_unit->ready_q, th);
             }
 
             th = next_th;
@@ -90,14 +100,14 @@ static int simple_next_thread
     }
 
     
-    th = linked_list_first(&unit->ready_q);
+    th = linked_list_first(&policy_unit->ready_q);
 
     if(th == NULL)
     {
         return(-1);
     }
 
-    linked_list_remove(&unit->ready_q, th);
+    linked_list_remove(&policy_unit->ready_q, th);
 
     *next = NODE_TO_THREAD(th);
 

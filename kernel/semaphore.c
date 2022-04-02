@@ -131,8 +131,9 @@ int sem_release(sem_t *sem)
     spinlock_lock_int(&sem->lock);
 
     if(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) < sem->max_count)
+    {
         __atomic_add_fetch(&sem->count, 1, __ATOMIC_RELEASE);
-    
+    }
 
     /* Get the first pending task */
     pend_node = linked_list_first(&sem->pendq);
@@ -148,10 +149,13 @@ int sem_release(sem_t *sem)
     spinlock_lock_int(&thread->lock);
     
     if(thread->flags & THREAD_BLOCKED)
+    {
         sched_unblock_thread(thread);
+    }
     else
+    {
         sched_wake_thread(thread);
-
+    }
     
     spinlock_unlock_int(&thread->lock);
 
