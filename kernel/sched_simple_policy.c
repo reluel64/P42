@@ -121,10 +121,9 @@ static int simple_put_thread
 
     if(th == NULL || policy_data == NULL)
     {
-        kprintf("CANNOT PUT THREAD\n");
         return(-1);
     }
-    kprintf("PUTTING THREAD\n");
+;
     policy_unit = policy_data;
     
     __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);

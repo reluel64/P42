@@ -224,7 +224,6 @@ int sched_unit_init
 
     while(node)
     {
-        kprintf("QUEUE %x\n",node);
         next_node = linked_list_next(node);
         
         pend_th = NODE_TO_THREAD(node);
@@ -365,6 +364,8 @@ void sched_sleep
     schedule();
 }
 
+
+/* time tracking - called from the interrupt context */
 static uint32_t sched_update_time
 (
     void *pv_unit,

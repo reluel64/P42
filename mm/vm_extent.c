@@ -441,7 +441,7 @@ int vm_extent_insert
                 /* Check if we can place the extent here */
                 else if((c_ext->length == 0) && (f_ext == NULL))
                 {
-                    /* Save the free slot and the header */
+                    /* Save the free slot */
                     f_ext = c_ext;
                 }
                 

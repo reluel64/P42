@@ -182,12 +182,6 @@ void isr_dispatcher
         return;
     
     memset(&inf, 0, sizeof(isr_info_t));
-    
-    if(index != 238)
-    {
-       vga_print("INTERRUPT\n");
-
-    }
 
     int_lst = &handlers[index];
 

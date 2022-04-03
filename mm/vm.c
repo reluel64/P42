@@ -14,7 +14,8 @@ void vm_list_entries()
     list_node_t *next_node = NULL;
     vm_slot_hdr_t *hdr = NULL;
     vm_extent_t *e = NULL;
-
+    virt_size_t alloc_len = 0;
+    virt_size_t free_len = 0;
     kprintf("FREE_DESC_PER_PAGE %d\n",vm_kernel_ctx.free_per_slot);
     kprintf("ALLOC_DESC_PER_PAGE %d\n",vm_kernel_ctx.alloc_per_slot);
 
@@ -35,7 +36,10 @@ void vm_list_entries()
             e  = &hdr->array[i];
 
             if(e->length != 0)
+            {
                 kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, e->base,e->length, e->flags, e->eflags);
+                free_len += e->length; 
+            }
         }
 
         node = next_node;
@@ -56,13 +60,16 @@ void vm_list_entries()
         {
             e  = &hdr->array[i];
             if(e->length != 0)
+            {
                 kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, e->base,e->length, e->flags, e->eflags);
+                alloc_len += e->length;
+            }
         }
 
         node = next_node;
     }
 
-    kprintf("DONE\n");
+    kprintf("ALLOCATED: 0x%x bytes\nFREE: 0x%x bytes\n", alloc_len, free_len);
 
 }
 
