@@ -21,11 +21,7 @@ static int vm_virt_is_present
     list_head_t *lh,
     uint32_t ent_per_slot
 );
-int vm_extent_merge
-(
-    list_head_t *lh,
-    uint32_t ext_per_slot
-);
+
 
 /* allocate tracking slot */
 
@@ -438,6 +434,7 @@ int vm_extent_insert
                 /* Try to join the extents */
                 if(vm_extent_join(ext, c_ext) == VM_OK)
                 {
+                    vm_extent_merge(lh, ext_per_slot);
                     return(VM_OK);
                 }
 
@@ -462,6 +459,7 @@ int vm_extent_insert
         memcpy(f_ext, ext, sizeof(vm_extent_t));
         hdr = VM_EXTENT_TO_HEADER(f_ext);
         hdr->avail--;
+        vm_extent_merge(lh, ext_per_slot);
         return(VM_OK);
     }
 
