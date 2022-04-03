@@ -12,6 +12,7 @@
 #define THREAD_DEAD             (1 << 4)
 #define THREAD_ALLOCATED        (1 << 5)
 #define THREAD_NEED_RESCHEDULE  (1 << 6)
+#define THREAD_NEW              (1 << 7)
 #define CPU_AFFINITY_VECTOR     (0x8)
 
 #define UNIT_THREADS_WAKE        (1 << 0)
@@ -20,7 +21,8 @@
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
                           THREAD_BLOCKED  | \
-                          THREAD_SLEEPING)
+                          THREAD_SLEEPING | \
+                          THREAD_NEW)
 
 #define SCHED_MAX_PRIORITY 255
 
@@ -33,34 +35,41 @@ typedef struct sched_thread_t    sched_thread_t;
 typedef struct sched_policy_t
 {
     char *policy_name;
-    void *policy_data;
+
     int (*next_thread)
     (
-        list_head_t       *new_th_list,
-        spinlock_t        *new_th_lock,
-        sched_exec_unit_t *unit,
+        void *policy,
         sched_thread_t    **next
     );
 
     int (*put_thread)
     (
+        void *policy_data,
         sched_thread_t *th
     );
 
     int (*update_time)
     (
+        void *policy_data,
         sched_thread_t *th
     );
 
     int (*load_balancing)
     (
-        list_head_t *units,
-        spinlock_t *units_lock,
-        sched_exec_unit_t *th_unit,
+        void *policy,
         sched_thread_t *th
     );
 
-    
+    int (*init_policy)
+    (
+        sched_exec_unit_t *unit
+    );
+
+    int (*enqueue_new_thread)
+    (   
+        void *policy_data,
+        sched_thread_t *th
+    );
 
 }sched_policy_t;
 
@@ -95,7 +104,7 @@ typedef struct sched_exec_unit_t
 {
     list_node_t      node;         /* node in units list */
     cpu_t            *cpu;         /* cpu structure that is tied to the scheduler 
-                                    * execution unit 
+                                    * execution unit*/ 
     list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t    idle;         /* our dearest idle task                         */
@@ -104,24 +113,8 @@ typedef struct sched_exec_unit_t
     device_t         *timer_dev;    /* timer device which is connected to this unit  */
     uint8_t           timer_on;     /* timer device status                           */
     volatile uint32_t unb_th;
-    uint32_t          blk_tm;      /* time to sleep until the the list of blocked 
-                                     * with timeout threads is checked again                      
-                                     * - it is used for comparison against c_blk_slp       
-                                     */
-
-    uint32_t          sleep;        /* time to sleep until the the list of sleeping 
-                                     * threads is checked again                     
-                                     * - it is used for comparison against c_slp      
-                                     */ 
-
-    uint32_t          c_blk_tm;    /* least timeout for threads that are having the
-                                     * blocking operation with timeout
-                                     */ 
-
-    uint32_t          c_sleep;      /* currsor for least timeout for threads that
-                                     * are sleeping                                  
-                                     */
     sched_policy_t    *policy;
+    void              *policy_data;
 }sched_exec_unit_t;
 
 typedef struct sched_owner_t
@@ -187,7 +180,7 @@ void sched_wake_thread
     sched_thread_t *th
 );
 
-void sched_yield();
+void sched_yield(void);
 
 void sched_sleep(uint32_t delay);
 

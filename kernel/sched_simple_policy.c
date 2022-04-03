@@ -7,10 +7,11 @@
 #include <utils.h>
 #include <linked_list.h>
 #include <spinlock.h>
-
+#include <liballoc.h>
 
 typedef struct simple_policy_unit_t
 {
+    sched_exec_unit_t *unit;        /* execution unit that holds this policy */
     list_head_t       ready_q;      /* queue of ready threads on the current CPU     */
     list_head_t       blocked_q;    /* queue of blocked threads                      */
     list_head_t       sleep_q;      /* queue of sleeping threads                     */
@@ -18,9 +19,7 @@ typedef struct simple_policy_unit_t
 
 static int simple_next_thread
 (
-    list_head_t *new_th_list,
-    spinlock_t *new_th_lock,
-    sched_exec_unit_t *unit,
+    void *policy_data,
     sched_thread_t **next
 )
 {
@@ -28,32 +27,19 @@ static int simple_next_thread
     list_node_t *next_th   = NULL;
     sched_thread_t *thread = NULL;
     simple_policy_unit_t  *policy_unit = NULL;
+    sched_exec_unit_t     *unit = NULL;
 
-    
-    /* Check if we have threads that need first execution 
-     * and if there are, add one of them to the ready queue
-     */
-    spinlock_lock_int(new_th_lock);
-
-    th = linked_list_first(new_th_list);
-
-    if(th)
-    {
-        linked_list_remove(new_th_list, th);
-        linked_list_add_tail(&policy_unit->ready_q, th);
-    }
-
-    spinlock_unlock_int(new_th_lock);
-
+    policy_unit = policy_data;
+      
+    unit = policy_unit->unit;
+  //  kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     /* Check blocked threads */
-
     th = linked_list_first(&policy_unit->blocked_q);
 
     if(__atomic_fetch_and(&unit->flags, 
                           ~UNIT_THREADS_UNBLOCK, 
                          __ATOMIC_SEQ_CST) & 
                          UNIT_THREADS_UNBLOCK)
-
     {
         while(th)
         {
@@ -99,54 +85,71 @@ static int simple_next_thread
         }
     }
 
-    
+    //    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     th = linked_list_first(&policy_unit->ready_q);
 
     if(th == NULL)
     {
+          //  kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(-1);
     }
-
+    
     linked_list_remove(&policy_unit->ready_q, th);
 
-    *next = NODE_TO_THREAD(th);
+    thread = NODE_TO_THREAD(th);
 
+    /* Mark the next thread as running */
+    __atomic_or_fetch(&thread->flags, 
+                      THREAD_RUNNING, 
+                      __ATOMIC_SEQ_CST);
+
+    *next = thread;
+   // kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     return(0);
 
 }
 
 static int simple_put_thread
 (
+    void *policy_data,
     sched_thread_t *th
 )
 {
-    sched_exec_unit_t *unit = NULL;
     list_head_t       *lh = NULL;
     uint32_t          state = 0;
+    simple_policy_unit_t  *policy_unit = NULL;
 
-    unit = th->unit;
-
+    if(th == NULL || policy_data == NULL)
+    {
+        kprintf("CANNOT PUT THREAD\n");
+        return(-1);
+    }
+    kprintf("PUTTING THREAD\n");
+    policy_unit = policy_data;
+    
     __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
-
-    /* The idle thread dioes not belong to any queue */
-    if(&unit->idle == th)
-        return(0);
 
    state = __atomic_load_n(&th->flags, __ATOMIC_SEQ_CST) & THREAD_STATE_MASK;
 
     switch(state)
     {
         case THREAD_BLOCKED:
-            lh = &unit->blocked_q;
+            lh = &policy_unit->blocked_q;
             break;
 
         case THREAD_SLEEPING:
-            lh = &unit->sleep_q;
+            lh = &policy_unit->sleep_q;
             break;
 
         case THREAD_READY:
-            lh = &unit->ready_q;
+            lh = &policy_unit->ready_q;
             break;
+
+        case THREAD_NEW:
+             __atomic_and_fetch(&th->flags, ~THREAD_NEW, __ATOMIC_SEQ_CST);
+            lh = &policy_unit->ready_q;
+            break;
+
         default:
             kprintf("%s %d\n",__FUNCTION__, __LINE__);
             while(1);
@@ -163,21 +166,72 @@ static int simple_put_thread
 
 static int simple_update_time
 (
+    void *policy_data,
     sched_thread_t *th
 )
 {
-    if(th->remain > 1)
-    {
-        th->remain--;
-    }
-    else
-    {
-        __atomic_or_fetch(&th->flags, 
-                          THREAD_NEED_RESCHEDULE, 
-                          __ATOMIC_SEQ_CST);
+    list_node_t          *node            = NULL;
+    simple_policy_unit_t *policy_unit     = NULL;
+    sched_thread_t       *sleeping_thread = NULL;
 
-          th->remain = 255 - th->prio;
+    policy_unit = policy_data;
+    
+    /* Update sleeping threads */
+    node = linked_list_first(&policy_unit->sleep_q);
+    
+    while(node)
+    {
+        
+        sleeping_thread = (sched_thread_t*)node;
+
+        /* If timeout has been reached, wake the thread */
+
+        if(__atomic_load_n(&sleeping_thread->flags, __ATOMIC_SEQ_CST) & 
+          THREAD_SLEEPING)
+        {
+            sleeping_thread->slept++;
+
+            if(sleeping_thread->slept >= sleeping_thread->to_sleep)
+            {            
+                /* Wake up the thread */
+                sched_wake_thread(sleeping_thread);
+            }
+        }
+        node = linked_list_next(node);
     }
+
+    return(0);
+}
+
+static int sched_simple_init
+(
+    sched_exec_unit_t *unit
+)
+{
+    simple_policy_unit_t *pd = NULL;
+    
+    if(unit == NULL)
+    {
+            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+        return(-1);
+    }
+
+    if(unit->policy_data != NULL)
+    {
+            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+        return(-1);
+    }
+
+    pd = kcalloc(1, sizeof(simple_policy_unit_t));
+    
+    if(pd == NULL)
+    {
+            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+        return(-1);
+    }
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    pd->unit = unit;
+    unit->policy_data = pd;
 
     return(0);
 }
@@ -188,7 +242,9 @@ static sched_policy_t policy =
     .next_thread = simple_next_thread,
     .put_thread  = simple_put_thread ,
     .update_time = simple_update_time,
-    .load_balancing = NULL,
+    .init_policy = sched_simple_init,
+    .enqueue_new_thread = simple_put_thread,
+    .load_balancing = NULL
 };
 
 
@@ -197,3 +253,4 @@ int sched_simple_register(sched_policy_t **p)
     *p = &policy;
     return(0);
 }
+
