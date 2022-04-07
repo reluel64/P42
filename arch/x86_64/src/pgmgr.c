@@ -1460,12 +1460,12 @@ static int _pgmgr_temp_unmap
 )
 {
     uint16_t ix = 0;
-    virt_addr_t *remap_tbl = (virt_addr_t*)REMAP_TABLE_VADDR;
+    virt_addr_t *remap_tbl = (virt_addr_t*)pgmgr.remap_tbl;
 
-    if(vaddr % PAGE_SIZE || vaddr <= REMAP_TABLE_VADDR)
+    if(vaddr % PAGE_SIZE || vaddr <= pgmgr.remap_tbl)
         return(-1);
 
-    ix = (vaddr - REMAP_TABLE_VADDR) / PAGE_SIZE;
+    ix = (vaddr - pgmgr.remap_tbl) / PAGE_SIZE;
 
     /* remove address */
     remap_tbl[ix] = 0;
