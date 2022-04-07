@@ -76,7 +76,23 @@ virt_addr_t vm_space_alloc
     status = vm_extent_extract(&ctx->free_mem,
                                ctx->free_per_slot,
                                &req_ext);
-    #if 0
+
+    if(status != VM_OK)
+    {
+        /* Try to merge the extents */
+        status = vm_extent_merge(&ctx->free_mem,
+                        ctx->free_per_slot);
+
+        /* If status is VM_OK, try again */
+        if(status == VM_OK)
+        {
+            status = vm_extent_extract(&ctx->free_mem,
+                           ctx->free_per_slot,
+                           &req_ext);
+               
+        }        
+    }
+#if 0
     kprintf("EXTENT IS %x %x - %s\n",
             req_ext.base, 
             req_ext.length, 
@@ -144,7 +160,6 @@ virt_addr_t vm_space_alloc
         vm_extent_insert(&ctx->free_mem,
                         ctx->free_per_slot,
                         &req_ext);
-                        while(1);
         return(VM_INVALID_ADDRESS);
     }
 
@@ -178,31 +193,37 @@ virt_addr_t vm_space_alloc
         /* Hehe... no slots?...try to allocate */
         if(status == VM_NOMEM)
         {
-            status = vm_extent_alloc_slot(&ctx->free_mem, 
-                                   ctx->free_per_slot);
-
-            /* status != 0? ...well..FUCK */
-            if(status != 0)
+            /* No memory ? try to merge the adjacent slots */
+            status = vm_extent_merge(&ctx->free_mem,
+                                     ctx->free_per_slot);
+            if(status != VM_OK)
             {
-                
-                /* We failed to allocate so we must revert
-                 * everything
-                 */
-                vm_space_undo(&ctx->alloc_mem, 
-                        &ctx->free_mem,
-                        ctx->alloc_per_slot,
-                        ctx->free_per_slot,
-                        &req_ext,
-                        &alloc_ext,
-                        &rem_ext);
+                status = vm_extent_alloc_slot(&ctx->free_mem, 
+                                              ctx->free_per_slot);
 
-                return(VM_INVALID_ADDRESS);
+                /* status != 0? ...well..FUCK */
+                if(status != VM_OK)
+                {
+                    
+                    /* We failed to allocate so we must revert
+                     * everything
+                     */
+                    vm_space_undo(&ctx->alloc_mem, 
+                            &ctx->free_mem,
+                            ctx->alloc_per_slot,
+                            ctx->free_per_slot,
+                            &req_ext,
+                            &alloc_ext,
+                            &rem_ext);
+
+                    return(VM_INVALID_ADDRESS);
+                }
+
+                /* Ok, let's do this again, shall we? */
+                status = vm_extent_insert(&ctx->free_mem,
+                                          ctx->free_per_slot,
+                                          &req_ext);
             }
-
-            /* Ok, let's do this again, shall we? */
-            status = vm_extent_insert(&ctx->free_mem,
-                                      ctx->free_per_slot,
-                                      &req_ext);
         }
     }
 
@@ -215,25 +236,31 @@ virt_addr_t vm_space_alloc
     if(status == VM_NOMEM)
     {
 
-        status = vm_extent_alloc_slot(&ctx->alloc_mem, 
-                               ctx->alloc_per_slot);
+        status = vm_extent_merge(&ctx->alloc_mem,
+                                ctx->alloc_per_slot);
 
-        /* status != 0? ...well..FUCK */
         if(status != VM_OK)
         {
-            /* 
-             * Undo the changes
-             */
+            status = vm_extent_alloc_slot(&ctx->alloc_mem, 
+                                   ctx->alloc_per_slot);
 
-            vm_space_undo(&ctx->alloc_mem, 
-                    &ctx->free_mem,
-                    ctx->alloc_per_slot,
-                    ctx->free_per_slot,
-                    &req_ext,
-                    &alloc_ext,
-                    &rem_ext);
-                    
-            return(VM_INVALID_ADDRESS);
+            /* status != 0? ...well..FUCK */
+            if(status != VM_OK)
+            {
+                /* 
+                 * Undo the changes
+                 */
+
+                vm_space_undo(&ctx->alloc_mem, 
+                        &ctx->free_mem,
+                        ctx->alloc_per_slot,
+                        ctx->free_per_slot,
+                        &req_ext,
+                        &alloc_ext,
+                        &rem_ext);
+                        
+                return(VM_INVALID_ADDRESS);
+            }
         }
 
         /* Ok, let's do this again, shall we? */
@@ -242,7 +269,7 @@ virt_addr_t vm_space_alloc
                                    &alloc_ext);
     }
 
-    if(!status)
+    if(status == VM_OK)
     {
         return(alloc_ext.base);
     }
@@ -342,24 +369,29 @@ int vm_space_free
 
         if(status == VM_NOMEM)
         {
-            status = vm_extent_alloc_slot(&ctx->alloc_mem,
-                                  ctx->alloc_per_slot);
+            status = vm_extent_merge(&ctx->alloc_mem,
+                                     ctx->alloc_per_slot);
 
-            if(status != 0)
+            if(status  != VM_OK)
             {
-                kprintf("NO MEMORY\n");
+                status = vm_extent_alloc_slot(&ctx->alloc_mem,
+                                      ctx->alloc_per_slot);
 
-                status = vm_space_undo(&ctx->free_mem, 
-                             &ctx->alloc_mem,
-                             ctx->free_per_slot,
-                             ctx->alloc_per_slot,
-                             &req_ext,
-                             &free_ext,
-                             &rem_ext);
-                             
-                return(status);
+                if(status != 0)
+                {
+                    kprintf("NO MEMORY\n");
+
+                    status = vm_space_undo(&ctx->free_mem, 
+                                 &ctx->alloc_mem,
+                                 ctx->free_per_slot,
+                                 ctx->alloc_per_slot,
+                                 &req_ext,
+                                 &free_ext,
+                                 &rem_ext);
+                                 
+                    return(status);
+                }
             }
-
             /* Do the insertion again */
             status = vm_extent_insert(&ctx->alloc_mem,
                                   ctx->alloc_per_slot,
@@ -374,20 +406,28 @@ int vm_space_free
 
     if(status == VM_NOMEM)
     {
-        /* We have a remainder - insert it */
-        status = vm_extent_alloc_slot(&ctx->free_mem,
-                               ctx->free_per_slot);
 
-        if(status != 0)
+        status = vm_extent_merge(&ctx->free_mem,
+                                 ctx->free_per_slot);
+
+        if(status != VM_OK)
         {
-            status = vm_space_undo(&ctx->free_mem, 
-                             &ctx->alloc_mem,
-                             ctx->free_per_slot,
-                             ctx->alloc_per_slot,
-                             &req_ext,
-                             &free_ext,
-                             &rem_ext);
-            return(status);
+
+            /* We have a remainder - insert it */
+            status = vm_extent_alloc_slot(&ctx->free_mem,
+                                           ctx->free_per_slot);
+
+            if(status != 0)
+            {
+                status = vm_space_undo(&ctx->free_mem, 
+                                 &ctx->alloc_mem,
+                                 ctx->free_per_slot,
+                                 ctx->alloc_per_slot,
+                                 &req_ext,
+                                 &free_ext,
+                                 &rem_ext);
+                return(status);
+            }
         }
 
         /* Do the insertion again */

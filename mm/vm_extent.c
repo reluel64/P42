@@ -401,9 +401,6 @@ int vm_extent_insert
     vm_slot_hdr_t   *f_hdr     = NULL;
     vm_extent_t     *c_ext     = NULL;
     vm_extent_t     *f_ext     = NULL;
-
-
-    int             try_merge = 1;
     
     if((ext->flags & VM_REGION_MASK) == VM_REGION_MASK ||
        (ext->flags & VM_REGION_MASK) == 0)
@@ -434,7 +431,6 @@ int vm_extent_insert
                 /* Try to join the extents */
                 if(vm_extent_join(ext, c_ext) == VM_OK)
                 {
-                    vm_extent_merge(lh, ext_per_slot);
                     return(VM_OK);
                 }
 
@@ -459,7 +455,6 @@ int vm_extent_insert
         memcpy(f_ext, ext, sizeof(vm_extent_t));
         hdr = VM_EXTENT_TO_HEADER(f_ext);
         hdr->avail--;
-        vm_extent_merge(lh, ext_per_slot);
         return(VM_OK);
     }
 
@@ -486,7 +481,7 @@ int vm_extent_extract
     if(!ext || !ext->length)
     {
         kprintf("NO LENGTH, NO ENTRY\n");
-        return(-1);
+        return(VM_FAIL);
     }
     hn = linked_list_first(lh);
 
@@ -556,7 +551,6 @@ int vm_extent_extract
     /* verify if we have at least something to return */
     if((best == NULL) || (best->length < ext->length))
     {
-        kprintf("NO BEST - NO NOTHING BEST %x \n", best);
         return(VM_FAIL);
     }
 
@@ -748,6 +742,7 @@ int vm_extent_merge
 
                         if(vm_extent_join(src_ext, dst_ext) == VM_OK)
                         {   
+                            merged = 1;
                             /* Clear the extent as it is merged in dest */
                             memset(src_ext, 0, sizeof(vm_extent_t));
 
@@ -764,7 +759,7 @@ int vm_extent_merge
 
             dst_ln = linked_list_next(dst_ln);
         }
-
+        /* if we got something merged, then the status should be OK */
         if(merged != 0)
         {
             status = VM_OK;
@@ -801,7 +796,8 @@ int vm_extent_compact_all_hdr
     {
         hdr = (vm_slot_hdr_t*)node;
         empty_ext = NULL;
-        /* Do not do compatcion on empty/full headers */
+
+        /* Do not do compaction on empty/full headers */
         if(hdr->avail == 0 || hdr->avail == ext_per_slot)
         {
             node = linked_list_next(node);
