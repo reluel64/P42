@@ -156,7 +156,7 @@ int mtx_release(mutex_t *mtx)
     sched_exec_unit_t *unit = NULL;
     list_node_t    *pend_node = NULL;
     void *expected = NULL;
-    kprintf("REleasing thread\n");
+
     spinlock_lock_int(&mtx->lock);
 
     self = sched_thread_self();
@@ -191,6 +191,8 @@ int mtx_release(mutex_t *mtx)
 
     if(pend_node == NULL)
     {
+        /* if we don't have a new owner, clear oursevles */
+        __atomic_clear(&mtx->owner, __ATOMIC_RELEASE);
         spinlock_unlock_int(&mtx->lock);
         return(0);
     }
