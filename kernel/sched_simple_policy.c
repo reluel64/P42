@@ -8,7 +8,7 @@
 #include <linked_list.h>
 #include <spinlock.h>
 #include <liballoc.h>
-
+typedef int bibiribis;
 typedef struct simple_policy_unit_t
 {
     sched_exec_unit_t *unit;        /* execution unit that holds this policy */
@@ -32,7 +32,7 @@ static int simple_next_thread
     policy_unit = policy_data;
       
     unit = policy_unit->unit;
-  //  kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
     /* Check blocked threads */
     th = linked_list_first(&policy_unit->blocked_q);
 
@@ -85,12 +85,10 @@ static int simple_next_thread
         }
     }
 
-    //    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     th = linked_list_first(&policy_unit->ready_q);
 
     if(th == NULL)
     {
-          //  kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(-1);
     }
     
@@ -163,7 +161,7 @@ static int simple_put_thread
 
 }
 
-static int simple_update_time
+static int simple_thread_tick
 (
     void *policy_data,
     sched_thread_t *th
@@ -175,6 +173,23 @@ static int simple_update_time
 
     policy_unit = policy_data;
     
+    /* Update the current thread */
+    if(th != NULL)
+    {
+        if(th->remain > 1)
+        {
+            th->remain--;
+        }
+        else
+        {
+            __atomic_or_fetch(&th->flags, 
+                              THREAD_NEED_RESCHEDULE, 
+                              __ATOMIC_SEQ_CST);
+
+            th->remain = 255 - th->prio;
+        }
+    }
+
     /* Update sleeping threads */
     node = linked_list_first(&policy_unit->sleep_q);
     
@@ -202,7 +217,7 @@ static int simple_update_time
     return(0);
 }
 
-static int sched_simple_init
+static int simple_init
 (
     sched_exec_unit_t *unit
 )
@@ -211,13 +226,11 @@ static int sched_simple_init
     
     if(unit == NULL)
     {
-            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(-1);
     }
 
     if(unit->policy_data != NULL)
     {
-            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(-1);
     }
 
@@ -225,10 +238,9 @@ static int sched_simple_init
     
     if(pd == NULL)
     {
-            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(-1);
     }
-        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
     pd->unit = unit;
     unit->policy_data = pd;
 
@@ -237,13 +249,13 @@ static int sched_simple_init
 
 static sched_policy_t policy = 
 {
-    .policy_name = "Simple",
-    .next_thread = simple_next_thread,
-    .put_thread  = simple_put_thread ,
-    .update_time = simple_update_time,
-    .init_policy = sched_simple_init,
-    .enqueue_new_thread = simple_put_thread,
-    .load_balancing = NULL
+    .policy_name        = "Simple",
+    .thread_dequeue     = simple_next_thread,
+    .thread_enqueue     = simple_put_thread ,
+    .thread_tick        = simple_thread_tick,
+    .init_policy        = simple_init,
+    .thread_enqueue_new = simple_put_thread,
+    .load_balancing     = NULL
 };
 
 

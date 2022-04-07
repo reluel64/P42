@@ -30,16 +30,17 @@ static spinlock_t pre_policy_lock;
 
 static void sched_idle_thread(void *pv);
 static void schedule_main(void);
-
-
-extern void __context_unit_start(void *tcb);
-extern int sched_simple_register(sched_policy_t **p);
-
-static uint32_t sched_update_time
+static uint32_t sched_tick
 (
     void *unit,
     void *isr_info
 );
+
+extern void __context_unit_start(void *tcb);
+extern void cpu_signal_on(uint32_t id);
+extern int sched_simple_register(sched_policy_t **p);
+
+
 
 
 void sched_thread_entry_point
@@ -106,7 +107,7 @@ int sched_enqueue_thread
     th->unit = unit;
 
     /* Ask the policy to enqueue the thread */
-    unit->policy->enqueue_new_thread(unit->policy_data, th);
+    unit->policy->thread_enqueue_new(unit->policy_data, th);
 
     /* Unlock everything */
     spinlock_unlock_int(&unit->lock);
@@ -186,16 +187,11 @@ int sched_unit_init
         return(-1);
     }
 
-    kprintf("UNIT %x\n",unit);
-
     /* assign scheduler unit to the cpu */
     cpu->sched = unit;
 
     /* tell the scheduler unit on which cpu it belongs */
     unit->cpu = cpu;
-
-    /* Initialize the dead queue */
-    linked_list_init(&unit->dead_q);
 
     /* Set up the spinlock for the unit */
     spinlock_init(&unit->lock);
@@ -208,9 +204,9 @@ int sched_unit_init
     unit->policy->init_policy(unit);
 
     /* Initialize the idle thread
-     * The scheduler will automatically start executing 
-     * it in case there are no other threads in the ready_q
-     */
+     * as we will switch to it when we finish 
+     * intializing the scheduler unit
+     */ 
     thread_create_static(&unit->idle, 
                          sched_idle_thread, 
                          unit, 
@@ -219,6 +215,7 @@ int sched_unit_init
     
     unit->idle.unit = unit;
 
+    /* Execute the threads that are waiting in thre pre sched queue */
     spinlock_lock_int(&pre_policy_lock);
     node = linked_list_first(&pre_policy_queue);
 
@@ -230,7 +227,7 @@ int sched_unit_init
 
         linked_list_remove(&pre_policy_queue, node);
 
-        unit->policy->enqueue_new_thread(unit->policy_data, pend_th);
+        unit->policy->thread_enqueue_new(unit->policy_data, pend_th);
 
         node = next_node;
     }    
@@ -250,10 +247,14 @@ int sched_unit_init
     if(timer != NULL)
     {
         unit->timer_dev = timer;
-        timer_dev_connect_cb(timer, sched_update_time, unit);
+        timer_dev_connect_cb(timer, sched_tick, unit);
         timer_dev_enable(timer); 
     }
-    kprintf("%s UNLOCKED %d\n",__FUNCTION__, cpu_int_check());
+    else
+    {
+        kprintf("No timer - will rely on resched IPIs only\n");
+    }
+
     /* From now , we are entering the unit's idle routine */
     context_unit_start(&unit->idle);
 
@@ -293,17 +294,20 @@ void sched_block_thread
     sched_thread_t *th
 )
 {
-    spinlock_lock_int(&th->lock);
+    if(th != NULL)
+    {
+        spinlock_lock_int(&th->lock);
 
-    /* set the blocked thread */
-    __atomic_or_fetch(&th->flags, THREAD_BLOCKED, __ATOMIC_SEQ_CST);
+        /* set the blocked thread */
+        __atomic_or_fetch(&th->flags, THREAD_BLOCKED, __ATOMIC_SEQ_CST);
 
-    /* thread not running and not ready */
-    __atomic_and_fetch(&th->flags, 
-                        ~(THREAD_RUNNING | THREAD_READY), 
-                        __ATOMIC_SEQ_CST);
+        /* thread not running and not ready */
+        __atomic_and_fetch(&th->flags, 
+                            ~(THREAD_RUNNING | THREAD_READY), 
+                            __ATOMIC_SEQ_CST);
 
-    spinlock_unlock_int(&th->lock);
+        spinlock_unlock_int(&th->lock);
+    }
 }
 
 void sched_sleep_thread
@@ -312,20 +316,26 @@ void sched_sleep_thread
     uint32_t timeout
 )
 {
-    spinlock_lock_int(&th->lock);
+    if(th != NULL)
+    {
+        if(timeout > 0)
+        {
+            spinlock_lock_int(&th->lock);
 
-    th->to_sleep = timeout;
-    th->slept = 0;
-    
-    /* mark thread as sleeping */
-    __atomic_or_fetch(&th->flags, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+            th->to_sleep = timeout;
+            th->slept = 0;
+            
+            /* mark thread as sleeping */
+            __atomic_or_fetch(&th->flags, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
 
-    /* thread not running and not ready */
-    __atomic_and_fetch(&th->flags, 
-                        ~(THREAD_RUNNING | THREAD_READY), 
-                        __ATOMIC_SEQ_CST);
+            /* thread not running and not ready */
+            __atomic_and_fetch(&th->flags, 
+                                ~(THREAD_RUNNING | THREAD_READY), 
+                                __ATOMIC_SEQ_CST);
 
-    spinlock_unlock_int(&th->lock);
+            spinlock_unlock_int(&th->lock);
+        }
+    }
 }
 
 void sched_wake_thread
@@ -333,23 +343,27 @@ void sched_wake_thread
     sched_thread_t *th
 )
 {
-    spinlock_lock_int(&th->lock);
 
-    th->slept = 0;
-    th->to_sleep = 0;
+    if(th != NULL)
+    {
+        spinlock_lock_int(&th->lock);
 
-    /* clear the sleeping flag */
-    __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+        th->slept = 0;
+        th->to_sleep = 0;
 
-    /* thread is ready */
-    __atomic_or_fetch(&th->flags, THREAD_READY, __ATOMIC_SEQ_CST);
-    
-    /* notify unit that there are threads to be awaken */
-    __atomic_or_fetch(&th->unit->flags, 
-                      UNIT_THREADS_WAKE, 
-                      __ATOMIC_SEQ_CST);
-    
-    spinlock_unlock_int(&th->lock);
+        /* clear the sleeping flag */
+        __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+
+        /* thread is ready */
+        __atomic_or_fetch(&th->flags, THREAD_READY, __ATOMIC_SEQ_CST);
+        
+        /* notify unit that there are threads to be awaken */
+        __atomic_or_fetch(&th->unit->flags, 
+                          UNIT_THREADS_WAKE, 
+                          __ATOMIC_SEQ_CST);
+        
+        spinlock_unlock_int(&th->lock);
+    }
 
 }
 
@@ -366,7 +380,7 @@ void sched_sleep
 
 
 /* time tracking - called from the interrupt context */
-static uint32_t sched_update_time
+static uint32_t sched_tick
 (
     void *pv_unit,
     void *isr_inf
@@ -374,36 +388,14 @@ static uint32_t sched_update_time
 {
     sched_exec_unit_t *unit         = NULL;
     sched_policy_t    *policy       = NULL;
-    sched_thread_t    *current       = NULL;
     unit = pv_unit;
 
     /* lock the unit */
     spinlock_lock_int(&unit->lock);
 
     policy = unit->policy;
-    current = unit->current;
-         
-    /* Update the current thread that runs on the 
-     * scheduler
-     */    
 
-    if(current != NULL)
-    {
-        if(current->remain > 1)
-        {
-            current->remain--;
-        }
-        else
-        {
-            __atomic_or_fetch(&current->flags, 
-                              THREAD_NEED_RESCHEDULE, 
-                              __ATOMIC_SEQ_CST);
-
-            current->remain = 255 - current->prio;
-        }
-    }
-
-    policy->update_time(unit->policy_data, unit->current);
+    policy->thread_tick(unit->policy_data, unit->current);
     
     spinlock_unlock_int(&unit->lock);
 
@@ -412,7 +404,6 @@ static uint32_t sched_update_time
 }
 
 /******************************************************************************/
-extern  void cpu_signal_on(uint32_t id);
 static void sched_idle_thread
 (
     void *pv
@@ -430,44 +421,23 @@ static void sched_idle_thread
     kprintf("Entered idle loop on %d\n", unit->cpu->cpu_id);
 
     /* Signal that the execution unit is up and running 
-     * so that the BSP can continue waking up other threads
+     * so that the BSP can continue waking up other cores
      */
     
     cpu_signal_on(unit->cpu->cpu_id);
+#if 0
+    /* When entering the idle loop, disable the timer
+     * for the AP CPU as currently it does not have anything
+     * to handle
+     */ 
 
     if(unit->cpu->cpu_id > 0)
         timer_dev_disable(unit->timer_dev);
-
+#endif
     while(1)
     {
-
         cpu_halt();
-
-#if 0
-        /* Begin cleaning the dead threads */
-        spinlock_lock_int(&unit->lock);    
-
-        c = linked_list_first(&unit->dead_q);
-
-        while(c)
-        {
-            kprintf("Cleaning %x\n", c);
-            
-            n = linked_list_next(c);
-
-            th = (sched_thread_t*)c;
-
-            linked_list_remove(&unit->dead_q, c);
-            
-           /* sched_clean_thread(th);*/
-            
-            c = n;
-        }
-
-        spinlock_unlock_int(&unit->lock);
-#endif
     }
-
 }
 
 static void sched_context_switch
@@ -486,12 +456,13 @@ int sched_need_resched
 {
     sched_thread_t *th = NULL;
     int need_resched  = 1;
-
+    
+    /* if we have a thread, check if we have to do rescheduling */
     if(unit->current)
     {
         th = unit->current;
         need_resched = (th->flags & THREAD_NEED_RESCHEDULE) == 
-                        THREAD_NEED_RESCHEDULE;
+                                    THREAD_NEED_RESCHEDULE;
     }
     
     return(need_resched);
@@ -540,14 +511,17 @@ static void schedule_main(void)
                         ~THREAD_RUNNING, 
                         __ATOMIC_SEQ_CST);
 
+    /* If we are not coming from the idle task, tell the policy
+     * to handle the thread
+     */
     if(unit->current != NULL)
     {
-        policy->put_thread(unit->policy_data, prev_th);    
+        policy->thread_enqueue(unit->policy_data, prev_th);    
     }
 
-
-    status = policy->next_thread(unit->policy_data, 
-                                 &next_th);
+    /* Ask the policy for the next thread */
+    status = policy->thread_dequeue(unit->policy_data, 
+                                    &next_th);
 
     /* If we don't have a task to execute, go to the idle task */
     if(status != 0)
@@ -560,6 +534,11 @@ static void schedule_main(void)
         next_th->unit = unit;
         unit->current = next_th;
     }
+
+    /* Set thread's running flag */
+    __atomic_or_fetch(&prev_th->flags, 
+                      THREAD_RUNNING, 
+                      __ATOMIC_SEQ_CST);
 
     /* Switch context */
     sched_context_switch(prev_th, next_th);
