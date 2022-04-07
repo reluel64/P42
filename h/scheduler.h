@@ -36,19 +36,19 @@ typedef struct sched_policy_t
 {
     char *policy_name;
 
-    int (*next_thread)
+    int (*thread_dequeue)
     (
-        void *policy,
+        void *policy_data,
         sched_thread_t    **next
     );
 
-    int (*put_thread)
+    int (*thread_enqueue)
     (
         void *policy_data,
         sched_thread_t *th
     );
 
-    int (*update_time)
+    int (*thread_tick)
     (
         void *policy_data,
         sched_thread_t *th
@@ -56,7 +56,7 @@ typedef struct sched_policy_t
 
     int (*load_balancing)
     (
-        void *policy,
+        void *policy_data,
         sched_thread_t *th
     );
 
@@ -65,7 +65,7 @@ typedef struct sched_policy_t
         sched_exec_unit_t *unit
     );
 
-    int (*enqueue_new_thread)
+    int (*thread_enqueue_new)
     (   
         void *policy_data,
         sched_thread_t *th
@@ -99,13 +99,11 @@ typedef struct sched_thread_t
 
 }sched_thread_t;
 
-
 typedef struct sched_exec_unit_t
 {
     list_node_t      node;         /* node in units list */
     cpu_t            *cpu;         /* cpu structure that is tied to the scheduler 
                                     * execution unit*/ 
-    list_head_t       dead_q;       /* queue of dead threads - for cleanup           */
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t    idle;         /* our dearest idle task                         */
     spinlock_t        lock;         /* lock to protect the queues                    */
