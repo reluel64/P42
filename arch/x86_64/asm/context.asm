@@ -35,13 +35,12 @@ global __context_unit_start
 ;-------------------------------------------------------------------------------
 
 
-
 ; Switch between two threads
 ; RDI - previous thread
 ; RSI - next thread
 
-__context_switch:
 ;--------------------------------SAVE CONTEXT-----------------------------------
+__context_switch:
     ; pop the return address -  we will save it separately
     add rsp, 8
 
@@ -64,6 +63,7 @@ __context_switch:
     pushfq
     pop rax
     mov qword [rdi + OFFSET (RFLAGS_INDEX)], rax
+
 ;--------------------------------LOAD CONTEXT-----------------------------------
 __context_load:
     ; Restore stack
@@ -79,6 +79,7 @@ __context_load:
 
     ; restore RFLAGS
     mov rax, qword [rsi + OFFSET(RFLAGS_INDEX)]
+
     ; clear interrupt flag
     and rax, ~(1 << 9) 
     push rax
@@ -90,8 +91,6 @@ __context_load:
     ; Send the parameter to the 
     mov rdi, qword [rsi + OFFSET(TH_INDEX)]
     jmp rax
-
-
 
 ; Launches the first task for a given unit
 __context_unit_start:

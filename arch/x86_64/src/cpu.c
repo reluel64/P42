@@ -305,7 +305,7 @@ static void cpu_prepare_trampoline
     entry_pt[0] = (virt_addr_t) cpu_entry_point;
 }
 
-static int cpu_bring_cpu_up
+static int cpu_bring_ap_up
 (
     device_t *issuer,
     uint32_t cpu,
@@ -342,7 +342,6 @@ static int cpu_bring_cpu_up
 
     sched_sleep(10);
    
-
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < 10; attempt++)
     {
@@ -361,7 +360,7 @@ static int cpu_bring_cpu_up
                 return(0);
             }
             
-            sched_sleep(10);
+            sched_sleep(1);
         }
     }
     return(-1);
@@ -369,7 +368,7 @@ static int cpu_bring_cpu_up
 
 void cpu_signal_on(uint32_t id)
 {
-    __atomic_or_fetch(&cpu_on, id, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&cpu_on, id, __ATOMIC_SEQ_CST);
 }
 
 int cpu_issue_ipi
@@ -428,6 +427,7 @@ int cpu_ap_start
     ACPI_SUBTABLE_HEADER   *subhdr     = NULL;
     int                    use_x2_apic = 0;
     uint32_t               started_cpu = 1;
+    uint8_t                start_ap    = 0;
 
     cpu_id = cpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
@@ -477,6 +477,7 @@ int cpu_ap_start
         i += subhdr->Length)
     {
         subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
+        start_ap = 0;
 
         if(use_x2_apic)
         {
@@ -495,8 +496,7 @@ int cpu_ap_start
                 }
                 else
                 {
-                    if(cpu_bring_cpu_up(dev, x2lapic->LocalApicId, timeout) == 0)
-                        started_cpu++;
+                    start_ap = 1;
                 }
             }
         }
@@ -517,17 +517,21 @@ int cpu_ap_start
                 }
                 else
                 {
-                    if(cpu_bring_cpu_up(dev, lapic->Id, timeout) == 0)
-                        started_cpu++;
+                    start_ap = 1;
                 }
+            }
+        }
+
+        if(start_ap == 1)
+        {
+            if(cpu_bring_ap_up(dev, lapic->Id, timeout) == 0)
+            {
+                started_cpu++;
             }
         }
     }
 
     AcpiPutTable((ACPI_TABLE_HEADER*)madt);
-
-    /* unmap the 1:1 trampoline */
-    /*(NULL, CPU_TRAMPOLINE_LOCATION_START, PAGE_SIZE);*/
 
     /* clear the trampoline from the area */
     memset((void*)trampoline, 0, tramp_size);
@@ -568,7 +572,6 @@ static void cpu_entry_point(void)
     /* signal that the cpu is up and running */
     kprintf("CPU %d STARTED\n", cpu_id);
     
-
     cpu = devmgr_dev_data_get(cpu_dev);
 
     /* at this point we should jump in the scheduler */
@@ -588,7 +591,6 @@ static void cpu_entry_point(void)
     {
         cpu_halt();
     }
-
 }
 
 static uint32_t cpu_get_domain
@@ -673,9 +675,11 @@ static int pcpu_dev_init(device_t *dev)
 
     devmgr_dev_data_set(dev, cpu);
 
+    /* Store cpu id and proximity domain */
     cpu->cpu_id = cpu_id;
     cpu->proximity_domain = cpu_get_domain(cpu_id);
 
+    /* store per cpu private data */
     cpu->cpu_pv = pcpu;
 
     /* Prepare the GDT */
@@ -684,6 +688,7 @@ static int pcpu_dev_init(device_t *dev)
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
       
+     /* Create the APIC instance of the core */
     if(!devmgr_dev_create(&apic_dev))
     {
         devmgr_dev_name_set(apic_dev, APIC_DRIVER_NAME);
@@ -698,7 +703,8 @@ static int pcpu_dev_init(device_t *dev)
 
         kprintf("DEV_TYPE %s\n",devmgr_dev_type_get(apic_dev));
     }
-
+    
+    /* Create the APIC TIMER instance of the core */
     if(!devmgr_dev_create(&apic_timer_dev))
     {
         devmgr_dev_name_set(apic_timer_dev, APIC_TIMER_NAME);
