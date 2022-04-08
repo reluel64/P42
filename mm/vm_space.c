@@ -26,11 +26,11 @@ virt_addr_t vm_space_alloc
     uint32_t eflags
 )
 {
-    vm_extent_t req_ext   = VM_EXTENT_INIT;
-    vm_extent_t rem_ext   = VM_EXTENT_INIT;
-    vm_extent_t alloc_ext = VM_EXTENT_INIT;
-
-    int         status = 0;
+    vm_extent_t req_ext       = VM_EXTENT_INIT;
+    vm_extent_t rem_ext       = VM_EXTENT_INIT;
+    vm_extent_t alloc_ext     = VM_EXTENT_INIT;
+    int         split_status  = 0;
+    int         status        = 0;
 
     
     /* If we are going VM_BASE_AUTO, then we must 
@@ -137,39 +137,43 @@ virt_addr_t vm_space_alloc
         addr = req_ext.base;
 
     /* do the split - it also saves the flags */
-    status = vm_extent_split(&req_ext, 
-                              addr, 
-                              len, 
-                              &rem_ext);
-#if 0
-    kprintf("AFTER SPLIT %x %x - %x %x - %x %x\n", 
-            req_ext.base,
-            req_ext.length, 
-            rem_ext.base, 
-            rem_ext.length, 
-            addr, 
-            len);
-#endif
+    split_status = vm_extent_split(&req_ext, 
+                                   addr, 
+                                   len, 
+                                   &rem_ext);
+
+    /* Check if we managed to split the extent */
+    if(split_status < 0)
+    {
+        kprintf("Could not perform split\n");
+        status = vm_extent_insert(&ctx->free_mem,
+                        ctx->free_per_slot,
+                        &req_ext);
+
+        if(status == VM_NOMEM)
+        {
+            kprintf("FATAL ERROR %s %d\n",__FUNCTION__,__LINE__);
+            while(1);
+        }
+        
+        return(VM_INVALID_ADDRESS);
+    }
+
     /* Insert the left side - this is guaranteed to work 
      * If it doesn't...well...we're fucked
      */
 
-    if(status < 0)
+    status = vm_extent_insert(&ctx->free_mem,
+                             ctx->free_per_slot,
+                            &req_ext);
+
+    if(status == VM_NOMEM)
     {
-        kprintf("Could not perform split\n");
-        vm_extent_insert(&ctx->free_mem,
-                        ctx->free_per_slot,
-                        &req_ext);
-        return(VM_INVALID_ADDRESS);
+        kprintf("FATAL ERROR %s %d\n",__FUNCTION__,__LINE__);
+        while(1);
     }
 
-    vm_extent_insert(&ctx->free_mem,
-                     ctx->free_per_slot,
-                     &req_ext);
-
-    /* set the alloc_ext to what 
-     * we want to add to the 
-     * allocated list 
+    /* set the alloc_ext to what we want to add to the allocated list 
      * We do this here as in case we need to vm_undo
      * to have the alloc_ext ready
      */
@@ -178,13 +182,13 @@ virt_addr_t vm_space_alloc
     alloc_ext.length = len;
 
     /* Make sure that the region mask is appropiately set */
-    alloc_ext.flags = (flags & ~VM_REGION_MASK) | 
-                     (req_ext.flags & VM_REGION_MASK);
+    alloc_ext.flags = (flags         & ~VM_REGION_MASK) | 
+                      (req_ext.flags & VM_REGION_MASK);
 
     alloc_ext.eflags = eflags;
 
     /* If we have a right side, insert it */
-    if(status > 0)
+    if(split_status > 0)
     {
         status = vm_extent_insert(&ctx->free_mem,
                                   ctx->free_per_slot,
@@ -204,7 +208,6 @@ virt_addr_t vm_space_alloc
                 /* status != 0? ...well..FUCK */
                 if(status != VM_OK)
                 {
-                    
                     /* We failed to allocate so we must revert
                      * everything
                      */
@@ -269,11 +272,7 @@ virt_addr_t vm_space_alloc
                                    &alloc_ext);
     }
 
-    if(status == VM_OK)
-    {
-        return(alloc_ext.base);
-    }
-    else
+    if(status != VM_OK)
     {
         /* That's not enough - we must undo any changes if we are
          * unable to allocate
@@ -281,15 +280,17 @@ virt_addr_t vm_space_alloc
 
         kprintf("FAILED\n");
         status = vm_space_undo(&ctx->alloc_mem, 
-                            &ctx->free_mem,
-                            ctx->alloc_per_slot,
-                            ctx->free_per_slot,
-                            &req_ext,
-                            &alloc_ext,
-                            &rem_ext);
+                               &ctx->free_mem,
+                               ctx->alloc_per_slot,
+                               ctx->free_per_slot,
+                               &req_ext,
+                               &alloc_ext,
+                               &rem_ext);
 
         return(VM_INVALID_ADDRESS);
     }
+
+    return(alloc_ext.base);
 }
 
 int vm_space_free
@@ -304,7 +305,7 @@ int vm_space_free
     vm_extent_t req_ext  = VM_EXTENT_INIT;
     vm_extent_t rem_ext  = VM_EXTENT_INIT;
     vm_extent_t free_ext = VM_EXTENT_INIT;
-
+    int         split_status = 0;
     int         status = 0;
 
     if(addr == VM_BASE_AUTO)
@@ -347,20 +348,44 @@ int vm_space_free
         return(VM_FAIL);
     }
 
-    status = vm_extent_split(&req_ext, 
-                             addr, 
-                             len, 
-                             &rem_ext);
+    split_status = vm_extent_split(&req_ext, 
+                                  addr, 
+                                  len, 
+                                  &rem_ext);
 
     free_ext.base = addr;
     free_ext.length = len;
     free_ext.flags = (req_ext.flags & VM_REGION_MASK) ;
 
-    vm_extent_insert(&ctx->alloc_mem,
+    /* If we failed to split, insert the unmodified extent back */
+    if(split_status < 0)
+    {
+        status = vm_extent_insert(&ctx->alloc_mem,
                     ctx->alloc_per_slot,
                     &req_ext);
 
-    if(status > 0)
+        if(status == VM_NOMEM)
+        {
+            kprintf("FATAL ERROR %s %d\n",__FILE__,__LINE__);
+            while(1);
+        }
+
+        return(VM_FAIL);
+    }
+
+    status = vm_extent_insert(&ctx->alloc_mem,
+                             ctx->alloc_per_slot,
+                             &req_ext);
+
+    /* This should not happen but if it does, suspend everything */
+
+    if(status == VM_NOMEM)
+    {
+        kprintf("FATAL ERROR %s %d\n",__FILE__,__LINE__);
+        while(1);
+    }
+
+    if(split_status > 0)
     {
         /* We have a remainder - insert it */
         status = vm_extent_insert(&ctx->alloc_mem,
