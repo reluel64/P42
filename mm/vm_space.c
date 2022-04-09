@@ -133,8 +133,11 @@ virt_addr_t vm_space_alloc
      * we would set the address to req_ext.base
      * to do the split
      */ 
+    
     if(addr == VM_BASE_AUTO)
+    {
         addr = req_ext.base;
+    }
 
     /* do the split - it also saves the flags */
     split_status = vm_extent_split(&req_ext, 
@@ -315,10 +318,14 @@ int vm_space_free
     }
 
     if(len % PAGE_SIZE)
+    {
         len = ALIGN_UP(len, PAGE_SIZE);
+    }
 
     if(addr % PAGE_SIZE)
+    {
         addr = ALIGN_DOWN(addr, PAGE_SIZE);
+    }
 
     memset(&req_ext, 0, sizeof(vm_extent_t));
 
@@ -353,9 +360,9 @@ int vm_space_free
                                   len, 
                                   &rem_ext);
 
-    free_ext.base = addr;
+    free_ext.base   = addr;
     free_ext.length = len;
-    free_ext.flags = (req_ext.flags & VM_REGION_MASK) ;
+    free_ext.flags  = (req_ext.flags & VM_REGION_MASK) ;
 
     /* If we failed to split, insert the unmodified extent back */
     if(split_status < 0)
@@ -402,7 +409,7 @@ int vm_space_free
                 status = vm_extent_alloc_slot(&ctx->alloc_mem,
                                       ctx->alloc_per_slot);
 
-                if(status != 0)
+                if(status != VM_OK)
                 {
                     kprintf("NO MEMORY\n");
 
@@ -442,7 +449,7 @@ int vm_space_free
             status = vm_extent_alloc_slot(&ctx->free_mem,
                                            ctx->free_per_slot);
 
-            if(status != 0)
+            if(status != VM_OK)
             {
                 status = vm_space_undo(&ctx->free_mem, 
                                  &ctx->alloc_mem,

@@ -876,7 +876,9 @@ int vm_extent_compact_hdr
     return(status);
 }
 
-
+/* Defragment the extents by moving them to headers which
+ * have space left
+ */
 int vm_extent_defragment
 (
     list_head_t *lh,
@@ -940,7 +942,7 @@ int vm_extent_defragment
 
                         /* One less available in the destination */
                         dst_hdr->avail--;
-                        compacted = 1;
+                        compacted  = 1;
                         defrag_sts = VM_OK;
                         break;
                     }
