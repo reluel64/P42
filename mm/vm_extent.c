@@ -54,14 +54,13 @@ int vm_extent_alloc_slot
     {
         return(VM_FAIL);
     }
+
     /* Acquire backend for the page */
     status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
                                     fext.base,
                                     VM_SLOT_SIZE,
                                     NULL);
 
-
-    
     if(status != 0)
     {
         kprintf("Failed to allocate extent\n");
@@ -876,20 +875,87 @@ int vm_extent_compact_hdr
 
     return(status);
 }
-#if 0
+
+
 int vm_extent_defragment
 (
     list_head_t *lh,
     uint32_t    ext_per_slot
 )
 {
-    vm_slot_hdr_t *src_hdr = NULL;
-    vm_slot_hdr_t *dst_hdr = NULL;
-    vm_extent_t   *src_ext = NULL;
-    vm_extent_t   *dst_ext = NULL;
-    list_node_t   *src_ln  = NULL;
-    list_node_t   *dst_ln  = NULL;
+    vm_slot_hdr_t *src_hdr   = NULL;
+    vm_slot_hdr_t *dst_hdr   = NULL;
+    vm_extent_t   *src_ext   = NULL;
+    vm_extent_t   *dst_ext   = NULL;
+    list_node_t   *src_ln    = NULL;
+    list_node_t   *dst_ln    = NULL;
+    uint8_t       compacted  = 0;
+    uint8_t       defrag_sts = VM_FAIL;
 
+    src_ln = linked_list_first(lh);
 
+    while(src_ln)
+    {
+        compacted = 0;
+        src_hdr = (vm_slot_hdr_t*)src_ln;
+
+        for(uint32_t si = 0; si < ext_per_slot; si++)
+        {
+            src_ext = &dst_hdr->array[si];
+
+            /* skip empty extents */
+            if(src_ext->length == 0)
+            {
+                src_ln = linked_list_next(src_ln);
+            }
+
+            dst_ln = linked_list_first(lh);
+
+            while(dst_ln)
+            {
+                dst_hdr = (vm_slot_hdr_t*)dst_ln;
+
+                /* skip headers that are empty or full */
+                if((dst_hdr->avail == 0)  || (dst_hdr->avail == ext_per_slot))
+                {
+                    dst_ln = linked_list_next(dst_ln);
+                    continue;
+                }
+                
+                for(uint32_t di = 0 ; di < ext_per_slot; di++)
+                {
+                    dst_ext = &dst_hdr->array[di];
+
+                    /* if we found an empty extent, we can insert it here */
+                    if(dst_ext->length == 0)
+                    {
+                        /* copy the extent */
+                        memcpy(dst_ext, src_ext, sizeof(vm_extent_t));
+
+                        /* clear the slot from the source */
+                        memset(src_ext, 0, sizeof(vm_extent_t));
+
+                        /* One more available in the source */
+                        src_hdr->avail++;
+
+                        /* One less available in the destination */
+                        dst_hdr->avail--;
+                        compacted = 1;
+                        defrag_sts = VM_OK;
+                        break;
+                    }
+                }
+
+                if(compacted)
+                {
+                    break;
+                }
+
+                dst_ln = linked_list_next(dst_ln);
+            }
+        }
+        src_ln = linked_list_next(src_ln);
+    }
+
+    return(defrag_sts);
 }
-#endif
