@@ -20,6 +20,7 @@ static pfmgr_base_t base;
 static pfmgr_t pfmgr_interface;
 static spinlock_t pfmgr_lock = SPINLOCK_INIT;
 
+/* Tracking information = header + bitmap */
 #define TRACK_LEN(x) (ALIGN_UP((sizeof(pfmgr_free_range_t)) + \
                                BITMAP_SIZE_FOR_AREA((x)), PAGE_SIZE))
 

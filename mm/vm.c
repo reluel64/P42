@@ -37,7 +37,12 @@ void vm_list_entries()
 
             if(e->length != 0)
             {
-                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, e->base,e->length, e->flags, e->eflags);
+                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, 
+                        e->base,
+                        e->length, 
+                        e->flags, 
+                        e->eflags);
+                        
                 free_len += e->length; 
             }
         }
@@ -61,7 +66,12 @@ void vm_list_entries()
             e  = &hdr->array[i];
             if(e->length != 0)
             {
-                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, e->base,e->length, e->flags, e->eflags);
+                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, 
+                        e->base,
+                        e->length, 
+                        e->flags, 
+                        e->eflags);
+
                 alloc_len += e->length;
             }
         }
@@ -775,4 +785,36 @@ int vm_free
     }
    
    return(VM_OK);
+}
+
+
+int vm_fault_handler
+(
+    vm_ctx_t    *ctx,
+    virt_addr_t vaddr,
+    uint32_t    reason
+)
+{
+    int status = 0;
+
+    switch(reason)
+    {
+        case VM_FAULT_NOT_PRESENT:
+            kprintf("%x NOT PRESENT\n");
+            break;
+
+        case VM_FAULT_WRITE:
+            kprintf("%x NOT_WRITABLE\n");
+            break;
+        
+        case VM_INSTRUCTION_FETCH:
+            kprintf("%x NO EXEC\n");
+            break;
+
+        default:
+            status = VM_FAIL;
+            break;
+    }
+
+    return(status);
 }

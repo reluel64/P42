@@ -174,7 +174,7 @@ int vm_extent_alloc_slot
     return(VM_OK);
 }
 
-/* release a tracking slog */
+/* release a tracking slot */
 
 int vm_extent_release_slot
 (

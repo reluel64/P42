@@ -62,24 +62,9 @@ static int _pgmgr_temp_unmap
 );
 
 
-/* This piece code is the intermediate layer
- * between the physical memory manager and
- * the virtual memory manager.
- * It manages the page tables and handles page
- * faults.
- * 
- * In order for the page manager to work, we
- * will create a new page table.
- * 
- * In this page table, the last table (~2MB) will
- * be used to modify the page table by temporary 
- * mapping it to the needed physical region.
- * 
- * Also, the initial page table will also map the kernel 
- * image so that when we switch it, we won't get
- * a page fault which would result at that point in a
- * triple fault because the interrupt handler is not
- * yet installed
+/* The page manager handles the platform specific structures used
+ * to translate between physical and virtual memory
+ * The code should be called only by the virtual memory manager
  */ 
 
 
@@ -1559,7 +1544,7 @@ static int pgmgr_page_fault_handler(void *pv, isr_info_t *inf)
             int_frame->rflags);
 
 
-
+    //vm_fault_handler(NULL, fault_address, )
     while(1);
 
     return(0);

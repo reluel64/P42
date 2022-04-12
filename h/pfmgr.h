@@ -41,13 +41,6 @@ typedef struct pfmgr_base_t
 
 typedef struct pfmgr_range_header_t
 {
-    /* The next entry from the node will 
-     * point to a physical address not a virtual one
-     * while early page frame allocator is in place, that
-     * being before pfmgr_init is called
-     */ 
-
-     
     list_node_t node;
     phys_addr_t next_range;
     phys_addr_t base;

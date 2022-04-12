@@ -132,7 +132,10 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
         }
 
         /* Add it to the mutex pend queue */
+    #ifdef MTX_DEBUG
         kprintf("BLOCKING %x\n",thread);
+    #endif
+    
         linked_list_add_tail(&mtx->pendq, &thread->pend_node);
 
         spinlock_unlock_int(&mtx->lock);

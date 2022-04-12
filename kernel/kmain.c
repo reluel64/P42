@@ -55,22 +55,44 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
     } return (vendor);
 }
 mutex_t mtx;
+static void test_thread(void *pv)
+{
+    while(1)
+    {
+       // mtx_acquire(&mtx, WAIT_FOREVER);
+        sched_sleep(100);
+       // mtx_release(&mtx);
+        kprintf("SELLPING on CPU %d\n", cpu_id_get());
+    }
+}
+
+
 static void kmain_sys_init(void *arg)
 {
     int hr = 0;
     int min = 0;
     int sec = 0;
-
+    mtx_init(&mtx, 0);
     /* Start APs */
     kprintf("starting APs\n");
     
     kprintf("Platform init\n");
     platform_init();
-    virt_size_t alloc_sz = 1024 * 1024 * 1024;
+    virt_size_t alloc_sz = 1024 * 1024;
     virt_addr_t addr = 0;
-
+vga_print("HELLO\n");
   kprintf("BEFORE LOOP - ");
-       
+         static sched_thread_t th[100];
+    mtx_acquire(&mtx, WAIT_FOREVER);
+    #if 0
+         for(int i = 0; i < 100; i++)
+         {
+            thread_create_static(&th[i], test_thread,NULL, 0x1000, 100);
+            thread_start(&th[i]);
+         }
+#endif
+
+         
     while(1)
     {
       //  mtx_acquire(&mtx, WAIT_FOREVER);
@@ -80,31 +102,44 @@ static void kmain_sys_init(void *arg)
      // pgmgr_per_cpu_init();
 
 
-    for(int i  = 0; i < 1000; i++)
+    for(int i  = 0; i < 100; i++)
     {
 
 #if 1    
-      addr = vm_alloc(NULL,0xffff800040001000 + alloc_sz , alloc_sz,VM_LAZY, VM_ATTR_WRITABLE);
+      addr = vm_alloc(NULL,0xffff800040001000 + alloc_sz , alloc_sz,0, VM_ATTR_WRITABLE);
 
-
-        kprintf("DONE %x\n", addr);
+       // kprintf("DONE %x\n", addr);
 
         vm_free(NULL,addr, alloc_sz);
-        alloc_sz += 1024 *1024;
-        kprintf("AGAIN\n");
+        alloc_sz += 1024 * 1024;
+     //   kprintf("AGAIN\n");
 #endif
     }
+
         //vm_free(NULL, addr, alloc_sz );
      
         vm_list_entries();
-             
+        kprintf("PHYS_MEMORY\n");
+        pfmgr_show_free_memory();
+        mtx_release(&mtx);
+            while(1)
+        {
+          
+           // mtx_acquire(&mtx, WAIT_FOREVER);
+          kprintf("CPU INT %d\n",cpu_int_check());
+        //  mtx_release(&mtx);
+          sched_sleep(100);
+        }
       //  kprintf("XXXX %d\n",cpu_int_check());
       //  kprintf("TEST\n");
     //    kprintf("XXXX %d\n",cpu_int_check());
-        sched_sleep(100000);
+      
+    //    sched_sleep(100000);
        // for(int i = 0; i < INT32_MAX / 2 - 1; i++);
       //  kprintf("ENDED\n");
     //    mtx_release(&mtx);
+
+    while(1);
     }
     
 
@@ -117,6 +152,8 @@ static void kmain_sys_init(void *arg)
             pciCheckVendor(bus, slot);
         }
     }
+
+    while(1);
 }
 
 
@@ -129,40 +166,6 @@ int func2(int i)
     return(0);
 }
 
-static void kmain_sys_init2(void *arg)
-{
-    int hr = 0;
-    int min = 0;
-    int sec = 0;
-
-    /* Start APs */
-    kprintf("starting APs 2\n");
-    
-    kprintf("Platform init\n");
-
-    while(1)
-    {
-
-        mtx_acquire(&mtx, WAIT_FOREVER);;
-        kprintf("TEST2 %x\n", arg);
-      //  for(int i = 0; i < INT32_MAX/2 - 1; i++);
-        func2(90);
-
-        mtx_release(&mtx);
-    }
-    platform_init();
-
-   vga_print("Hello World\n");
-
-    for(int bus = 0; bus < 256; bus++)
-    {
-        for(int slot = 0; slot < 32; slot++)
-        {
-            pciCheckVendor(bus, slot);
-        }
-    }
-
-}
 /* Kernel entry point */
 
 void kmain()
@@ -195,7 +198,6 @@ void kmain()
     /* Initialize base of the scheduler */
     sched_init();
 
-    mtx_init(&mtx, 0);
 
     /* Prepare the initialization thread */
     thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 200);

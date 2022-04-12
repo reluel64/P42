@@ -480,7 +480,9 @@ void schedule(void)
     schedule_main();
 
     if(!cpu_int_check() && int_status)
+    {
         cpu_int_unlock();
+    }
 }
 
 static void schedule_main(void)

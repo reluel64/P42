@@ -314,6 +314,7 @@ static int cpu_bring_ap_up
 {
     ipi_packet_t ipi;
     uint32_t expected = 0;
+
     /* wipe the ipi garbage */
     memset(&ipi, 0, sizeof(ipi_packet_t));
 
@@ -331,10 +332,7 @@ static int cpu_bring_ap_up
     ipi.type      = IPI_INIT;
     ipi.dest_cpu  = cpu;
     
-    /* prepare cpu_on flag */
-    kprintf("CPU_FLAG_PRE %d\n", cpu_on);
     __atomic_and_fetch(&cpu_on, 0, __ATOMIC_SEQ_CST);
-    kprintf("CPU_FLAG_POST %d\n", cpu_on);
     intc_send_ipi(issuer, &ipi);
     
     /* Start-up SIPI */
@@ -345,7 +343,6 @@ static int cpu_bring_ap_up
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < 10; attempt++)
     {
-       
         intc_send_ipi(issuer, &ipi);
 
         /* wait for about 10ms */
@@ -537,7 +534,7 @@ int cpu_ap_start
     memset((void*)trampoline, 0, tramp_size);
 
     /* Clear the stack */
-     memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
+    memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
 
     /* unmap the trampoline */
     vm_unmap(NULL, trampoline, tramp_size);

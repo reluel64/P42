@@ -31,6 +31,9 @@
                                  * or low memory 
                                  */
 
+#define VM_FAULT_NOT_PRESENT     (1 << 0)
+#define VM_FAULT_WRITE           (1 << 1)
+#define VM_INSTRUCTION_FETCH     (1 << 2)
 
 #define VM_CTX_PREFER_HIGH_MEMORY VM_HIGH_MEM
 #define VM_CTX_PREFER_LOW_MEMORY  VM_LOW_MEM
@@ -138,6 +141,13 @@ int vm_free
     vm_ctx_t *ctx, 
     virt_addr_t vaddr, 
     virt_size_t len
+);
+
+int vm_fault_handler
+(
+    vm_ctx_t    *ctx,
+    virt_addr_t vaddr,
+    uint32_t    reason
 );
 
 int vm_init(void);
