@@ -247,6 +247,77 @@ static int simple_init
     return(0);
 }
 
+static int simple_load_balancing
+(
+    void *policy_data,
+    sched_thread_t *th,
+    list_head_t    *units
+)
+{
+    int                  status      = -1;
+    list_node_t          *cursor = NULL;
+    uint32_t             least_ready = 0; 
+    uint32_t             ready_in_q  = 0;
+    simple_policy_unit_t *this_punit = NULL;
+    simple_policy_unit_t *work_punit = NULL;
+    sched_exec_unit_t    *this_unit  = NULL;
+    sched_exec_unit_t    *work_unit  = NULL;
+    sched_exec_unit_t    *balance_target = NULL;
+
+    this_punit = policy_data;
+    this_unit = this_punit->unit;
+    
+    least_ready = linked_list_count(&this_punit->ready_q);
+    cursor = linked_list_first(units);
+
+    /* Find the unit with the least threads ready */
+    while(cursor)
+    {
+        kprintf("UNIT %x\n",cursor);
+        /* Skip ourselves */
+        if(cursor == &this_unit->node)
+        {
+            cursor = linked_list_next(cursor);
+            continue;
+        }
+
+        work_unit = (sched_exec_unit_t*)cursor;
+
+        /* lock the unit we are looking in */
+        spinlock_lock(&work_unit->lock);
+
+        work_punit = work_unit->policy_data;
+
+        ready_in_q = linked_list_count(&work_punit->ready_q);
+
+        if(least_ready > ready_in_q)
+        {
+            least_ready = ready_in_q;
+            balance_target = work_unit;
+        }
+        
+        /* Unlock the target unit */
+        spinlock_unlock(&work_unit->lock);
+
+        cursor = linked_list_next(cursor);
+    }
+
+    /* If we found something, insert the thread */
+    if(balance_target != NULL)
+    {
+        spinlock_lock(&balance_target->lock);
+        kprintf("BALANCING ON %x\n",balance_target);
+        balance_target->policy->thread_enqueue(balance_target->policy_data, 
+                                               th);
+
+        spinlock_unlock(&balance_target->lock);
+
+        status = 0;
+    }
+
+    return(status);
+}
+
 static sched_policy_t policy = 
 {
     .policy_name        = "Simple",
@@ -255,7 +326,7 @@ static sched_policy_t policy =
     .thread_tick        = simple_thread_tick,
     .init_policy        = simple_init,
     .thread_enqueue_new = simple_put_thread,
-    .load_balancing     = NULL
+    .load_balancing     = simple_load_balancing,
 };
 
 
