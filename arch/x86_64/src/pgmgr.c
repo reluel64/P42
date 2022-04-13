@@ -740,37 +740,46 @@ static int pgmgr_iterate_levels
 
         /* If we haven't reached the target level then we have to go
          * down by obtaining the address for the lower page table entry 
+         * It the PAGE_TABLE_SIZE bit is set, we should not go any deeper
+         * because this is the page we are looking for
          */
-
-        if(ld->curr_level > ld->req_level)
+        if(~ld->level[it_dat.entry] & PAGE_TABLE_SIZE)
         {
-            /* notify the callback the we have to go down 
-             * so it notifies if we can continue or not
-             */
-            ld->iter_cb(&it_dat,
-                         ld,
-                         pfmgr_dat,
-                         PGMGR_CB_LEVEL_GO_DOWN);
-
-            if(ld->cb_status & PGMGR_CB_ERROR)
+            if(ld->curr_level > ld->req_level)
             {
-                return (-1);
-            }
-            
-            else if(ld->cb_status & PGMGR_CB_BREAK)
-            {
-                break;
-            }
-            else if(ld->cb_status & PGMGR_CB_STOP)
-            {
-                return(0);
-            }
+                /* notify the callback the we have to go down 
+                 * so it notifies if we can continue or not
+                 */
+                ld->iter_cb(&it_dat,
+                             ld,
+                             pfmgr_dat,
+                             PGMGR_CB_LEVEL_GO_DOWN);
 
-            ld->level_phys = ld->level[it_dat.entry];
-            ld->curr_level--;
-            ld->do_map = 1;
+                if(ld->cb_status & PGMGR_CB_ERROR)
+                {
+                    return (-1);
+                }
+                
+                else if(ld->cb_status & PGMGR_CB_BREAK)
+                {
+                    break;
+                }
+                else if(ld->cb_status & PGMGR_CB_STOP)
+                {
+                    return(0);
+                }
 
-            continue;
+                ld->level_phys = ld->level[it_dat.entry];
+                ld->curr_level--;
+                ld->do_map = 1;
+
+                continue;
+            }
+        }
+        else
+        {
+            kprintf("PGMGR: unable to handle page sizes > 4KB\n");
+            while(1);
         }
 
         /* do the actual request - allocate/free/change attrs */
@@ -967,24 +976,6 @@ static int pgmgr_setup_remap_table(pgmgr_ctx_t *ctx)
  #ifdef PGMGR_DEBUG
     kprintf("----Done setting up remapping table----\n");
 #endif
-    return(0);
-}
-
-int pgmgr_ctx_lock
-(
-    pgmgr_ctx_t *ctx
-)
-{
-    spinlock_lock_int(&ctx->lock);
-    return(0);
-}
-
-int pgmgr_ctx_unlock
-(
-    pgmgr_ctx_t *ctx
-)
-{
-    spinlock_unlock_int(&ctx->lock);
     return(0);
 }
 
@@ -1588,4 +1579,14 @@ int pgmgr_per_cpu_init(void)
     __wbinvd();
     kprintf("ENDING\n");
     return(0);
+}
+
+void pgmgr_ctx_lock(pgmgr_ctx_t *ctx)
+{
+    spinlock_lock(&ctx->lock);
+}
+
+void pgmgr_ctx_unlock(pgmgr_ctx_t *ctx)
+{
+    spinlock_unlock(&ctx->lock);
 }

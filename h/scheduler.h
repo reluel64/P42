@@ -57,7 +57,8 @@ typedef struct sched_policy_t
     int (*load_balancing)
     (
         void *policy_data,
-        sched_thread_t *th
+        sched_thread_t *th,
+        list_head_t    *units
     );
 
     int (*init_policy)

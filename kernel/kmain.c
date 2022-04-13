@@ -59,6 +59,7 @@ static void test_thread(void *pv)
 {
     while(1)
     {
+        cpu_int_lock();
        // mtx_acquire(&mtx, WAIT_FOREVER);
         sched_sleep(100);
        // mtx_release(&mtx);
@@ -77,6 +78,7 @@ static void kmain_sys_init(void *arg)
     kprintf("starting APs\n");
     
     kprintf("Platform init\n");
+          
     platform_init();
     virt_size_t alloc_sz = 1024 * 1024;
     virt_addr_t addr = 0;
@@ -84,8 +86,8 @@ vga_print("HELLO\n");
   kprintf("BEFORE LOOP - ");
          static sched_thread_t th[100];
     mtx_acquire(&mtx, WAIT_FOREVER);
-    #if 0
-         for(int i = 0; i < 100; i++)
+    #if 1
+         for(int i = 0; i < 10; i++)
          {
             thread_create_static(&th[i], test_thread,NULL, 0x1000, 100);
             thread_start(&th[i]);

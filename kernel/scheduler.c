@@ -50,14 +50,14 @@ void sched_thread_entry_point
 {
     int             int_status   = 0;
     void *(*entry_point)(void *) = NULL;
-
+    uint8_t int_flag = 0;
     entry_point = th->entry_point;
    
     /* during startup of the thread, unlock the scheduling unit 
      * on which we are running.
      * failing to do so will cause one thread to run on the locked unit
      */
-    spinlock_unlock_int(&th->unit->lock);
+    spinlock_unlock_int(&th->unit->lock, int_flag);
     cpu_int_unlock();
 
     if(entry_point != NULL)
@@ -66,11 +66,11 @@ void sched_thread_entry_point
     }
 
     /* The thread is now dead */
-    spinlock_lock_int(&th->lock);
+    spinlock_lock_int(&th->lock, &int_flag);
 
     __atomic_or_fetch(&th->flags, THREAD_DEAD, __ATOMIC_ACQUIRE);
     
-    spinlock_unlock_int(&th->lock);
+    spinlock_unlock_int(&th->lock, int_flag);
     
     while(1)
     {
@@ -86,22 +86,22 @@ int sched_enqueue_thread
 {
     cpu_t *cpu = NULL;
     sched_exec_unit_t *unit = NULL;
-
+    uint8_t int_flag = 0;
     cpu = cpu_current_get();
 
     if((cpu == NULL) || cpu->sched == NULL)
     {
-        spinlock_lock_int(&pre_policy_lock);
+        spinlock_lock_int(&pre_policy_lock, &int_flag);
         linked_list_add_tail(&pre_policy_queue, &th->node);
-        spinlock_unlock_int(&pre_policy_lock);
+        spinlock_unlock_int(&pre_policy_lock, int_flag);
         return(-1);
     }
 
     unit = cpu->sched;
     
     /* Lock everything */
-    spinlock_lock_int(&th->lock);
-    spinlock_lock_int(&unit->lock);
+    spinlock_lock(&th->lock);
+    spinlock_lock_int(&unit->lock, &int_flag);
 
     /* this thread belongs to this unit */
     th->unit = unit;
@@ -110,8 +110,8 @@ int sched_enqueue_thread
     unit->policy->thread_enqueue_new(unit->policy_data, th);
 
     /* Unlock everything */
-    spinlock_unlock_int(&unit->lock);
-    spinlock_unlock_int(&th->lock);
+    spinlock_unlock_int(&unit->lock, int_flag);
+    spinlock_unlock(&th->lock);
 }
 
 sched_thread_t *sched_thread_self(void)
@@ -119,6 +119,7 @@ sched_thread_t *sched_thread_self(void)
     sched_exec_unit_t *unit = NULL;
     cpu_t             *cpu  = NULL;
     sched_thread_t    *self = NULL;
+    uint8_t           int_flag = 0;
 
     cpu = cpu_current_get();
 
@@ -130,11 +131,11 @@ sched_thread_t *sched_thread_self(void)
     if(unit == NULL)
         return(NULL);
 
-    spinlock_lock_int(&unit->lock);
+    spinlock_lock_int(&unit->lock, &int_flag);
     
     self = unit->current;
 
-    spinlock_unlock_int(&unit->lock);
+    spinlock_unlock_int(&unit->lock, int_flag);
 
     return(self);
 }
@@ -166,11 +167,11 @@ int sched_unit_init
 )
 {
     sched_exec_unit_t *unit       = NULL;
-    int                int_status = 0;
     list_node_t      *node = NULL;
-    list_node_t      *next_node = NULL;
-    sched_thread_t   *pend_th = NULL;
-  
+    list_node_t      *next_node   = NULL;
+    sched_thread_t   *pend_th     = NULL;
+    uint8_t          int_flag     = 0;
+
     if(cpu == NULL)
     {
         kprintf("ERROR: CPU %x\n", cpu);
@@ -216,7 +217,8 @@ int sched_unit_init
     unit->idle.unit = unit;
 
     /* Execute the threads that are waiting in thre pre sched queue */
-    spinlock_lock_int(&pre_policy_lock);
+    spinlock_lock_int(&pre_policy_lock, &int_flag);
+
     node = linked_list_first(&pre_policy_queue);
 
     while(node)
@@ -232,14 +234,14 @@ int sched_unit_init
         node = next_node;
     }    
 
-    spinlock_unlock_int(&pre_policy_lock);
+    spinlock_unlock_int(&pre_policy_lock, int_flag);
 
     /* Add the unit to the list */
-    spinlock_write_lock_int(&units_lock);
+    spinlock_write_lock_int(&units_lock, &int_flag);
 
     linked_list_add_tail(&units, &unit->node);
     
-    spinlock_write_unlock_int(&units_lock);
+    spinlock_write_unlock_int(&units_lock, int_flag);
 
     /* Link the execution unit to the timer provided by
      * platform's CPU driver
@@ -273,7 +275,9 @@ void sched_unblock_thread
     sched_thread_t *th
 )
 {
-    spinlock_lock_int(&th->lock);
+    uint8_t int_flag = 0;
+
+    spinlock_lock_int(&th->lock, &int_flag);
 
     /* clear the blocked flag */
     __atomic_and_fetch(&th->flags, ~THREAD_BLOCKED, __ATOMIC_SEQ_CST);
@@ -286,7 +290,7 @@ void sched_unblock_thread
                       UNIT_THREADS_UNBLOCK, 
                       __ATOMIC_SEQ_CST);
 
-    spinlock_unlock_int(&th->lock);
+    spinlock_unlock_int(&th->lock, int_flag);
 }
 
 void sched_block_thread
@@ -294,9 +298,11 @@ void sched_block_thread
     sched_thread_t *th
 )
 {
+    uint8_t int_flag = 0;
+
     if(th != NULL)
     {
-        spinlock_lock_int(&th->lock);
+        spinlock_lock_int(&th->lock, &int_flag);
 
         /* set the blocked thread */
         __atomic_or_fetch(&th->flags, THREAD_BLOCKED, __ATOMIC_SEQ_CST);
@@ -306,7 +312,7 @@ void sched_block_thread
                             ~(THREAD_RUNNING | THREAD_READY), 
                             __ATOMIC_SEQ_CST);
 
-        spinlock_unlock_int(&th->lock);
+        spinlock_unlock_int(&th->lock, int_flag);
     }
 }
 
@@ -316,11 +322,13 @@ void sched_sleep_thread
     uint32_t timeout
 )
 {
+    uint8_t int_flag = 0;
+
     if(th != NULL)
     {
         if(timeout > 0)
         {
-            spinlock_lock_int(&th->lock);
+            spinlock_lock_int(&th->lock, &int_flag);
 
             th->to_sleep = timeout;
             th->slept = 0;
@@ -333,7 +341,7 @@ void sched_sleep_thread
                                 ~(THREAD_RUNNING | THREAD_READY), 
                                 __ATOMIC_SEQ_CST);
 
-            spinlock_unlock_int(&th->lock);
+            spinlock_unlock_int(&th->lock, int_flag);
         }
     }
 }
@@ -343,10 +351,11 @@ void sched_wake_thread
     sched_thread_t *th
 )
 {
+    uint8_t int_flag = 0;
 
     if(th != NULL)
     {
-        spinlock_lock_int(&th->lock);
+        spinlock_lock_int(&th->lock, &int_flag);
 
         th->slept = 0;
         th->to_sleep = 0;
@@ -362,9 +371,8 @@ void sched_wake_thread
                           UNIT_THREADS_WAKE, 
                           __ATOMIC_SEQ_CST);
         
-        spinlock_unlock_int(&th->lock);
+        spinlock_unlock_int(&th->lock, int_flag);
     }
-
 }
 
 void sched_sleep
@@ -388,16 +396,18 @@ static uint32_t sched_tick
 {
     sched_exec_unit_t *unit         = NULL;
     sched_policy_t    *policy       = NULL;
+    uint8_t           int_flag      = 0;
+
     unit = pv_unit;
 
     /* lock the unit */
-    spinlock_lock_int(&unit->lock);
+    spinlock_lock_int(&unit->lock, &int_flag);
 
     policy = unit->policy;
 
     policy->thread_tick(unit->policy_data, unit->current);
     
-    spinlock_unlock_int(&unit->lock);
+    spinlock_unlock_int(&unit->lock, int_flag);
 
     return(0);
     
@@ -495,13 +505,15 @@ static void schedule_main(void)
     sched_thread_t    *prev_th = NULL;
     sched_policy_t    *policy  = NULL;
     int               status = 0;
+    int               balance_sts = -1;
+    uint8_t           int_flag = 0;
 
     cpu    = cpu_current_get();
     unit   = cpu->sched;
     policy = unit->policy;
-
+   
     /* Lock the execution unit */
-    spinlock_lock_int(&unit->lock);
+    spinlock_lock_int(&unit->lock, &int_flag);
     
     if(unit->current != NULL)
         prev_th = unit->current;
@@ -518,7 +530,18 @@ static void schedule_main(void)
      */
     if(unit->current != NULL)
     {
-        policy->thread_enqueue(unit->policy_data, prev_th);    
+        if(policy->load_balancing !=  NULL)
+        {
+#if 0
+            balance_sts = policy->load_balancing(unit->policy_data, 
+                                                  prev_th, &units);                        
+#endif
+        }
+
+        if(balance_sts != 0)
+        {
+            policy->thread_enqueue(unit->policy_data, prev_th);    
+        }
     }
 
     /* Ask the policy for the next thread */
@@ -546,5 +569,5 @@ static void schedule_main(void)
     sched_context_switch(prev_th, next_th);
 
     /* Unlock unit */
-    spinlock_unlock_int(&unit->lock);
+    spinlock_unlock_int(&unit->lock, int_flag);
 }

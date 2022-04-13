@@ -43,13 +43,13 @@ sem_t *sem_create(uint32_t init_val, uint32_t max_count)
 
 int sem_acquire(sem_t *sem, uint32_t wait_ms)
 {
-    int int_state = 0;
+    uint8_t int_state = 0;
     int th_int_state = 0;
     sched_thread_t *thread = NULL;
     uint32_t        block_flags = 0;
 
 
-    spinlock_lock_int(&sem->lock);
+    spinlock_lock_int(&sem->lock, &int_state);
 
     /* If we have the semaphore full, allow the task to continue 
      * Otherwise, we will need to block the task
@@ -58,7 +58,7 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
     if(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) > 0)
     {
         __atomic_sub_fetch(&sem->count, 1, __ATOMIC_ACQUIRE);
-        spinlock_unlock_int(&sem->lock);
+        spinlock_unlock_int(&sem->lock, int_state);
         return(0);
     }
 
@@ -70,18 +70,18 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
         
         if(block_flags & THREAD_SLEEPING)
         {
-            spinlock_unlock_int(&sem->lock);
+            spinlock_unlock_int(&sem->lock, int_state);
             return(-1);
         }
 
         if(wait_ms == NO_WAIT)
         {
-            spinlock_unlock_int(&sem->lock);
+            spinlock_unlock_int(&sem->lock, int_state);
             return(-1);
         }
 
         /* Acquire spinlock for the thread */
-        spinlock_lock_int(&thread->lock);
+        spinlock_lock(&thread->lock);
 
         if(wait_ms != WAIT_FOREVER)
         {
@@ -99,36 +99,34 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
 
         /* Release the spinlock of the thread */
         
-        spinlock_unlock_int(&thread->lock);
+        spinlock_unlock(&thread->lock);
 
         /* release the semaphore spinlock */
-        spinlock_unlock_int(&sem->lock);
+        spinlock_unlock_int(&sem->lock, int_state);
 
         /* suspend the thread */
         sched_yield();
 
         /* once the thread is woken up, it would lock again the semaphore */
-        spinlock_lock_int(&sem->lock);
+        spinlock_lock_int(&sem->lock, &int_state);
         linked_list_remove(&sem->pendq, &thread->pend_node);
     }
     
     __atomic_sub_fetch(&sem->count, 1, __ATOMIC_ACQUIRE);
     
-    spinlock_unlock_int(&sem->lock);
+    spinlock_unlock_int(&sem->lock, int_state);
 
     return(0);
 }
 
 int sem_release(sem_t *sem)
 {
-    int int_state = 0;
-    int unit_int_state = 0;
-
+    uint8_t int_state = 0;
     sched_thread_t *thread = NULL;
     sched_exec_unit_t *unit = NULL;
     list_node_t    *pend_node = NULL;
     
-    spinlock_lock_int(&sem->lock);
+    spinlock_lock_int(&sem->lock, &int_state);
 
     if(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) < sem->max_count)
     {
@@ -140,13 +138,13 @@ int sem_release(sem_t *sem)
 
     if(pend_node == NULL)
     {
-        spinlock_unlock_int(&sem->lock);
+        spinlock_unlock_int(&sem->lock, int_state);
         return(0);
     }
 
     thread = PEND_NODE_TO_THREAD(pend_node);
    
-    spinlock_lock_int(&thread->lock);
+    spinlock_lock(&thread->lock);
     
     if(thread->flags & THREAD_BLOCKED)
     {
@@ -157,11 +155,11 @@ int sem_release(sem_t *sem)
         sched_wake_thread(thread);
     }
     
-    spinlock_unlock_int(&thread->lock);
+    spinlock_unlock(&thread->lock);
 
     sched_unblock_thread(thread);
 
-    spinlock_unlock_int(&sem->lock);
+    spinlock_unlock_int(&sem->lock, int_state);
 
     return(0);
 }

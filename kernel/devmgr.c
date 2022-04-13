@@ -169,7 +169,7 @@ int devmgr_drv_add(driver_t *drv)
 {
     int status = 0;
     
-    int int_status = 0;
+    uint8_t int_flag = 0;
 
     if(drv == NULL)
         return(-1);
@@ -182,11 +182,11 @@ int devmgr_drv_add(driver_t *drv)
     }
     else
     {
-        spinlock_write_lock_int(&drv_list_lock);
+        spinlock_write_lock_int(&drv_list_lock, &int_flag);
 
         linked_list_add_tail(&drv_list, &drv->drv_node);
 
-        spinlock_write_unlock_int(&drv_list_lock);
+        spinlock_write_unlock_int(&drv_list_lock, int_flag);
     }
 
     return(status);
@@ -199,12 +199,12 @@ int devmgr_drv_add(driver_t *drv)
 int devmgr_drv_remove(driver_t *drv)
 {
     int status = 0;
-    int int_status = 0;
+    uint8_t int_flag = 0;
 
     if(drv == NULL)
         return(-1);
 
-    spinlock_write_lock_int(&drv_list_lock);
+    spinlock_write_lock_int(&drv_list_lock, &int_flag);
 
     /* If the driver is not in the list, then bail out */
     if(linked_list_find_node(&drv_list, &drv->drv_node))
@@ -213,7 +213,7 @@ int devmgr_drv_remove(driver_t *drv)
     else
         linked_list_remove(&drv_list, &drv->drv_node);
     
-    spinlock_write_unlock_int(&drv_list_lock);
+    spinlock_write_unlock_int(&drv_list_lock, int_flag);
 
     return(status);
 }
@@ -257,24 +257,26 @@ static int devmgr_dev_add_to_parent
     device_t *parent
 )
 {
+    uint8_t int_flag = 0;
+
     if(parent == NULL)
         parent = &root_bus;
 
     if(dev->parent != NULL)
         return(-1);
    
-    spinlock_write_lock_int(&dev_list_lock);
+    spinlock_write_lock_int(&dev_list_lock, &int_flag);
    
     if(!linked_list_find_node(&parent->children, &dev->dev_node))
     {
-        spinlock_write_unlock_int(&dev_list_lock);
+        spinlock_write_unlock_int(&dev_list_lock, int_flag);
         return(-1);
     }
     linked_list_add_tail(&parent->children, &dev->dev_node);
     
     dev->parent = parent;
 
-    spinlock_write_unlock_int(&dev_list_lock);
+    spinlock_write_unlock_int(&dev_list_lock, int_flag);
     
     return(0);
 }
@@ -285,9 +287,9 @@ driver_t *devmgr_drv_find(const char *name)
 {
     driver_t    *drv  = NULL;
     list_node_t *node = NULL;
-    int         int_status = 0;
+    uint8_t     int_flag = 0;
 
-    spinlock_read_lock_int(&drv_list_lock);
+    spinlock_read_lock_int(&drv_list_lock, &int_flag);
     
     node = linked_list_first(&drv_list);
     
@@ -305,7 +307,7 @@ driver_t *devmgr_drv_find(const char *name)
         node = linked_list_next(node);
     }
 
-    spinlock_read_unlock_int(&drv_list_lock);
+    spinlock_read_unlock_int(&drv_list_lock, int_flag);
 
     return(drv);
 }
@@ -332,9 +334,9 @@ int devmgr_dev_probe(device_t *dev)
     int status        = -1;
     list_node_t *node = NULL;
     driver_t       *drv  = NULL;
-    int int_status = 0;
+    uint8_t int_flag = 0;
 
-    spinlock_read_lock_int(&drv_list_lock);
+    spinlock_read_lock_int(&drv_list_lock, &int_flag);
 
     node = linked_list_first(&drv_list);
 
@@ -373,7 +375,7 @@ int devmgr_dev_probe(device_t *dev)
         node = linked_list_next(node);
     }
 
-    spinlock_read_unlock_int(&drv_list_lock);
+    spinlock_read_unlock_int(&drv_list_lock, int_flag);
 
     return(status);
 }
@@ -511,11 +513,11 @@ device_t *devmgr_dev_get_by_name
     list_node_t *dev_stack[DEVMGR_SRCH_STACK];
     list_node_t *node        = NULL;
     int          stack_index = 0;
-    int          int_status = 0;
+    uint8_t      int_status = 0;
 
     memset(dev_stack, 0, sizeof(dev_stack));
     
-    spinlock_read_lock_int(&dev_list_lock);
+    spinlock_read_lock_int(&dev_list_lock, &int_status);
 
     node = linked_list_first(&root_bus.children);
 
@@ -529,7 +531,7 @@ device_t *devmgr_dev_get_by_name
             if(dev->index == index && 
                !strcmp(dev->dev_name, name))
             {
-                spinlock_read_unlock_int(&dev_list_lock);
+                spinlock_read_unlock_int(&dev_list_lock, int_status);
                 return(dev);
             }
 
@@ -558,7 +560,7 @@ device_t *devmgr_dev_get_by_name
             break;
     }
 
-    spinlock_read_unlock_int(&dev_list_lock);
+    spinlock_read_unlock_int(&dev_list_lock, int_status);
 
     return(NULL);
 }

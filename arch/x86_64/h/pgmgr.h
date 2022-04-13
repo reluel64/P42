@@ -171,12 +171,12 @@ int pgmgr_change_attrib
     uint32_t attr
 );
 
-int pgmgr_ctx_lock
+void pgmgr_ctx_lock
 (
     pgmgr_ctx_t *ctx
 );
 
-int pgmgr_ctx_unlock
+void pgmgr_ctx_unlock
 (
     pgmgr_ctx_t *ctx
 );

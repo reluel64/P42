@@ -13,8 +13,6 @@ extern virt_addr_t kstack_top;
 
 #define PLATFORM_CPU_NAME "x86_cpu"
 #define CPU_TRAMPOLINE_LOCATION_START (0x8000)
-#define PER_CPU_STACK_SIZE            (0x8000) /* 32 K */
-
 
 #define IDT_ENTRY_SIZE (sizeof(idt64_entry_t))
 #define IDT_TABLE_COUNT (256)
@@ -23,11 +21,12 @@ extern virt_addr_t kstack_top;
 #define ISR_EC_MASK (0x27D00)
 #define RESERVED_ISR_BEGIN (21)
 #define RESERVED_ISR_END   (31)
-#define MAX_HANDLERS       (256)
+#define MAX_HANDLERS       IDT_TABLE_COUNT
 
-#define PLATFORM_AP_START_TIMEOUT (20000)
+#define PLATFORM_AP_RETRIES       (1)
+#define PLATFORM_AP_START_TIMEOUT (1000)
 
-#define PLATFORM_RESCHED_VECTOR (240)
+#define PLATFORM_RESCHED_VECTOR        (240)
 #define PLATFORM_PG_INVALIDATE_VECTOR  (239)
 #define PLATFORM_LOCAL_TIMER_VECTOR    (238)
 #define PLATFORM_PG_FAULT_VECTOR       (14)
@@ -161,12 +160,12 @@ extern void        __cpuid
     uint32_t *edx
 );
 
-extern void __sti();
-extern void __cli();
-extern int  __geti();
-extern void __lidt(idt64_ptr_t *);
-extern void __hlt();
-extern void __pause();
+extern void     __sti();
+extern void     __cli();
+extern uint8_t  __geti();
+extern void     __lidt(idt64_ptr_t *);
+extern void     __hlt();
+extern void     __pause();
 
 
 

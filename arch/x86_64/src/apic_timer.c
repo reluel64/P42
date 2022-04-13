@@ -28,7 +28,8 @@ static int apic_timer_isr(void *drv, isr_info_t *inf)
 {
     apic_timer_t  *timer     = NULL;
     device_t      *dev = NULL;
-    
+    uint8_t       int_flag = 0;
+
     dev = devmgr_dev_get_by_name(APIC_TIMER_NAME, inf->cpu_id);
 
     if(dev == NULL)
@@ -39,13 +40,13 @@ static int apic_timer_isr(void *drv, isr_info_t *inf)
     if(timer == NULL)
         return(-1);
 
-    spinlock_read_lock_int(&timer->lock);
+    spinlock_read_lock_int(&timer->lock, &int_flag);
 
     /* Call the callback */
     if(timer->func != NULL)
         timer->func(timer->func_data, inf);
 
-    spinlock_read_unlock_int(&timer->lock);
+    spinlock_read_unlock_int(&timer->lock, int_flag);
 
     return(0);
 }
@@ -165,16 +166,17 @@ static int apic_timer_install_cb
     apic_timer_t *timer = NULL;
     int           int_status = 0;
     int           ret = -1;
+    uint8_t       int_flag = 0;
 
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_write_lock_int(&timer->lock);
+    spinlock_write_lock_int(&timer->lock, &int_flag);
 
     timer->func = func;
     timer->func_data = data;
     ret = 0;
     
-    spinlock_write_unlock_int(&timer->lock);
+    spinlock_write_unlock_int(&timer->lock, int_flag);
 
     return(ret);
 }
@@ -189,16 +191,17 @@ static int apic_timer_uninstall_cb
     apic_timer_t *timer = NULL;
     int           int_status = 0;
     int           ret = -1;
-    
+    uint8_t       int_flag = 0;
+
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_write_lock_int(&timer->lock);
+    spinlock_write_lock_int(&timer->lock, &int_flag);
 
     timer->func = NULL;
     timer->func_data = NULL;
     ret = 0;
 
-    spinlock_write_unlock_int(&timer->lock);
+    spinlock_write_unlock_int(&timer->lock, int_flag);
 
     return(ret);
 }
@@ -213,16 +216,17 @@ static int apic_timer_get_cb
     apic_timer_t *timer = NULL;
     int           int_status = 0;
     int           ret = -1;
-    
+    uint8_t      int_flag = 0;
+
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_read_lock_int(&timer->lock);
+    spinlock_read_lock_int(&timer->lock, &int_flag);
 
     *func = timer->func;
     *data = timer->func_data;
     ret = 0;
 
-    spinlock_read_unlock_int(&timer->lock);
+    spinlock_read_unlock_int(&timer->lock, int_flag);
 
     return(ret);
 }

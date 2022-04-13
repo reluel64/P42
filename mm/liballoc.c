@@ -847,7 +847,7 @@ void* PREFIX(realloc)(void* p, size_t size)
  */
 int liballoc_lock(int *int_status)
 {
-    spinlock_lock_int(&lock);
+    spinlock_lock(&lock);
     return(0);
 }
 
@@ -859,7 +859,7 @@ int liballoc_lock(int *int_status)
  */
 int liballoc_unlock(int int_status)
 {
-    spinlock_unlock_int(&lock);
+    spinlock_unlock(&lock);
     return(0);
 }
 

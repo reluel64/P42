@@ -21,13 +21,14 @@ typedef struct isr_list_t
 static isr_list_t handlers[MAX_HANDLERS];
 static list_head_t eoi_handlers;
 static spinlock_t  eoi_lock;
-
+static spinlock_t serial_lock;
 
 int isr_init(void)
 {
     memset(&handlers, 0, sizeof(handlers));
     linked_list_init(&eoi_handlers);
     spinlock_rw_init(&eoi_lock);
+    spinlock_init(&serial_lock);
 
     for(int i = 0; i < MAX_HANDLERS; i++)
     {
@@ -47,7 +48,7 @@ isr_t *isr_install
 )
 {
     isr_t *intr = NULL;
-    int int_status = 0;
+    uint8_t int_status = 0;
 
     if(index >= MAX_HANDLERS  && eoi == 0)
         return(NULL);
@@ -77,19 +78,19 @@ isr_t *isr_install
 
     if(!eoi)
     {   
-        spinlock_write_lock_int(&handlers[index].lock);
+        spinlock_write_lock_int(&handlers[index].lock, &int_status);
 
         linked_list_add_head(&handlers[index].head, &intr->node);
 
-        spinlock_write_unlock_int(&handlers[index].lock);
+        spinlock_write_unlock_int(&handlers[index].lock, int_status);
     }
     else
     {
-        spinlock_write_lock_int(&eoi_lock);
+        spinlock_write_lock_int(&eoi_lock, &int_status);
 
         linked_list_add_head(&eoi_handlers, &intr->node);
 
-        spinlock_write_unlock_int(&eoi_lock);
+        spinlock_write_unlock_int(&eoi_lock, int_status);
     }
     return(intr);
 }
@@ -101,7 +102,7 @@ int isr_uninstall
 )
 {
     isr_t       *intr      = NULL;
-    int         int_status = 0;
+    uint8_t     int_status = 0;
     list_node_t *node      = NULL;
     list_node_t *next_node = NULL;    
     isr_list_t  *isr_lst    = NULL;
@@ -112,7 +113,7 @@ int isr_uninstall
 
     if(eoi)
     {
-        spinlock_write_lock_int(&eoi_lock);
+        spinlock_write_lock_int(&eoi_lock, &int_status);
 
         node = linked_list_first(&eoi_handlers);
     
@@ -132,7 +133,7 @@ int isr_uninstall
 
             node = next_node;
         }
-        spinlock_write_unlock_int(&eoi_lock);
+        spinlock_write_unlock_int(&eoi_lock, int_status);
 
         return(0);
     }
@@ -141,7 +142,7 @@ int isr_uninstall
     {
         isr_lst = &handlers[i];
         
-        spinlock_write_lock_int(&isr_lst->lock);
+        spinlock_write_lock_int(&isr_lst->lock, &int_status);
         
         node = linked_list_first(&isr_lst->head);
 
@@ -159,7 +160,7 @@ int isr_uninstall
 
             node = next_node;
         }
-        spinlock_write_unlock_int(&isr_lst->lock);
+        spinlock_write_unlock_int(&isr_lst->lock, int_status);
     }
     return(0);
 }
@@ -180,7 +181,7 @@ void isr_dispatcher
     
     if(index >= MAX_HANDLERS)
         return;
-    
+
     memset(&inf, 0, sizeof(isr_info_t));
 
     int_lst = &handlers[index];
@@ -190,7 +191,7 @@ void isr_dispatcher
     cpu        = cpu_current_get();
 
     /* gain exclusive access to the list */
-    spinlock_read_lock_int(&int_lst->lock);
+    spinlock_read_lock(&int_lst->lock);
 
     node = linked_list_first(&int_lst->head);
 
@@ -204,9 +205,9 @@ void isr_dispatcher
         node = linked_list_next(node);
     }
 
-    spinlock_read_unlock_int(&int_lst->lock);
+    spinlock_read_unlock(&int_lst->lock);
 
-    spinlock_read_lock_int(&eoi_lock);
+    spinlock_read_lock(&eoi_lock);
 
     /* Send EOIs */
     node = linked_list_first(&eoi_handlers);
@@ -221,7 +222,7 @@ void isr_dispatcher
         node = linked_list_next(node);
     }
 
-    spinlock_read_unlock_int(&eoi_lock);
+    spinlock_read_unlock(&eoi_lock);
 
     /* check if we need to reschedule */
     if(cpu && cpu->sched)

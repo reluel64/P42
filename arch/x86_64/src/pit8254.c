@@ -45,16 +45,16 @@ static int pit8254_irq_handler(void *dev, isr_info_t *inf)
 {
     pit8254_dev_t *pit_dev = NULL;
     uint16_t divider = 0;
-    int int_status = 0;
+    uint8_t int_flag = 0;
 
     pit_dev = devmgr_dev_data_get(dev);
 
-    spinlock_read_lock_int(&pit_dev->lock);
+    spinlock_read_lock_int(&pit_dev->lock, &int_flag);
 
     if(pit_dev->func != NULL)
         pit_dev->func(pit_dev->func_data, inf);
     
-    spinlock_read_unlock_int(&pit_dev->lock);
+    spinlock_read_unlock_int(&pit_dev->lock, int_flag);
 
     return(0);
 }
@@ -125,18 +125,18 @@ static int pit8254_install_cb
 )
 {
     pit8254_dev_t *timer = NULL;
-    int           int_status = 0;
+    uint8_t        int_flag = 0;
     int           ret = -1;
 
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_write_lock_int(&timer->lock);
+    spinlock_write_lock_int(&timer->lock, &int_flag);
 
     timer->func      = func;
     timer->func_data = data;
     ret = 0;
 
-    spinlock_write_unlock_int(&timer->lock);
+    spinlock_write_unlock_int(&timer->lock, int_flag);
 
     return(ret);
 }
@@ -149,18 +149,18 @@ static int pit8254_uninstall_cb
 )
 {
     pit8254_dev_t *timer = NULL;
-    int           int_status = 0;
+    uint8_t       int_status = 0;
     int           ret = -1;
     
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_write_lock_int(&timer->lock);
+    spinlock_write_lock_int(&timer->lock, &int_status);
 
     timer->func      = NULL;
     timer->func_data = NULL;
     ret              = 0;
 
-    spinlock_write_unlock_int(&timer->lock);
+    spinlock_write_unlock_int(&timer->lock, int_status);
 
     return(ret);
 }
@@ -173,18 +173,18 @@ static int pit8254_get_cb
 )
 {
     pit8254_dev_t *timer = NULL;
-    int           int_status = 0;
+    uint8_t       int_status = 0;
     int           ret = -1;
     
     timer = devmgr_dev_data_get(dev);
 
-    spinlock_read_lock_int(&timer->lock);
+    spinlock_read_lock_int(&timer->lock, &int_status);
 
     *func = timer->func;
     *data = timer->func_data;
     ret = 0;
 
-    spinlock_read_unlock_int(&timer->lock);
+    spinlock_read_unlock_int(&timer->lock, int_status);
 
     return(ret);
 }

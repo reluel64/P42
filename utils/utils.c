@@ -132,8 +132,9 @@ int kprintf(char *fmt,...)
     char ch = 0;
     char nbuf[64];
     uint64_t num = 0;
-    
-    spinlock_lock_int(&kprintf_lock);
+    uint8_t  int_flag = 0;
+
+    spinlock_lock_int(&kprintf_lock, &int_flag);
     
     while(fmt[0]!= '\0')
     {
@@ -192,7 +193,7 @@ int kprintf(char *fmt,...)
         fmt++;
     }
     va_end(lst);
-    spinlock_unlock_int(&kprintf_lock);
+    spinlock_unlock_int(&kprintf_lock, int_flag);
 }
 
 #if 0

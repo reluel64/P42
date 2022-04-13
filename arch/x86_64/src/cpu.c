@@ -341,7 +341,7 @@ static int cpu_bring_ap_up
     sched_sleep(10);
    
     /* Start up the CPU */
-    for(uint16_t attempt = 0; attempt < 10; attempt++)
+    for(uint16_t attempt = 0; attempt < PLATFORM_AP_RETRIES; attempt++)
     {
         intc_send_ipi(issuer, &ipi);
 
@@ -449,6 +449,7 @@ int cpu_ap_start
 
     if(trampoline == VM_INVALID_ADDRESS)
     {
+        AcpiPutTable((ACPI_TABLE_HEADER*)madt);
         return(-1);
     }
 

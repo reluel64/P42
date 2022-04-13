@@ -206,7 +206,7 @@ static int apic_eoi_handler(void *pv, isr_info_t *inf)
                         EOI_REGISTER, 
                         &data, 
                         1);
-    
+
     return(0);
 }
 
@@ -470,7 +470,7 @@ static int apic_dev_init(device_t *dev)
     
 
     data |= APIC_SVR_VEC_MASK(SPURIOUS_VECTOR) | 
-           APIC_SVR_ENABLE_BIT;
+            APIC_SVR_ENABLE_BIT;
 
     apic_drv->apic_write(apic_drv->vaddr, 
                          SPURIOUS_INTERRUPT_VECTOR_REGISTER,
@@ -549,8 +549,6 @@ static int apic_drv_init(driver_t *drv)
                 0,                
                 1, 
                 &eoi_isr);
-
-   
 
     devmgr_drv_data_set(drv, apic_drv);
 

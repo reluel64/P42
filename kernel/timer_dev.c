@@ -23,10 +23,10 @@ static uint32_t timer_isr_cb
     timer_dev_t *tm_dev = NULL;
     timer_t *c = NULL;
     timer_t *n = NULL;
-
+    uint8_t int_flag = 0;
     tm_dev = tm;
 
-    spinlock_read_lock_int(&tm_dev->queue_lock);
+    spinlock_read_lock_int(&tm_dev->queue_lock, &int_flag);
 
     tm_dev->tm_ticks++;
 
@@ -55,7 +55,7 @@ static uint32_t timer_isr_cb
         c = n;
     }
 
-    spinlock_read_unlock_int(&tm_dev->queue_lock);
+    spinlock_read_unlock_int(&tm_dev->queue_lock, int_flag);
 
     return(0);
 }
@@ -290,6 +290,7 @@ int timer_dev_start
     timer_dev_t *tm_dev
 )
 {
+    uint8_t int_flag = 0;
     if(t == NULL || cb == NULL || delay == 0 || tm_dev == NULL)
         return(-1);
 
@@ -300,13 +301,13 @@ int timer_dev_start
     t->flags  = TIMER_NOT_INIT;
 
     /* Protect the queue */
-    spinlock_write_lock_int(&tm_dev->queue_lock);
+    spinlock_write_lock_int(&tm_dev->queue_lock, &int_flag);
     
     /* Add the timer to the queue */
     linked_list_add_tail(&tm_dev->timer_queue, &t->node);
     
     /* Release the queue */
-    spinlock_write_unlock_int(&tm_dev->queue_lock);
+    spinlock_write_unlock_int(&tm_dev->queue_lock, int_flag);
 
     return(0);
 }
