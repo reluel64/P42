@@ -171,16 +171,6 @@ int pgmgr_change_attrib
     uint32_t attr
 );
 
-void pgmgr_ctx_lock
-(
-    pgmgr_ctx_t *ctx
-);
-
-void pgmgr_ctx_unlock
-(
-    pgmgr_ctx_t *ctx
-);
-
 int pgmgr_allocate_backend
 (
     pgmgr_ctx_t *ctx,
@@ -238,4 +228,5 @@ void pgmgr_invalidate
     virt_addr_t vaddr,
     virt_size_t len
 );
+
 #endif

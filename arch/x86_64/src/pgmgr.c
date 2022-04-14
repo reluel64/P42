@@ -1580,13 +1580,3 @@ int pgmgr_per_cpu_init(void)
     kprintf("ENDING\n");
     return(0);
 }
-
-void pgmgr_ctx_lock(pgmgr_ctx_t *ctx)
-{
-    spinlock_lock(&ctx->lock);
-}
-
-void pgmgr_ctx_unlock(pgmgr_ctx_t *ctx)
-{
-    spinlock_unlock(&ctx->lock);
-}

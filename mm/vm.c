@@ -117,7 +117,6 @@ static int vm_setup_protected_regions
             .length =  VM_SLOT_SIZE,
             .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
         },
-        
     };
 
     rsrvd_count = sizeof(re) / sizeof(vm_extent_t);
@@ -127,7 +126,8 @@ static int vm_setup_protected_regions
         kprintf("Reserving %x - %x\n", re[i].base, re[i].length);
         if(vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags, 0) == VM_INVALID_ADDRESS)
         {
-            kprintf("FAILED\n");
+            kprintf("FAILED to reserve memory\n");
+            while(1);
         }
     }
 }
@@ -294,15 +294,13 @@ virt_addr_t vm_alloc
                           alloc_flags, 
                           mem_flags);
 
-    spinlock_unlock_int(&ctx->lock, int_status);
+
     
     if(space_addr == VM_INVALID_ADDRESS)
     {
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(VM_INVALID_ADDRESS);
     }
-
-      /* Lock the page manager */
-    pgmgr_ctx_lock(&ctx->pgmgr);
       
     /* Check if we also need to allocate physical space now */
     if(~alloc_flags & VM_LAZY)
@@ -374,17 +372,13 @@ virt_addr_t vm_alloc
         ret_address = space_addr;
     }
     
-     pgmgr_ctx_unlock(&ctx->pgmgr);
-
     /* In case of error, free the allocated virtual space */
     if(ret_address == VM_INVALID_ADDRESS)
     {
-        spinlock_lock_int(&ctx->lock, &int_status);
-        
         vm_space_free(ctx, space_addr, len, NULL, NULL);
-        
-        spinlock_unlock_int(&ctx->lock, int_status);
     }
+
+    spinlock_unlock_int(&ctx->lock, int_status);    
 
     return(ret_address);
 }
@@ -428,14 +422,13 @@ virt_addr_t vm_map
                                alloc_flags, 
                                mem_flags);
 
-    spinlock_unlock_int(&ctx->lock, int_status);
+
 
     if(space_addr == VM_INVALID_ADDRESS)
     {
+        spinlock_unlock_int(&ctx->lock, int_status);
         return(VM_INVALID_ADDRESS);
     }
-
-    pgmgr_ctx_lock(&ctx->pgmgr);
 
     status = pgmgr_allocate_backend(&ctx->pgmgr,
                                         space_addr,
@@ -499,16 +492,12 @@ virt_addr_t vm_map
         }
     }
 
-    pgmgr_ctx_unlock(&ctx->pgmgr);
-
     if(ret_address == VM_INVALID_ADDRESS)
     {
-        spinlock_lock_int(&ctx->lock, &int_status);
-
         vm_space_free(ctx, space_addr, len, NULL, NULL);
-
-        spinlock_unlock_int(&ctx->lock, int_status);
     }
+
+    spinlock_unlock_int(&ctx->lock, int_status);
 
     return(ret_address);
 }
@@ -567,9 +556,7 @@ int vm_change_attr
 
     if(status != 0)
     {
-
         spinlock_unlock_int(&ctx->lock, int_flags);
-        while(1);
         return(VM_FAIL);
     }
 
@@ -684,13 +671,6 @@ int vm_unmap
         while(1);
     }
     
-   
-    /* Lock the pgmgr context before releasing the 
-     * VM context
-     */
-    pgmgr_ctx_lock(&ctx->pgmgr);
-    spinlock_unlock_int(&ctx->lock, int_flags);
-    
     status = pgmgr_unmap_pages(&ctx->pgmgr,
                                 vaddr,
                                 len,
@@ -709,8 +689,7 @@ int vm_unmap
                          vaddr,
                          len);
     
-    /* Release the pgmgr context */
-    pgmgr_ctx_unlock(&ctx->pgmgr);
+    spinlock_unlock_int(&ctx->lock, int_flags);
 
     if(status != 0)
     {
@@ -737,7 +716,9 @@ int vm_free
         ctx = &vm_kernel_ctx;
      
     /* Check if vaddr and len are page aligned */
-    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE)|| (vaddr == VM_INVALID_ADDRESS))
+    if((vaddr % PAGE_SIZE) || 
+       (len % PAGE_SIZE)   || 
+       (vaddr == VM_INVALID_ADDRESS))
     {
        return(VM_FAIL);
     }
@@ -754,10 +735,7 @@ int vm_free
     }
     
     if(~old_flags & VM_LAZY)
-    {
-        pgmgr_ctx_lock(&ctx->pgmgr);
-        spinlock_unlock_int(&ctx->lock, int_flags);
-        
+    {        
         status = pgmgr_release_pages(&ctx->pgmgr,
                                 vaddr,
                                 len,
@@ -772,14 +750,10 @@ int vm_free
         pgmgr_invalidate(&ctx->pgmgr,
                              vaddr,
                              len);
+    }
 
-        pgmgr_ctx_unlock(&ctx->pgmgr);
-    }
-    else
-    {
-        spinlock_unlock_int(&ctx->lock, int_flags);
-    }
-    
+    spinlock_unlock_int(&ctx->lock, int_flags);
+
     if(status != 0)
     {
         kprintf("FAILED TO FREE\n");
