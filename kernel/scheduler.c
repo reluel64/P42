@@ -40,6 +40,7 @@ extern void __context_unit_start(void *tcb);
 extern void cpu_signal_on(uint32_t id);
 extern int sched_simple_register(sched_policy_t **p);
 
+static int in_balance = 0;
 
 
 
@@ -228,7 +229,7 @@ int sched_unit_init
         pend_th = NODE_TO_THREAD(node);
 
         linked_list_remove(&pre_policy_queue, node);
-
+        pend_th->unit = unit;
         unit->policy->thread_enqueue_new(unit->policy_data, pend_th);
 
         node = next_node;
@@ -425,10 +426,9 @@ static void sched_idle_thread
     list_node_t        *c         = NULL;
     list_node_t        *n         = NULL;
 
-    int timer_enabled = 1;
     unit = (sched_exec_unit_t*)pv;
    
-    kprintf("Entered idle loop on %d\n", unit->cpu->cpu_id);
+    kprintf("Entered idle loop on %d UNIT ID 0x%x\n", unit->cpu->cpu_id, unit);
 
     /* Signal that the execution unit is up and running 
      * so that the BSP can continue waking up other cores
@@ -444,8 +444,10 @@ static void sched_idle_thread
     if(unit->cpu->cpu_id > 0)
         timer_dev_disable(unit->timer_dev);
 #endif
+
     while(1)
     {
+    
         cpu_halt();
     }
 }
@@ -507,6 +509,7 @@ static void schedule_main(void)
     int               status = 0;
     int               balance_sts = -1;
     uint8_t           int_flag = 0;
+    int              expected = 0;
 
     cpu    = cpu_current_get();
     unit   = cpu->sched;
@@ -532,12 +535,21 @@ static void schedule_main(void)
     {
         if(policy->load_balancing !=  NULL)
         {
-#if 0
-            balance_sts = policy->load_balancing(unit->policy_data, 
-                                                  prev_th, &units);                        
+#if 1
+            if(__atomic_compare_exchange_n(&in_balance, &expected, 
+                                           1, 0, 
+                                           __ATOMIC_SEQ_CST, 
+                                           __ATOMIC_SEQ_CST))
+            {
+             
+                balance_sts = policy->load_balancing(unit->policy_data, 
+                                                      prev_th, &units);               
+             
+                 __atomic_clear(&in_balance, __ATOMIC_SEQ_CST);
+            }
 #endif
         }
-
+        
         if(balance_sts != 0)
         {
             policy->thread_enqueue(unit->policy_data, prev_th);    
@@ -548,25 +560,31 @@ static void schedule_main(void)
     status = policy->thread_dequeue(unit->policy_data, 
                                     &next_th);
 
+
     /* If we don't have a task to execute, go to the idle task */
-    if(status != 0)
+
+    if(status < 0)
     {
         next_th = &unit->idle;
         unit->current = NULL;
     }
     else
     {
-        next_th->unit = unit;
         unit->current = next_th;
     }
 
     /* Set thread's running flag */
-    __atomic_or_fetch(&prev_th->flags, 
+    __atomic_or_fetch(&next_th->flags, 
                       THREAD_RUNNING, 
                       __ATOMIC_SEQ_CST);
 
     /* Switch context */
     sched_context_switch(prev_th, next_th);
+    
+    /* update the unit in case we switched the thread to another CPU */
+    cpu    = cpu_current_get();
+    unit   = cpu->sched;
+    next_th->unit = unit;
 
     /* Unlock unit */
     spinlock_unlock_int(&unit->lock, int_flag);

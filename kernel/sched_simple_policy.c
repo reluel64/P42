@@ -119,6 +119,7 @@ static int simple_put_thread
 
     if(th == NULL || policy_data == NULL)
     {
+       
         return(-1);
     }
 ;
@@ -156,7 +157,7 @@ static int simple_put_thread
     /* Add the thread in the corresponding queue */
 
     linked_list_add_tail(lh, &th->node);
-
+  
     return(0);
 
 }
@@ -273,7 +274,6 @@ static int simple_load_balancing
     /* Find the unit with the least threads ready */
     while(cursor)
     {
-        kprintf("UNIT %x\n",cursor);
         /* Skip ourselves */
         if(cursor == &this_unit->node)
         {
@@ -290,13 +290,12 @@ static int simple_load_balancing
 
         ready_in_q = linked_list_count(&work_punit->ready_q);
 
-        if(least_ready > ready_in_q)
+        if(least_ready > ready_in_q )
         {
             least_ready = ready_in_q;
             balance_target = work_unit;
         }
         
-        /* Unlock the target unit */
         spinlock_unlock(&work_unit->lock);
 
         cursor = linked_list_next(cursor);
@@ -306,6 +305,7 @@ static int simple_load_balancing
     if(balance_target != NULL)
     {
         spinlock_lock(&balance_target->lock);
+        
         kprintf("BALANCING ON %x\n",balance_target);
         balance_target->policy->thread_enqueue(balance_target->policy_data, 
                                                th);
@@ -314,7 +314,6 @@ static int simple_load_balancing
 
         status = 0;
     }
-
     return(status);
 }
 
