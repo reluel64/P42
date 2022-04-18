@@ -251,13 +251,13 @@ static int simple_init
 static int simple_load_balancing
 (
     void *policy_data,
-    sched_thread_t *th,
     list_head_t    *units
 )
 {
     int                  status      = -1;
     list_node_t          *cursor = NULL;
-    uint32_t             least_ready = 0; 
+    list_node_t          *th_tail = NULL;
+    uint32_t             this_ready_in_q  = 0; 
     uint32_t             ready_in_q  = 0;
     simple_policy_unit_t *this_punit = NULL;
     simple_policy_unit_t *work_punit = NULL;
@@ -268,7 +268,6 @@ static int simple_load_balancing
     this_punit = policy_data;
     this_unit = this_punit->unit;
     
-    least_ready = linked_list_count(&this_punit->ready_q);
     cursor = linked_list_first(units);
 
     /* Find the unit with the least threads ready */
@@ -280,6 +279,7 @@ static int simple_load_balancing
             cursor = linked_list_next(cursor);
             continue;
         }
+        this_ready_in_q = linked_list_count(&this_punit->ready_q); 
 
         work_unit = (sched_exec_unit_t*)cursor;
 
@@ -290,29 +290,20 @@ static int simple_load_balancing
 
         ready_in_q = linked_list_count(&work_punit->ready_q);
 
-        if(least_ready > ready_in_q )
+        if(this_ready_in_q > ready_in_q && this_ready_in_q > 1)
         {
-            least_ready = ready_in_q;
-            balance_target = work_unit;
+            th_tail = linked_list_last(&this_punit->ready_q);
+
+            if(th_tail)
+            {
+                linked_list_remove(&this_punit->ready_q, th_tail);
+                linked_list_add_tail(&work_punit->ready_q, th_tail);
+            }
         }
         
         spinlock_unlock(&work_unit->lock);
 
         cursor = linked_list_next(cursor);
-    }
-
-    /* If we found something, insert the thread */
-    if(balance_target != NULL)
-    {
-        spinlock_lock(&balance_target->lock);
-        
-        kprintf("BALANCING ON %x\n",balance_target);
-        balance_target->policy->thread_enqueue(balance_target->policy_data, 
-                                               th);
-
-        spinlock_unlock(&balance_target->lock);
-
-        status = 0;
     }
     return(status);
 }

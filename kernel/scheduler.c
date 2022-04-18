@@ -480,6 +480,50 @@ int sched_need_resched
     return(need_resched);
 }
 
+
+
+static int scheduler_balance
+(
+    sched_exec_unit_t *unit
+)
+{
+    uint8_t int_flag = 0;
+    sched_policy_t *policy = NULL;
+    int expected = 0;
+
+    int_flag = cpu_int_check();
+
+    cpu_int_lock();
+
+    if(__atomic_compare_exchange_n(&in_balance, &expected, 1, 
+                                   0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
+   {
+        /* lock the unit list */
+        spinlock_read_lock(&units_lock);
+
+        /* lock the unit */
+        spinlock_lock(&unit->lock);
+
+        policy = unit->policy;
+
+        if(policy->load_balancing != NULL)
+        {
+            policy->load_balancing(unit->policy_data, &units);
+        }
+
+        spinlock_unlock(&unit->lock);
+        spinlock_read_unlock(&units_lock);
+
+        __atomic_clear(&in_balance, __ATOMIC_SEQ_CST);
+   }
+
+   if(int_flag)
+   {
+       cpu_int_unlock();
+   }
+    return(0);
+}
+
 void schedule(void)
 {       
     int int_status = 0;
@@ -497,6 +541,7 @@ void schedule(void)
     }
 }
 
+
 static void schedule_main(void)
 {
     cpu_t             *cpu     = NULL;
@@ -509,7 +554,7 @@ static void schedule_main(void)
     int               status = 0;
     int               balance_sts = -1;
     uint8_t           int_flag = 0;
-    int              expected = 0;
+
 
     cpu    = cpu_current_get();
     unit   = cpu->sched;
@@ -532,28 +577,8 @@ static void schedule_main(void)
      * to handle the thread
      */
     if(unit->current != NULL)
-    {
-        if(policy->load_balancing !=  NULL)
-        {
-#if 1
-            if(__atomic_compare_exchange_n(&in_balance, &expected, 
-                                           1, 0, 
-                                           __ATOMIC_SEQ_CST, 
-                                           __ATOMIC_SEQ_CST))
-            {
-             
-                balance_sts = policy->load_balancing(unit->policy_data, 
-                                                      prev_th, &units);               
-             
-                 __atomic_clear(&in_balance, __ATOMIC_SEQ_CST);
-            }
-#endif
-        }
-        
-        if(balance_sts != 0)
-        {
-            policy->thread_enqueue(unit->policy_data, prev_th);    
-        }
+    {       
+            policy->thread_enqueue(unit->policy_data, prev_th);
     }
 
     /* Ask the policy for the next thread */
@@ -581,11 +606,13 @@ static void schedule_main(void)
     /* Switch context */
     sched_context_switch(prev_th, next_th);
     
-    /* update the unit in case we switched the thread to another CPU */
+    /* update the unit */
     cpu    = cpu_current_get();
     unit   = cpu->sched;
     next_th->unit = unit;
 
     /* Unlock unit */
     spinlock_unlock_int(&unit->lock, int_flag);
+
+    scheduler_balance(unit);
 }
