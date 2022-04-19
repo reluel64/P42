@@ -83,6 +83,7 @@ virt_addr_t vm_space_alloc
         status = vm_extent_merge(&ctx->free_mem,
                         ctx->free_per_slot);
 
+
         /* If status is VM_OK, try again */
         if(status == VM_OK)
         {
@@ -478,6 +479,11 @@ int vm_space_free
     if(old_eflags != NULL)
     {
         *old_eflags   = req_ext.eflags;
+    }
+
+    if(status == VM_OK)
+    {
+        vm_extent_merge(&ctx->free_mem, ctx->free_per_slot);
     }
 
     return(status);
