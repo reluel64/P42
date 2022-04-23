@@ -208,11 +208,6 @@ int platform_pre_init(void)
 
 int platform_early_init(void)
 {
-    /* install ISR handlers for the page manager */
-
-    if(pgmgr_install_handler())
-        return(-1);
-
     /* Tell ACPI code that now the memory manager is up and running */
     acpi_mem_mgr_on();
     InitializeAcpiTables();
@@ -261,6 +256,5 @@ int platform_init(void)
         ioapic = devmgr_dev_get_by_name(IOAPIC_DRV_NAME, 0);
         intc_mask_irq(ioapic, 0);
     }
-
 }
 
