@@ -31,7 +31,7 @@
 
 ;-------------------------------------------------------------------------------
 global __context_switch
-global __context_unit_start
+
 ;-------------------------------------------------------------------------------
 
 
@@ -41,6 +41,12 @@ global __context_unit_start
 
 ;--------------------------------SAVE CONTEXT-----------------------------------
 __context_switch:
+    ; check if we have a previous context to switch from
+    pushfq
+    cmp rdi, 0
+    jz __context_load_only
+    popfq
+    
     ; pop the return address -  we will save it separately
     add rsp, 8
 
@@ -66,6 +72,7 @@ __context_switch:
 
 ;--------------------------------LOAD CONTEXT-----------------------------------
 __context_load:
+    
     ; Restore stack
     mov rsp, qword [rsi + OFFSET(RSP_INDEX)]
     mov rbp, qword [rsi + OFFSET(RBP_INDEX)]
@@ -92,7 +99,10 @@ __context_load:
     mov rdi, qword [rsi + OFFSET(TH_INDEX)]
     jmp rax
 
-; Launches the first task for a given unit
-__context_unit_start:
-    mov rsi, rdi
+__context_load_only:
+    ; restore the flags
+    popfq
     jmp __context_load
+
+__context_nop:
+    ret
