@@ -151,13 +151,12 @@ int gdt_per_cpu_init(void *cpu_pv)
 void gdt_update_tss
 (
     void *cpu_pv, 
-    virt_addr_t esp0
+    virt_addr_t rsp0
 )
 {
     cpu_platform_t *cpu = NULL;
 
     cpu = cpu_pv;
-
-    cpu->tss->rsp0_low = esp0 & UINT32_MAX;
-    cpu->tss->rsp0_high = (esp0 >> 32) & UINT32_MAX;
+    cpu->tss->rsp0_low = rsp0 & UINT32_MAX;
+    cpu->tss->rsp0_high = (rsp0 >> 32) & UINT32_MAX;
 }
