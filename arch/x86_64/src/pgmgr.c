@@ -25,6 +25,7 @@ typedef struct pgmgr_t
     pat_t pat;
     isr_t fault_isr;
     isr_t inv_isr;
+    uint8_t kernel_ctx_init;
 }pgmgr_t;
 #define PGMGR_DEBUG
 /* for reference if in future we might want to also align the length */
@@ -60,31 +61,6 @@ static int _pgmgr_temp_unmap
 (
     virt_addr_t vaddr
 );
-
-
-/* The page manager handles the platform specific structures used
- * to translate between physical and virtual memory
- * The code should be called only by the virtual memory manager
- */ 
-
-
-int pgmgr_install_handler(void)
-{
-    isr_install(pgmgr_page_fault_handler, 
-                &pgmgr, 
-                PLATFORM_PG_FAULT_VECTOR, 
-                0,
-                &pgmgr.fault_isr);
-
-    isr_install(pgmgr_per_cpu_invl_handler, 
-                NULL, 
-                PLATFORM_PG_INVALIDATE_VECTOR, 
-                0,
-                &pgmgr.inv_isr);
-
-    return(0);
-
-}
 
 uint8_t pgmgr_pml5_support(void)
 {
@@ -915,7 +891,10 @@ static int pgmgr_iterate_levels
     return(1);
 }
 
-static int pgmgr_setup_remap_table(pgmgr_ctx_t *ctx)
+static int pgmgr_setup_remap_table
+(
+    pgmgr_ctx_t *ctx
+)
 {
     pgmgr_level_data_t lvl_dat;
     uint8_t curr_level = 0;
@@ -1320,29 +1299,13 @@ static int pgmgr_map_kernel(pgmgr_ctx_t *ctx)
     return(0);
 }
 
-/* This should be called only once */
-
-int pgmgr_init(pgmgr_ctx_t *ctx)
-{
-    pat_t *pat = NULL;
-    pgmgr_level_data_t lvl_dat;
-    virt_addr_t top_level = 0;
-    
-    memset(&pgmgr.pat, 0, sizeof(pat_t));
-    
-    pat = &pgmgr.pat;
-
-    pfmgr = pfmgr_get();
-
-    kprintf("Initializing Page Manager\n");
-
+int pgmgr_ctx_init
+(
+    pgmgr_ctx_t *ctx
+)
+{ 
     spinlock_init(&ctx->lock);
     
-    pgmgr.pml5_support = pgemgr_pml5_is_enabled();
-    pgmgr.nx_support   = pgmgr_check_nx();
-
-    kprintf("PML5 %d\n", pgmgr.pml5_support);
-
     if(pgmgr.pml5_support)
         ctx->max_level = 5;
     else
@@ -1355,15 +1318,67 @@ int pgmgr_init(pgmgr_ctx_t *ctx)
     } 
 
     pgmgr_clear_pt(ctx, ctx->pg_phys);
+
+    return(0);
+}
+
+/* This should be called only once */
+
+int pgmgr_kernel_ctx_init
+(
+    pgmgr_ctx_t *ctx
+)
+{
+    /* check if we already initalized it */
+    if(pgmgr.kernel_ctx_init)
+    {
+        return(-1);
+    }
+    kprintf("INITIALISING KERNEL CONTEXT\n");
+    /* set up the context */
+    pgmgr_ctx_init(ctx);
+
+    /* map the kernel */
     pgmgr_map_kernel(ctx);
+
+    /* create remapping table */
     pgmgr_setup_remap_table(ctx);
 
     /* If we support NX, enable it */
     if(pgmgr.nx_support)
         pgmgr_enable_nx();
 
-    /* Prepare PAT */
+    /* use the new page table */
+    __write_cr3(ctx->pg_phys);
 
+    /* Initializae per-CPU stuff */
+    pgmgr_per_cpu_init();
+
+    /* mark that we create the kernel context */
+    pgmgr.kernel_ctx_init = 1;
+
+    return(0);
+}
+
+int pgmgr_init(void)
+{
+    pat_t *pat = NULL;
+    pat = &pgmgr.pat;
+
+    kprintf("Initializing Page Manager\n");
+
+    /* clear the pat memory */
+    memset(pat, 0, sizeof(pat_t));
+
+    pgmgr.pml5_support = pgemgr_pml5_is_enabled();
+    pgmgr.nx_support   = pgmgr_check_nx();
+
+    kprintf("PML5       %d\n", pgmgr.pml5_support);
+    kprintf("NX support %d\n", pgmgr.nx_support);
+
+    pfmgr = pfmgr_get();
+
+    /* Populate PAT */
     pat->fields.pa0 = PAT_WRITE_BACK;
     pat->fields.pa1 = PAT_WRITE_THROUGH;
     pat->fields.pa2 = PAT_UNCACHED;
@@ -1372,22 +1387,22 @@ int pgmgr_init(pgmgr_ctx_t *ctx)
     pat->fields.pa5 = PAT_WRITE_PROTECTED;
     pat->fields.pa6 = PAT_UNCACHED;
     pat->fields.pa7 = PAT_UNCACHEABLE;
-
-    /* Flush cached changes */ 
-
-    __wbinvd();
     
-    /* write pat */
-    
-    __wrmsr(PAT_MSR, pat->pat);
+    /* Install the interrupt handler for page faults */
+    isr_install(pgmgr_page_fault_handler, 
+                &pgmgr, 
+                PLATFORM_PG_FAULT_VECTOR, 
+                0,
+                &pgmgr.fault_isr);
 
-    /* switch to the new page table */
-    kprintf("CTX %x\n",ctx->pg_phys);
-    __write_cr3(ctx->pg_phys);
-
-    /* Flush again */
-    __wbinvd();
+    /* install the interrupt handler for page invalidation */
+    isr_install(pgmgr_per_cpu_invl_handler, 
+                NULL, 
+                PLATFORM_PG_INVALIDATE_VECTOR, 
+                0,
+                &pgmgr.inv_isr);
     
+    pgmgr.kernel_ctx_init = 0;
 
     return(0);
 }
@@ -1558,11 +1573,14 @@ int pgmgr_per_cpu_init(void)
 {
     virt_addr_t cr0 = 0;
     virt_addr_t cr3 = 0;
-    kprintf("PGMGR_PER_CPU_INIT\n");
-    /* enable write protect*/
-    cr0 = __read_cr0();
+    
+    kprintf("Initializing per cpu pgmgr\n");
 
+    /* enable write protect for read only pages in kernel mode */
+    cr0 = __read_cr0();
     cr0 |= (1 << 16);
+    
+    /* enable cache and write back */
     cr0 &= ~((1 << 29) | (1 << 30));
 
     __write_cr0(cr0);
@@ -1577,6 +1595,6 @@ int pgmgr_per_cpu_init(void)
     
     /* wirte back and invalidate */
     __wbinvd();
-    kprintf("ENDING\n");
+
     return(0);
 }

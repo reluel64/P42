@@ -142,11 +142,8 @@ typedef struct pgmgr_iter_callback_data_t
 
 
 
-int         pgmgr_init(pgmgr_ctx_t *ctx);
+int         pgmgr_init(void);
 void        pgmgr_boot_temp_map_init(void);
-int         pgmgr_install_handler(void);
-uint64_t    page_manager_get_base(void);
-
 
 uint8_t     pgmgr_nx_support(void);
 uint8_t     pgmgr_pml5_support(void);
@@ -227,6 +224,16 @@ void pgmgr_invalidate
     pgmgr_ctx_t *ctx,
     virt_addr_t vaddr,
     virt_size_t len
+);
+
+int pgmgr_kernel_ctx_init
+(
+    pgmgr_ctx_t *ctx
+);
+
+int pgmgr_ctx_init
+(
+    pgmgr_ctx_t *ctx
 );
 
 #endif
