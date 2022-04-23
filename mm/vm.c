@@ -95,27 +95,49 @@ static int vm_setup_protected_regions
     {
         /* Reserve kernel image - only the higher half */
         {
-            .base   =  _KERNEL_VMA     + _BOOTSTRAP_END,
-            .length =  _KERNEL_VMA_END - (_KERNEL_VMA + _BOOTSTRAP_END),
-            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
+            .base    =  (virt_addr_t)&_code,
+            .length  =  (virt_addr_t)&_code_end - (virt_addr_t)&_code,
+            .flags   = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
+            .eflags  = VM_ATTR_EXECUTABLE
+        },
+        {
+            .base   =  (virt_addr_t)&_data,
+            .length =  (virt_addr_t)&_data_end -  (virt_addr_t)&_data,
+            .flags   = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
+            .eflags  = VM_ATTR_WRITABLE
+        },
+        {
+            .base   =  (virt_addr_t)&_rodata,
+            .length = (virt_addr_t)&_rodata_end - (virt_addr_t)&_rodata,
+            .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
+            .eflags = 0
+        },
+        {
+            .base   = (virt_addr_t)&_bss,
+            .length =  (virt_addr_t)&_bss_end - (virt_addr_t)&_bss,
+            .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
+            .eflags = VM_ATTR_WRITABLE
         },
         /* Reserve remapping table */
         {
             .base   =  REMAP_TABLE_VADDR,
             .length =  REMAP_TABLE_SIZE,
-            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
+            .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
+            .eflags = VM_ATTR_WRITABLE,
         },
         /* reserve head of tracking for free addresses */
         {
             .base   =  (virt_addr_t)linked_list_first(&ctx->free_mem),
             .length =  VM_SLOT_SIZE,
-            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
+            .flags  = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
+            .eflags = VM_ATTR_WRITABLE,
         },
         /* reserve tracking for allocated addresses */
         {
             .base   =  (virt_addr_t)linked_list_first(&ctx->alloc_mem),
             .length =  VM_SLOT_SIZE,
-            .flags   = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
+            .flags  = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
+            .eflags = VM_ATTR_WRITABLE
         },
     };
 
@@ -123,8 +145,8 @@ static int vm_setup_protected_regions
 
     for(uint32_t i = 0; i < rsrvd_count; i++)
     {
-        kprintf("Reserving %x - %x\n", re[i].base, re[i].length);
-        if(vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags, 0) == VM_INVALID_ADDRESS)
+        kprintf("Reserving 0x%x - 0x%x\n", re[i].base, re[i].length);
+        if(vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags, re[i].eflags) == VM_INVALID_ADDRESS)
         {
             kprintf("FAILED to reserve memory\n");
             while(1);
@@ -134,94 +156,49 @@ static int vm_setup_protected_regions
 
 int vm_init(void)
 {
-    virt_addr_t           vm_base = 0;
-    virt_addr_t           vm_max  = 0;
-    uint32_t              offset  = 0;
-    vm_slot_hdr_t         *hdr = NULL;
-    vm_extent_t           ext = VM_EXTENT_INIT;
-    virt_size_t           out_length = 0;
-    int status            = 0;
+    int status = 0;
+    virt_addr_t vm_base = 0;
+    virt_addr_t vm_max  = 0;
+
 
     vm_max = cpu_virt_max();
 
-    memset(&vm_kernel_ctx, 0, sizeof(vm_ctx_t));
+    vm_base = (~vm_base) - (vm_max >> 1);
     
-    if(pgmgr_init(&vm_kernel_ctx.pgmgr) == -1)
+    memset(&vm_kernel_ctx, 0, sizeof(vm_ctx_t));
+
+    if(pgmgr_kernel_ctx_init(&vm_kernel_ctx.pgmgr) == -1)
         return(VM_FAIL);
 
-    vm_base = (~vm_base) - (vm_max >> 1);
 
-    kprintf("Initializing Virtual Memory Manager BASE - 0x%x\n",vm_base);
-
-    vm_kernel_ctx.vm_base = vm_base;
-    vm_kernel_ctx.flags   = VM_CTX_PREFER_HIGH_MEMORY;
-
-    linked_list_init(&vm_kernel_ctx.free_mem);
-    linked_list_init(&vm_kernel_ctx.alloc_mem);
-
-    spinlock_init(&vm_kernel_ctx.lock);
-
+    kprintf("Initializing Virtual Memory Manager\n");
+    /* Allocate backend for the free memory tracking */
     status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
-                                    vm_kernel_ctx.vm_base,
+                                    vm_base,
                                     VM_SLOT_SIZE,
                                     NULL);
+    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     if(status != 0)
     {
         kprintf("Failed to allocate backend for Virtual Memory Manager\n");
         while(1);
     }
-
+    /* Allocate page for the free memory tracking */
     status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
-                                  vm_kernel_ctx.vm_base,
+                                  vm_base,
                                   VM_SLOT_SIZE,
                                   NULL,
                                   VM_ATTR_WRITABLE);
-    
+                                  
     if(status != 0)
     {
-        kprintf("Failed to allocate free slot for Virtual Memory Manager\n");
+        kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
         while(1);
     }
 
-    hdr = (vm_slot_hdr_t*) vm_kernel_ctx.vm_base;
-    
-    /* Clear the memory */
-    memset(hdr,    0, VM_SLOT_SIZE);
-
-    linked_list_add_head(&vm_kernel_ctx.free_mem,  &hdr->node);
-
-    /* How many free entries can we store per slot */
-    vm_kernel_ctx.free_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
-                                               sizeof(vm_extent_t);
-
-    /* How many allocated entries can we store per slot */
-    vm_kernel_ctx.alloc_per_slot = (VM_SLOT_SIZE - sizeof(vm_slot_hdr_t)) /
-                                                sizeof(vm_extent_t);
-
-    hdr->avail = vm_kernel_ctx.free_per_slot;
-
-    memset(&ext, 0, sizeof(vm_extent_t));
- 
-    /* Insert higher memory */
-    ext.base   = vm_kernel_ctx.vm_base;
-    ext.length = (((uintptr_t)-1) - vm_kernel_ctx.vm_base) + 1;
-    ext.flags  = VM_HIGH_MEM;
-
-    vm_extent_insert(&vm_kernel_ctx.free_mem, 
-                     vm_kernel_ctx.free_per_slot, 
-                     &ext);
- 
-    /* Insert lower memory */
-    ext.base   = 0;
-    ext.length = ((vm_max >> 1) - ext.base) + 1;
-    ext.flags  = VM_LOW_MEM;
-
-    vm_extent_insert(&vm_kernel_ctx.free_mem, 
-                      vm_kernel_ctx.free_per_slot, 
-                      &ext);
-
+    /* Allocate backend for allocated memory tracking */
     status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
-                                    vm_kernel_ctx.vm_base,
+                                    vm_base + VM_SLOT_SIZE,
                                     VM_SLOT_SIZE,
                                     NULL);
     
@@ -231,27 +208,138 @@ int vm_init(void)
         while(1);
     }
 
+    /* Allocate page for allocated memory tracking */
     status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
-                                  vm_kernel_ctx.vm_base + VM_SLOT_SIZE,
+                                  vm_base + VM_SLOT_SIZE,
                                   VM_SLOT_SIZE,
                                   NULL,
                                   VM_ATTR_WRITABLE);
     
     if(status != 0)
     {
-        kprintf("Failed to allocate tracking slot for Virtual Memory Manager\n");
+        kprintf("Failed to allocate tracking\n");
         while(1);
     }
 
-    hdr = (vm_slot_hdr_t*)(vm_kernel_ctx.vm_base + VM_SLOT_SIZE);
+    /* Initialize the context */
+    status = vm_ctx_init(&vm_kernel_ctx,
+                         vm_base,
+                         vm_base + VM_SLOT_SIZE,
+                         VM_SLOT_SIZE,
+                         VM_SLOT_SIZE,
+                         VM_CTX_PREFER_HIGH_MEMORY);
 
-    memset(hdr,    0, VM_SLOT_SIZE);
+    kprintf("INIT DONE\n");
 
-    linked_list_add_head(&vm_kernel_ctx.alloc_mem, &hdr->node);
-    hdr->avail = vm_kernel_ctx.alloc_per_slot;
 
     vm_setup_protected_regions(&vm_kernel_ctx);
     vm_list_entries();
+    return(status);
+}
+
+int vm_ctx_init
+(
+    vm_ctx_t    *ctx,
+    virt_addr_t free_mem_track,
+    virt_addr_t alloc_mem_track,
+    virt_size_t free_track_size,
+    virt_size_t alloc_track_size,
+    uint32_t    flags
+)
+{
+    virt_addr_t   vm_base = 0;
+    virt_addr_t   vm_max  = 0;
+    vm_slot_hdr_t *hdr    = NULL;
+    vm_extent_t   ext     = VM_EXTENT_INIT;
+    int           status  = 0;
+
+    vm_max = cpu_virt_max();
+
+    /* check for valid context */
+    if(ctx == NULL)
+    {
+        return(-1);
+    }
+    
+    kprintf("Initializing VM context 0x%x\n", ctx);
+
+    /* check if we have room for slots */
+    if((alloc_mem_track < VM_SLOT_SIZE) || 
+       (free_mem_track  < VM_SLOT_SIZE))
+    {
+        return(-1);
+    }
+
+    /* The only moment we are going with high memory
+     * is when we are initializing the vm kernel context
+     * and since we already have the page manager initialized,
+     * we should avoid zero-ing the structure
+     */ 
+    if(flags != VM_CTX_PREFER_HIGH_MEMORY)
+    {
+        memset(ctx, 0, sizeof(vm_ctx_t));
+    }
+
+    vm_base = (~vm_base) - (vm_max >> 1);
+
+    ctx->vm_base = vm_base;
+    ctx->flags   = flags;
+
+    /* setup lists */
+    linked_list_init(&ctx->free_mem);
+    linked_list_init(&ctx->alloc_mem);
+
+    /* set spin lock */
+    spinlock_init(&ctx->lock);
+
+    /* Prepare initializing free memory tracking */
+    hdr = (vm_slot_hdr_t*) free_mem_track;
+    
+    /* Clear the memory */
+    memset(hdr,    0, free_track_size);
+    
+    linked_list_add_head(&ctx->free_mem,  &hdr->node);
+    
+    ctx->alloc_track_size = alloc_track_size;
+    ctx->free_track_size = free_track_size;
+
+    /* How many free entries can we store per slot */
+    ctx->free_per_slot = (free_track_size - sizeof(vm_slot_hdr_t)) /
+                                                  sizeof(vm_extent_t);
+
+    /* How many allocated entries can we store per slot */
+    ctx->alloc_per_slot = (alloc_track_size - sizeof(vm_slot_hdr_t)) /
+                                                   sizeof(vm_extent_t);
+
+    hdr->avail = ctx->free_per_slot;
+
+    memset(&ext, 0, sizeof(vm_extent_t));
+ 
+    /* Insert higher memory */
+    ext.base   = vm_base;
+    ext.length = (((uintptr_t)-1) - vm_base) + 1;
+    ext.flags  = VM_HIGH_MEM;
+
+    vm_extent_insert(&ctx->free_mem, 
+                     ctx->free_per_slot, 
+                     &ext);
+ 
+    /* Insert lower memory */
+    ext.base   = 0;
+    ext.length = ((vm_max >> 1) - ext.base) + 1;
+    ext.flags  = VM_LOW_MEM;
+
+    vm_extent_insert(&ctx->free_mem, 
+                     ctx->free_per_slot, 
+                     &ext);
+
+    /* Setup tracking for allocated memory */
+    hdr = (vm_slot_hdr_t*)alloc_mem_track;
+
+    memset(hdr,    0, alloc_track_size);
+
+    linked_list_add_head(&ctx->alloc_mem, &hdr->node);
+    hdr->avail = ctx->alloc_per_slot;
 
     return(VM_OK);
 }
