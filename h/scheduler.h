@@ -17,6 +17,7 @@
 
 #define UNIT_THREADS_WAKE        (1 << 0)
 #define UNIT_THREADS_UNBLOCK     (1 << 1)
+#define UNIT_RESCHEDULE          (1 << 2)
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
@@ -57,7 +58,6 @@ typedef struct sched_policy_t
     int (*load_balancing)
     (
         void *policy_data,
-        sched_thread_t *th,
         list_head_t    *units
     );
 

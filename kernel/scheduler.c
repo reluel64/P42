@@ -491,19 +491,12 @@ static int scheduler_balance
     sched_policy_t *policy = NULL;
     int expected = 0;
 
-    int_flag = cpu_int_check();
-
-    cpu_int_lock();
+    /* lock the unit */
+    spinlock_lock_int(&unit->lock, &int_flag);
 
     if(__atomic_compare_exchange_n(&in_balance, &expected, 1, 
                                    0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
    {
-        /* lock the unit list */
-        spinlock_read_lock(&units_lock);
-
-        /* lock the unit */
-        spinlock_lock(&unit->lock);
-
         policy = unit->policy;
 
         if(policy->load_balancing != NULL)
@@ -511,16 +504,12 @@ static int scheduler_balance
             policy->load_balancing(unit->policy_data, &units);
         }
 
-        spinlock_unlock(&unit->lock);
-        spinlock_read_unlock(&units_lock);
-
         __atomic_clear(&in_balance, __ATOMIC_SEQ_CST);
    }
 
-   if(int_flag)
-   {
-       cpu_int_unlock();
-   }
+
+   spinlock_unlock_int(&unit->lock, int_flag);
+
     return(0);
 }
 
@@ -568,6 +557,7 @@ static void schedule_main(void)
     else
         prev_th = &unit->idle;
 
+    
     /* Clear thread's running flag */
     __atomic_and_fetch(&prev_th->flags, 
                         ~THREAD_RUNNING, 
@@ -614,5 +604,6 @@ static void schedule_main(void)
     /* Unlock unit */
     spinlock_unlock_int(&unit->lock, int_flag);
 
+    /* try to do some balancing work */
     scheduler_balance(unit);
 }
