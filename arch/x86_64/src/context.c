@@ -16,6 +16,33 @@ extern void __context_unit_start
     virt_addr_t ctx
 );
 
+void context_main
+(
+    virt_addr_t *context
+)
+{
+    sched_thread_t *th = NULL;
+    void *(*thread_main)(void *pv) = NULL;
+    th = (sched_thread_t*)context[TH_INDEX];
+
+    /* First thing to do is to unlock the unit on which we
+     * are running 
+     */
+
+    thread_main = th->entry_point;
+
+    spinlock_unlock(&th->unit->lock);    
+    cpu_int_unlock();
+
+    /* call the thread main routine */
+    if(thread_main != NULL)
+    {
+        th->rval = thread_main(th->arg);
+    }
+    
+
+}
+
 int context_init
 (
     sched_thread_t *th
@@ -26,7 +53,7 @@ int context_init
     virt_addr_t   *context   = NULL;
     virt_size_t   stack_size = 0;
     vm_ctx_t      *vm_ctx    = NULL;
-
+    virt_size_t   rsp0       = 0;
 
    // owner = th->owner;
    // vm_ctx = owner->vm_ctx;
@@ -50,6 +77,18 @@ int context_init
         return(-1);
     }
 
+    rsp0 = vm_alloc(NULL, VM_BASE_AUTO, PAGE_SIZE, 0, VM_ATTR_WRITABLE);
+
+    if(rsp0 == VM_INVALID_ADDRESS)
+    {
+        vm_free(NULL, stack, stack_size);
+        kfree((void*)th->context);
+        return(-1);
+    }
+
+    memset((void*)rsp0, 0, PAGE_SIZE);
+
+    /* Fill the context */
     context = (virt_addr_t*)th->context;
 
 #if 0
@@ -69,16 +108,17 @@ int context_init
     th->stack_bottom = stack;
     th->stack_top    = stack_size + stack;
 
-    context[RIP_INDEX] = (virt_addr_t)sched_thread_entry_point;
-    context[RSP_INDEX] = th->stack_top;
-    context[RBP_INDEX] = th->stack_top;
-    context[CR3_INDEX] = __read_cr3();
-    context[TH_INDEX]  = (virt_addr_t)th;
-
-    /* Make sure we enable interrupts */
+    context[RIP_INDEX]  = (virt_addr_t)sched_thread_entry_point;
+    context[RSP_INDEX]  = th->stack_top;
+    context[RBP_INDEX]  = th->stack_top;
+    context[CR3_INDEX]  = __read_cr3();
+    context[TH_INDEX ]  = (virt_addr_t)th;
+    context[RSP0_INDEX] = rsp0;
 
     return(0);
 }
+
+
 
 void context_switch
 (
@@ -86,6 +126,9 @@ void context_switch
     sched_thread_t *next
 )
 {
+    gdt_update_tss(next->unit->cpu->cpu_pv, 
+                  ((virt_addr_t*)next->context)[RSP0_INDEX]);
+    
     __context_switch(prev->context, next->context);
 }
 
@@ -94,5 +137,8 @@ void context_unit_start
     sched_thread_t *th
 )
 {
-    __context_unit_start(th->context);
+        gdt_update_tss(th->unit->cpu->cpu_pv, 
+                  ((virt_addr_t*)th->context)[RSP0_INDEX]);
+
+    __context_switch(0, th->context);
 }

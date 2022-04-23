@@ -30,6 +30,7 @@ static const int CONTEXT_START = __LINE__;
 #define CR3_INDEX    (0x0012)
 #define ARG_INDEX    (0x0013)
 #define TH_INDEX     (0x0014)
+#define RSP0_INDEX   (0x0015)
 static const int CONTEXT_END  =__LINE__;
 
 
