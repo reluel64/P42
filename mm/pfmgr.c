@@ -920,6 +920,10 @@ static int pfmgr_alloc
                     return(0);
                 }
             }
+            else if(req_pf == 0)
+            {
+                break;
+            }
         }
         
         /* If we got frames, try again on the same range */
@@ -932,13 +936,18 @@ static int pfmgr_alloc
 
     if(!(flags & ALLOC_CB_STOP))
     {
+        spinlock_unlock_int(&pfmgr_lock, int_flag);
+
         if(req_pf > 0)
         {
-            spinlock_unlock_int(&pfmgr_lock, int_flag);
             return(-1);
         }
+        else
+        {
+            return(0);
+        }
     }
-    
+
     spinlock_unlock_int(&pfmgr_lock, int_flag);
     
     return(-1);
