@@ -155,12 +155,16 @@ static int pgmgr_alloc_pf_cb
     *pf = cb_dat->phys_base;
     cb_dat->used_bytes = PAGE_SIZE;
 
-    return(1);
+    return(0);
 }
 
-static phys_addr_t pgmgr_alloc_pf(phys_addr_t *pf)
+static int pgmgr_alloc_pf(phys_addr_t *pf)
 {
-    return(pfmgr->alloc(1, 0, pgmgr_alloc_pf_cb, pf));
+    int ret = 0;
+
+    ret = pfmgr->alloc(1, 0, pgmgr_alloc_pf_cb, pf);
+
+    return(ret);
 }
 
 static int pgmgr_free_pf_cb
