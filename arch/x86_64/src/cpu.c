@@ -441,11 +441,11 @@ int cpu_ap_start
     tramp_size = ALIGN_UP( _TRAMPOLINE_END - _TRAMPOLINE_BEGIN, PAGE_SIZE);
 
     trampoline = vm_map(NULL,CPU_TRAMPOLINE_LOCATION_START,
-                tramp_size,
-                CPU_TRAMPOLINE_LOCATION_START,
-                0,
-                VM_ATTR_EXECUTABLE |
-                VM_ATTR_WRITABLE);
+                        tramp_size,
+                        CPU_TRAMPOLINE_LOCATION_START,
+                        0,
+                        VM_ATTR_EXECUTABLE |
+                        VM_ATTR_WRITABLE);
 
     if(trampoline == VM_INVALID_ADDRESS)
     {
