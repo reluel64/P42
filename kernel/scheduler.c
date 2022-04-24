@@ -36,7 +36,6 @@ static uint32_t sched_tick
     void *isr_info
 );
 
-extern void __context_unit_start(void *tcb);
 extern void cpu_signal_on(uint32_t id);
 extern int sched_simple_register(sched_policy_t **p);
 
@@ -259,7 +258,7 @@ int sched_unit_init
     }
 
     /* From now , we are entering the unit's idle routine */
-    context_unit_start(&unit->idle);
+    context_switch(NULL, &unit->idle);
 
     /* make the compiler happy  - we would never reach this*/
     return(0);

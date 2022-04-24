@@ -128,17 +128,17 @@ void context_switch
 {
     gdt_update_tss(next->unit->cpu->cpu_pv, 
                   ((virt_addr_t*)next->context)[RSP0_INDEX]);
-    
-    __context_switch(prev->context, next->context);
-}
 
-void context_unit_start
-(
-    sched_thread_t *th
-)
-{
-        gdt_update_tss(th->unit->cpu->cpu_pv, 
-                  ((virt_addr_t*)th->context)[RSP0_INDEX]);
-
-    __context_switch(0, th->context);
+    if(prev != NULL)
+    {
+        __context_switch(prev->context, next->context);
+    }
+    else if(next != NULL)
+    {
+        __context_switch(0, next->context);
+    }
+    else
+    {
+        kprintf("NOT SWITCHING TO/FROM ANYTHING\n");
+    }
 }
