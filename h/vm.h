@@ -154,13 +154,14 @@ int vm_fault_handler
 
 int vm_init(void);
 
-int vm_ctx_init
+void vm_ctx_show
 (
-    vm_ctx_t *ctx,
-    virt_addr_t free_mem_track,
-    virt_addr_t alloc_mem_track,
-    virt_size_t free_track_size,
-    virt_size_t alloc_track_size,
-    uint32_t    flags
+    vm_ctx_t *ctx
 );
+
+int vm_user_ctx_init
+(
+    vm_ctx_t *ctx
+);
+
 #endif

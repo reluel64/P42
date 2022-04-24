@@ -8,7 +8,10 @@
 
 vm_ctx_t vm_kernel_ctx;
 
-void vm_list_entries()
+void vm_ctx_show
+(
+    vm_ctx_t *ctx
+)
 {
     list_node_t *node = NULL;
     list_node_t *next_node = NULL;
@@ -16,10 +19,18 @@ void vm_list_entries()
     vm_extent_t *e = NULL;
     virt_size_t alloc_len = 0;
     virt_size_t free_len = 0;
-    kprintf("FREE_DESC_PER_PAGE %d\n",vm_kernel_ctx.free_per_slot);
-    kprintf("ALLOC_DESC_PER_PAGE %d\n",vm_kernel_ctx.alloc_per_slot);
 
-    node = linked_list_first(&vm_kernel_ctx.free_mem);
+    if(ctx == NULL)
+    {
+        ctx = &vm_kernel_ctx;
+    }
+
+    kprintf("FREE_DESC_PER_PAGE %d\n",ctx->free_per_slot);
+    kprintf("ALLOC_DESC_PER_PAGE %d\n",ctx->alloc_per_slot);
+
+
+
+    node = linked_list_first(&ctx->free_mem);
 
     kprintf("----LISTING FREE RANGES----\n");
 
@@ -29,9 +40,9 @@ void vm_list_entries()
 
         next_node = linked_list_next(node);
         kprintf("============================================\n");
-        kprintf("HDR 0x%x AVAIL %x\n",hdr, hdr->avail);
+        kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
         kprintf("============================================\n");
-        for(uint16_t i = 0; i < vm_kernel_ctx.free_per_slot; i++)
+        for(uint16_t i = 0; i < ctx->free_per_slot; i++)
         {
             e  = &hdr->array[i];
 
@@ -50,7 +61,7 @@ void vm_list_entries()
         node = next_node;
     }
 
-    node = linked_list_first(&vm_kernel_ctx.alloc_mem);
+    node = linked_list_first(&ctx->alloc_mem);
 
     kprintf("----LISTING ALLOCATED RANGES----\n");
 
@@ -59,9 +70,9 @@ void vm_list_entries()
         next_node = linked_list_next(node);
         hdr = (vm_slot_hdr_t*)node;
         kprintf("============================================\n");
-        kprintf("HDR 0x%x AVAIL %x\n",hdr, hdr->avail);
+        kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
         kprintf("============================================\n");
-        for(uint16_t i = 0; i < vm_kernel_ctx.alloc_per_slot; i++)
+        for(uint16_t i = 0; i < ctx->alloc_per_slot; i++)
         {
             e  = &hdr->array[i];
             if(e->length != 0)
@@ -154,90 +165,7 @@ static int vm_setup_protected_regions
     }
 }
 
-int vm_init(void)
-{
-    int status = 0;
-    virt_addr_t vm_base = 0;
-    virt_addr_t vm_max  = 0;
-
-
-    vm_max = cpu_virt_max();
-
-    vm_base = (~vm_base) - (vm_max >> 1);
-    
-    memset(&vm_kernel_ctx, 0, sizeof(vm_ctx_t));
-
-    if(pgmgr_kernel_ctx_init(&vm_kernel_ctx.pgmgr) == -1)
-        return(VM_FAIL);
-
-
-    kprintf("Initializing Virtual Memory Manager\n");
-    /* Allocate backend for the free memory tracking */
-    status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
-                                    vm_base,
-                                    VM_SLOT_SIZE,
-                                    NULL);
-    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
-    if(status != 0)
-    {
-        kprintf("Failed to allocate backend for Virtual Memory Manager\n");
-        while(1);
-    }
-    /* Allocate page for the free memory tracking */
-    status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
-                                  vm_base,
-                                  VM_SLOT_SIZE,
-                                  NULL,
-                                  VM_ATTR_WRITABLE);
-                                  
-    if(status != 0)
-    {
-        kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
-        while(1);
-    }
-
-    /* Allocate backend for allocated memory tracking */
-    status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
-                                    vm_base + VM_SLOT_SIZE,
-                                    VM_SLOT_SIZE,
-                                    NULL);
-    
-    if(status != 0)
-    {
-        kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
-        while(1);
-    }
-
-    /* Allocate page for allocated memory tracking */
-    status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
-                                  vm_base + VM_SLOT_SIZE,
-                                  VM_SLOT_SIZE,
-                                  NULL,
-                                  VM_ATTR_WRITABLE);
-    
-    if(status != 0)
-    {
-        kprintf("Failed to allocate tracking\n");
-        while(1);
-    }
-
-    /* Initialize the context */
-    status = vm_ctx_init(&vm_kernel_ctx,
-                         vm_base,
-                         vm_base + VM_SLOT_SIZE,
-                         VM_SLOT_SIZE,
-                         VM_SLOT_SIZE,
-                         VM_CTX_PREFER_HIGH_MEMORY);
-
-    kprintf("INIT DONE\n");
-
-
-    vm_setup_protected_regions(&vm_kernel_ctx);
-    vm_list_entries();
-    return(status);
-}
-
-int vm_ctx_init
+static int vm_ctx_init
 (
     vm_ctx_t    *ctx,
     virt_addr_t free_mem_track,
@@ -344,6 +272,133 @@ int vm_ctx_init
     return(VM_OK);
 }
 
+int vm_init(void)
+{
+    int status = 0;
+    virt_addr_t vm_base = 0;
+    virt_addr_t vm_max  = 0;
+
+
+    vm_max = cpu_virt_max();
+
+    vm_base = (~vm_base) - (vm_max >> 1);
+    
+    memset(&vm_kernel_ctx, 0, sizeof(vm_ctx_t));
+
+    if(pgmgr_kernel_ctx_init(&vm_kernel_ctx.pgmgr) == -1)
+        return(VM_FAIL);
+
+
+    kprintf("Initializing Virtual Memory Manager\n");
+    /* Allocate backend for the free memory tracking */
+    status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
+                                    vm_base,
+                                    VM_SLOT_SIZE,
+                                    NULL);
+    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    if(status != 0)
+    {
+        kprintf("Failed to allocate backend for Virtual Memory Manager\n");
+        while(1);
+    }
+    /* Allocate page for the free memory tracking */
+    status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
+                                  vm_base,
+                                  VM_SLOT_SIZE,
+                                  NULL,
+                                  VM_ATTR_WRITABLE);
+                                  
+    if(status != 0)
+    {
+        kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
+        while(1);
+    }
+
+    /* Allocate backend for allocated memory tracking */
+    status = pgmgr_allocate_backend(&vm_kernel_ctx.pgmgr,
+                                    vm_base + VM_SLOT_SIZE,
+                                    VM_SLOT_SIZE,
+                                    NULL);
+    
+    if(status != 0)
+    {
+        kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
+        while(1);
+    }
+
+    /* Allocate page for allocated memory tracking */
+    status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
+                                  vm_base + VM_SLOT_SIZE,
+                                  VM_SLOT_SIZE,
+                                  NULL,
+                                  VM_ATTR_WRITABLE);
+    
+    if(status != 0)
+    {
+        kprintf("Failed to allocate tracking\n");
+        while(1);
+    }
+
+    /* Initialize the context */
+    status = vm_ctx_init(&vm_kernel_ctx,
+                         vm_base,
+                         vm_base + VM_SLOT_SIZE,
+                         VM_SLOT_SIZE,
+                         VM_SLOT_SIZE,
+                         VM_CTX_PREFER_HIGH_MEMORY);
+
+    kprintf("INIT DONE\n");
+
+
+    vm_setup_protected_regions(&vm_kernel_ctx);
+    vm_ctx_show(&vm_kernel_ctx);
+    return(status);
+}
+
+int vm_user_ctx_init
+(
+    vm_ctx_t *ctx
+)
+{
+    int status = VM_OK;
+    virt_addr_t free_track  = VM_INVALID_ADDRESS;
+    virt_addr_t alloc_track = VM_INVALID_ADDRESS;
+
+    /* Allocate tracking from the kernel context */
+    free_track = vm_alloc(&vm_kernel_ctx, 
+                          VM_BASE_AUTO,
+                          VM_SLOT_SIZE,
+                          VM_PERMANENT | VM_LOCKED,
+                          VM_ATTR_WRITABLE);
+
+    if(free_track == VM_INVALID_ADDRESS)
+    {
+        return(VM_FAIL);
+    }
+
+    alloc_track = vm_alloc(&vm_kernel_ctx, 
+                          VM_BASE_AUTO,
+                          VM_SLOT_SIZE,
+                          VM_PERMANENT | VM_LOCKED,
+                          VM_ATTR_WRITABLE);
+    
+    if(alloc_track == VM_INVALID_ADDRESS)
+    {
+        vm_free(&vm_kernel_ctx, 
+                 free_track, 
+                 VM_SLOT_SIZE);
+                 
+        return(VM_FAIL);
+    }
+
+    status = vm_ctx_init(ctx, 
+                         free_track,
+                         alloc_track,
+                         VM_SLOT_SIZE,
+                         VM_SLOT_SIZE,
+                         VM_CTX_PREFER_LOW_MEMORY);
+}
+
 virt_addr_t vm_alloc
 (
     vm_ctx_t   *ctx, 
@@ -381,8 +436,6 @@ virt_addr_t vm_alloc
                           len, 
                           alloc_flags, 
                           mem_flags);
-
-
     
     if(space_addr == VM_INVALID_ADDRESS)
     {
