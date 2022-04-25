@@ -397,6 +397,42 @@ int vm_user_ctx_init
                          VM_SLOT_SIZE,
                          VM_SLOT_SIZE,
                          VM_CTX_PREFER_LOW_MEMORY);
+
+    if(status == VM_FAIL)
+    {
+        vm_free(&vm_kernel_ctx, 
+                 free_track, 
+                 VM_SLOT_SIZE);
+        
+        vm_free(&vm_kernel_ctx, 
+                alloc_track, 
+                VM_SLOT_SIZE);
+        
+        return(status);
+    }
+
+    status = pgmgr_ctx_init(&ctx->pgmgr);
+
+    if(status == VM_FAIL)
+    {
+        vm_free(&vm_kernel_ctx, 
+                 free_track, 
+                 VM_SLOT_SIZE);
+        
+        vm_free(&vm_kernel_ctx, 
+                alloc_track, 
+                VM_SLOT_SIZE);
+    }
+
+    return(status);
+}
+
+int vm_ctx_destroy
+(
+    vm_ctx_t *ctx
+)
+{
+
 }
 
 virt_addr_t vm_alloc
