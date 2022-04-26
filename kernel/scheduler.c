@@ -78,7 +78,6 @@ void sched_thread_entry_point
     }
 }
 
-
 int sched_enqueue_thread
 (
     sched_thread_t *th
@@ -119,24 +118,50 @@ sched_thread_t *sched_thread_self(void)
     sched_exec_unit_t *unit = NULL;
     cpu_t             *cpu  = NULL;
     sched_thread_t    *self = NULL;
-    uint8_t           int_flag = 0;
+    uint8_t           iflag = 0;
+
+    iflag = cpu_int_check();
+
+    /* lock the interrupts to prevent rescheduling */
+    cpu_int_lock();
 
     cpu = cpu_current_get();
 
     if(cpu == NULL)
+    {
+        if(iflag)
+        {
+            cpu_int_unlock();
+        }
         return(NULL);
+    }
     
     unit = cpu->sched;
 
     if(unit == NULL)
-        return(NULL);
+    {
+        if(iflag)
+        {
+            cpu_int_unlock();
+        }
 
-    spinlock_lock_int(&unit->lock, &int_flag);
+        return(NULL);
+    }
+
+    /* lock the unit to extract the thread */
+    spinlock_lock(&unit->lock);
     
     self = unit->current;
 
-    spinlock_unlock_int(&unit->lock, int_flag);
+    /* unlock the unit */
+    spinlock_unlock(&unit->lock);
 
+    /* enable interrupts */
+    if(iflag)
+    {
+        cpu_int_unlock();
+    }
+    
     return(self);
 }
 
