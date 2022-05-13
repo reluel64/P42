@@ -88,6 +88,9 @@ __context_load:
     mov rax, qword [rsi + OFFSET(RFLAGS_INDEX)]
 
     ; clear interrupt flag
+    ; the interrupt before the context switch is stored
+    ; in the stack so we will re-enable the interrupts
+    ; for the current task when we will exit the schedule function
     and rax, ~(1 << 9) 
     push rax
     popfq

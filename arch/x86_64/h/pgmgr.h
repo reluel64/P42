@@ -86,6 +86,7 @@
 #define PGMGR_CB_FORCE_GO_UP        (1 << 3)
 
 #define PGMGR_MAX_TABLE_INDEX       (0x1FF)
+
 typedef struct pgmgr_ctx_t
 {
      phys_addr_t pg_phys; /* physical location of the first

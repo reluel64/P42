@@ -72,10 +72,4 @@ void context_switch
     sched_thread_t *prev,
     sched_thread_t *next
 );
-
-void context_unit_start
-(
-    sched_thread_t *th
-);
-
 #endif
