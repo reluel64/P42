@@ -36,6 +36,12 @@ static uint32_t sched_tick
     void *isr_info
 );
 
+static void sched_context_switch
+(
+    sched_thread_t *prev,
+    sched_thread_t *next
+);
+
 extern void cpu_signal_on(uint32_t id);
 extern int sched_simple_register(sched_policy_t **p);
 
@@ -165,6 +171,18 @@ sched_thread_t *sched_thread_self(void)
     return(self);
 }
 
+void sched_thread_mark_dead
+(
+    sched_thread_t *th
+)
+{
+    if(th != NULL)
+    {
+        __atomic_or_fetch(&th->flags, THREAD_DEAD, __ATOMIC_ACQUIRE);
+    }
+
+}
+
 /*
  * sched_init - initialize scheduler structures
  */ 
@@ -283,7 +301,7 @@ int sched_unit_init
     }
 
     /* From now , we are entering the unit's idle routine */
-    context_switch(NULL, &unit->idle);
+    sched_context_switch(NULL, &unit->idle);
 
     /* make the compiler happy  - we would never reach this*/
     return(0);
@@ -503,8 +521,6 @@ int sched_need_resched
     
     return(need_resched);
 }
-
-
 
 static int scheduler_balance
 (
