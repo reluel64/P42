@@ -79,15 +79,13 @@ typedef struct sched_thread_t
     
     list_node_t        node;         /* node in the queue                             */
     list_node_t        pend_node;    /* node for synchronization                      */
-    virt_addr_t        stack_bottom; /* start of memory allocated for the stack       */
-    virt_size_t        stack_sz;     /* stack size                                    */
-    virt_size_t        stack_top;   
+    virt_addr_t        stack_origin; /* start of memory allocated for the stack       */
+    virt_size_t        stack_sz;     /* stack size                                    */  
     uint32_t           flags;        /* thread flags                                  */
     void              *owner;        /* owner of the thread - if kernel, owner = null */
     virt_addr_t        context;
     uint32_t           id;           /* thread id                                     */
     uint16_t           prio;         /* priority                                      */
-    virt_addr_t        stack_pos;
     void              *entry_point;  /* entry point of the thread                     */
     void              *arg;          /* parameter for the entry point of the thread   */
     sched_exec_unit_t *unit;         /* execution unit on which the thread is running */
@@ -110,8 +108,6 @@ typedef struct sched_exec_unit_t
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     device_t         *timer_dev;    /* timer device which is connected to this unit  */
-    uint8_t           timer_on;     /* timer device status                           */
-    volatile uint32_t unb_th;
     sched_policy_t    *policy;
     void              *policy_data;
 }sched_exec_unit_t;
@@ -119,9 +115,11 @@ typedef struct sched_exec_unit_t
 typedef struct sched_owner_t
 {
     list_node_t node;
+    list_head_t threads;
     uint32_t    owner_id;
-    void *vm_ctx;
-    uint8_t user_space;
+    void       *vm_ctx;
+    uint8_t    user;
+    
 }sched_owner_t;
 
 
@@ -151,7 +149,10 @@ int sched_need_resched
     sched_exec_unit_t *unit
 );
 
-sched_thread_t *sched_thread_self(void);
+sched_thread_t *sched_thread_self
+(
+    void
+);
 
 void sched_unblock_thread
 (
@@ -181,7 +182,10 @@ void sched_wake_thread
 
 void sched_yield(void);
 
-void sched_sleep(uint32_t delay);
+void sched_sleep
+(
+    uint32_t delay
+);
 
 int sched_enqueue_thread
 (
@@ -193,6 +197,15 @@ void sched_thread_entry_point
     sched_thread_t *th
 );
 
+void sched_thread_mark_dead
+(
+    sched_thread_t *th
+);
+
+void sched_thread_exit
+(
+    void *exit_val
+);
 
 void schedule(void);
 
