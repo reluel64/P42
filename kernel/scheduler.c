@@ -57,6 +57,8 @@ void sched_thread_entry_point
     int             int_status   = 0;
     void *(*entry_point)(void *) = NULL;
     uint8_t int_flag = 0;
+    void *ret_val = NULL;
+
     entry_point = th->entry_point;
    
     /* during startup of the thread, unlock the scheduling unit 
@@ -68,20 +70,19 @@ void sched_thread_entry_point
 
     if(entry_point != NULL)
     {
-        th->rval = entry_point(th->arg);
+        ret_val = entry_point(th->arg);
     }
 
     /* The thread is now dead */
     spinlock_lock_int(&th->lock, &int_flag);
 
-    __atomic_or_fetch(&th->flags, THREAD_DEAD, __ATOMIC_ACQUIRE);
+     if(~th->flags & THREAD_DEAD)
+     {
+         sched_thread_mark_dead(th);
+         th->rval = ret_val;
+     }
     
     spinlock_unlock_int(&th->lock, int_flag);
-    
-    while(1)
-    {
-        sched_yield();
-    }
 }
 
 int sched_enqueue_thread
@@ -181,6 +182,29 @@ void sched_thread_mark_dead
         __atomic_or_fetch(&th->flags, THREAD_DEAD, __ATOMIC_ACQUIRE);
     }
 
+}
+
+void sched_thread_exit
+(
+    void *exit_val
+)
+{
+    sched_thread_t *self = NULL;
+
+    self = sched_thread_self();
+
+    if(self != NULL)
+    {
+       if(~self->flags & THREAD_DEAD)
+       {
+           sched_thread_mark_dead(self);
+
+           self->rval = exit_val;
+
+           /* we're dead so we can release the cpu */
+           sched_yield();
+       }
+    }
 }
 
 /*
