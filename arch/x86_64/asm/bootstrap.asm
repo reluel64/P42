@@ -132,20 +132,20 @@ kernel_init:
     xor eax, eax
     cld
     rep stosb
-	
+    
 ;Check if we support PML5
     xor eax, eax
     xor ecx, ecx
     mov eax, 0x7
     cpuid
     test ecx, (1 << 16)
-	jz	fill_pml4
-	
+    jz	fill_pml4
+    
 ;Fill PML5	
     mov edi, PML5_ADDR
     mov dword [edi],                PML4_ADDR + PAGE_PRESENT + PAGE_WRITE
     mov dword [edi + (511 * 0x8)],  PML4_ADDR + PAGE_PRESENT + PAGE_WRITE
-	
+    
 
 fill_pml4:
     ;2) Fill  PML4T
@@ -196,7 +196,7 @@ fill_pml4:
     mov eax, 0x7
     cpuid
     test ecx, (1 << 16)
-	jz	load_pml4
+    jz	load_pml4
 
 
 load_pml5:
@@ -219,15 +219,15 @@ set_pg_base:
     or eax, 0x00000100                ; Set the LME bit.
     wrmsr
 
-	xor eax, eax
+    xor eax, eax
     xor ecx, ecx
     mov eax, 0x7
     cpuid
     test ecx, (1 << 16)
-	jz	enable_paging
+    jz	enable_paging
 
 ; otherwise enable PML5 and then paging
-	mov eax, cr4
+    mov eax, cr4
     or eax, (1 << 12)
     mov cr4, eax
 
@@ -244,8 +244,8 @@ enable_paging:
 [BITS 64]
 
 enter_64_bit:
-	mov rcx, kernel_higher_half
-	jmp rcx
+    mov rcx, kernel_higher_half
+    jmp rcx
 
 section .text
 
