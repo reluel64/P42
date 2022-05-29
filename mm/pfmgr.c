@@ -1212,7 +1212,9 @@ int pfmgr_show_free_memory(void)
     {
 
         kprintf("Region #%d: BASE 0x%x TOTAL 0x%x AVAILABLE 0x%x\n", region,
-                freer->hdr.base, freer->total_pf, freer->avail_pf);
+                freer->hdr.base, 
+                PF_TO_BYTES(freer->total_pf), 
+                PF_TO_BYTES(freer->avail_pf));
         free_mem += freer->avail_pf;
         total_mem += freer->total_pf;
         freer = (pfmgr_free_range_t*)linked_list_next(&freer->hdr.node);
