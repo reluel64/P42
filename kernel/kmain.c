@@ -57,16 +57,27 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
 mutex_t mtx;
 static void test_thread(void *pv)
 {
+   
     while(1)
     {
-        cpu_int_lock();
-       // mtx_acquire(&mtx, WAIT_FOREVER);
-        sched_sleep(100);
-       // mtx_release(&mtx);
-        kprintf("SELLPING on CPU %d\n", cpu_id_get());
+        
+       
+       //mtx_acquire(&mtx, WAIT_FOREVER);
+        sched_sleep(1000);
+      //  kprintf("%d SELLPING on CPU %d\n", pv, cpu_id_get());
+        //mtx_release(&mtx);
+        
     }
 }
 
+
+static void pci_test(void)
+{
+    ACPI_TABLE_MCFG *mcfg = NULL;
+   AcpiGetTable(ACPI_SIG_MCFG, 0, (ACPI_TABLE_HEADER**)&mcfg);
+
+   kprintf("MCFG %x LEN %d\n",mcfg, mcfg->Header.Length);
+}
 
 static void kmain_sys_init(void *arg)
 {
@@ -78,22 +89,23 @@ static void kmain_sys_init(void *arg)
     kprintf("starting APs\n");
     
     kprintf("Platform init\n");
-          
+
     platform_init();
     virt_size_t alloc_sz = 1024 * 1024;
     virt_addr_t addr = 0;
 vga_print("HELLO\n");
   kprintf("BEFORE LOOP - ");
-         static sched_thread_t th[100];
+ // cpu_int_lock();
+         static sched_thread_t th[500];
     mtx_acquire(&mtx, WAIT_FOREVER);
-    #if 1
-         for(int i = 0; i < 10; i++)
+    #if 0
+         for(int i = 0; i < sizeof(th) / sizeof(sched_thread_t); i++)
          {
-            thread_create_static(&th[i], test_thread,NULL, 0x1000, 100);
+            thread_create_static(&th[i], test_thread,i, 0x1000, 100);
             thread_start(&th[i]);
          }
 #endif
-
+ mtx_release(&mtx);
          
     while(1)
     {
@@ -107,7 +119,7 @@ vga_print("HELLO\n");
     for(int i  = 0; i < 100; i++)
     {
 
-#if 1    
+#if 1
       addr = vm_alloc(NULL,0xffff800040001000 + alloc_sz , alloc_sz,0, VM_ATTR_WRITABLE);
 
        // kprintf("DONE %x\n", addr);
@@ -120,17 +132,34 @@ vga_print("HELLO\n");
 
         //vm_free(NULL, addr, alloc_sz );
      
-        vm_list_entries();
+        vm_ctx_show(NULL);
         kprintf("PHYS_MEMORY\n");
         pfmgr_show_free_memory();
-        mtx_release(&mtx);
-            while(1)
+       pci_test();
+      
+        vm_ctx_t test_ctx;
+
+        memset(&test_ctx, 0, sizeof(vm_ctx_t));
+
+        vm_user_ctx_init(&test_ctx);
+
+        vm_alloc(&test_ctx, VM_BASE_AUTO, 0x1000, 0, VM_ATTR_WRITABLE);
+        vm_ctx_show(&test_ctx);
+        kprintf("KERNEL\n");
+
+        vm_ctx_show(NULL);
+        while(1)
         {
-          
+            
+          kprintf("INT_CHECK %x\n",cpu_int_check());
            // mtx_acquire(&mtx, WAIT_FOREVER);
-          kprintf("CPU INT %d\n",cpu_int_check());
+          //kprintf("CPU INT %d\n",cpu_int_check());
         //  mtx_release(&mtx);
-          sched_sleep(100);
+        for(int i = 0; i < UINT32_MAX; i++);
+
+        kprintf("HELLO\n");
+        cpu_int_unlock();
+        //  sched_sleep(100);
         }
       //  kprintf("XXXX %d\n",cpu_int_check());
       //  kprintf("TEST\n");
@@ -158,21 +187,11 @@ vga_print("HELLO\n");
     while(1);
 }
 
-
-
-
-int func2(int i)
-{
-    kprintf("XXXX %d\n",cpu_int_check());
-  //  schedule();
-    return(0);
-}
-
 /* Kernel entry point */
 
 void kmain()
 {
-
+    /* prepare very basic platform functionality */
     platform_pre_init();
 
     /* initialize early page frame manager */
@@ -182,6 +201,14 @@ void kmain()
     if(devmgr_init())
         return;
     
+    /* initialize interrupt handler */
+    if(isr_init())
+        return;
+
+    /* Initialize pgmgr */
+    if(pgmgr_init())
+        return;
+
     /* initialize Virtual Memory Manager */
     if(vm_init())
         return;
@@ -189,23 +216,24 @@ void kmain()
     /* initialize Page Frame Manager*/
     if(pfmgr_init())
         return;
-
-    /* initialize interrupt handler */
-    if(isr_init())
+        
+    /* Initialize base of the scheduler */
+    
+    if(sched_init())
         return;
     
     /* Initialize basic platform functionality */
     platform_early_init();
 
-    /* Initialize base of the scheduler */
-    sched_init();
-
 
     /* Prepare the initialization thread */
-    thread_create_static(&init_th, kmain_sys_init,NULL, 0x1000, 200);
+    thread_create_static(&init_th, 
+                         kmain_sys_init,
+                         NULL, 
+                         0x8000, 
+                         200);
+
     thread_start(&init_th);
-//    thread_create_static(&init_th2, kmain_sys_init2,NULL, 0x1000, 0);
-//    thread_start(&init_th2);
 
     /* initialize the CPU driver and the BSP */
     if(cpu_init())
