@@ -8,7 +8,8 @@
 #include <linked_list.h>
 #include <spinlock.h>
 #include <liballoc.h>
-typedef int bibiribis;
+#include <intc.h>
+
 typedef struct simple_policy_unit_t
 {
     sched_exec_unit_t *unit;        /* execution unit that holds this policy */
@@ -76,7 +77,6 @@ static int simple_next_thread
             if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_SLEEPING))
             {
-
                 linked_list_remove(&policy_unit->sleep_q, th);
                 linked_list_add_tail(&policy_unit->ready_q, th);
             }
@@ -102,7 +102,7 @@ static int simple_next_thread
                       __ATOMIC_SEQ_CST);
 
     *next = thread;
-   // kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
     return(0);
 
 }
@@ -122,7 +122,7 @@ static int simple_put_thread
        
         return(-1);
     }
-;
+
     policy_unit = policy_data;
     
     __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
@@ -298,6 +298,11 @@ static int simple_load_balancing
             {
                 linked_list_remove(&this_punit->ready_q, th_tail);
                 linked_list_add_tail(&work_punit->ready_q, th_tail);
+                work_unit->flags |= UNIT_RESCHEDULE;
+
+                cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, 
+                              work_unit->cpu->cpu_id, 
+                              IPI_RESCHED);
             }
         }
         
