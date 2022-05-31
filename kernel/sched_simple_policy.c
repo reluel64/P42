@@ -13,9 +13,7 @@
 typedef struct simple_policy_unit_t
 {
     sched_exec_unit_t *unit;        /* execution unit that holds this policy */
-    list_head_t       ready_q;      /* queue of ready threads on the current CPU     */
-    list_head_t       blocked_q;    /* queue of blocked threads                      */
-    list_head_t       sleep_q;      /* queue of sleeping threads                     */
+
 }simple_policy_unit_t;
 
 static int simple_next_thread
@@ -35,7 +33,7 @@ static int simple_next_thread
     unit = policy_unit->unit;
 
     /* Check blocked threads */
-    th = linked_list_first(&policy_unit->blocked_q);
+    th = linked_list_first(&unit->blocked_q);
 
     if(__atomic_fetch_and(&unit->flags, 
                           ~UNIT_THREADS_UNBLOCK, 
@@ -51,8 +49,8 @@ static int simple_next_thread
             if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_BLOCKED))
             {
-                linked_list_remove(&policy_unit->blocked_q, th);
-                linked_list_add_tail(&policy_unit->ready_q, th);
+                linked_list_remove(&unit->blocked_q, th);
+                linked_list_add_tail(&unit->ready_q, th);
             }
 
             th = next_th;
@@ -66,7 +64,7 @@ static int simple_next_thread
                           UNIT_THREADS_WAKE)
     {
         
-        th = linked_list_first(&policy_unit->sleep_q);
+        th = linked_list_first(&unit->sleep_q);
 
         while(th)
         {
@@ -77,22 +75,22 @@ static int simple_next_thread
             if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_SLEEPING))
             {
-                linked_list_remove(&policy_unit->sleep_q, th);
-                linked_list_add_tail(&policy_unit->ready_q, th);
+                linked_list_remove(&unit->sleep_q, th);
+                linked_list_add_tail(&unit->ready_q, th);
             }
 
             th = next_th;
         }
     }
 
-    th = linked_list_first(&policy_unit->ready_q);
+    th = linked_list_first(&unit->ready_q);
 
     if(th == NULL)
     {
         return(-1);
     }
     
-    linked_list_remove(&policy_unit->ready_q, th);
+    linked_list_remove(&unit->ready_q, th);
 
     thread = NODE_TO_THREAD(th);
 
@@ -116,14 +114,15 @@ static int simple_put_thread
     list_head_t       *lh = NULL;
     uint32_t          state = 0;
     simple_policy_unit_t  *policy_unit = NULL;
+    sched_exec_unit_t     *unit = NULL;
 
     if(th == NULL || policy_data == NULL)
     {
-       
         return(-1);
     }
 
     policy_unit = policy_data;
+    unit = policy_unit->unit;
     
     __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
 
@@ -132,20 +131,20 @@ static int simple_put_thread
     switch(state)
     {
         case THREAD_BLOCKED:
-            lh = &policy_unit->blocked_q;
+            lh = &unit->blocked_q;
             break;
 
         case THREAD_SLEEPING:
-            lh = &policy_unit->sleep_q;
+            lh = &unit->sleep_q;
             break;
 
         case THREAD_READY:
-            lh = &policy_unit->ready_q;
+            lh = &unit->ready_q;
             break;
 
         case THREAD_NEW:
              __atomic_and_fetch(&th->flags, ~THREAD_NEW, __ATOMIC_SEQ_CST);
-            lh = &policy_unit->ready_q;
+            lh = &unit->ready_q;
             break;
 
         default:
@@ -160,62 +159,6 @@ static int simple_put_thread
   
     return(0);
 
-}
-
-static int simple_thread_tick
-(
-    void *policy_data,
-    sched_thread_t *th
-)
-{
-    list_node_t          *node            = NULL;
-    simple_policy_unit_t *policy_unit     = NULL;
-    sched_thread_t       *sleeping_thread = NULL;
-
-    policy_unit = policy_data;
-    
-    /* Update the current thread */
-    if(th != NULL)
-    {
-        if(th->remain > 1)
-        {
-            th->remain--;
-        }
-        else
-        {
-            __atomic_or_fetch(&th->flags, 
-                              THREAD_NEED_RESCHEDULE, 
-                              __ATOMIC_SEQ_CST);
-
-            th->remain = 255 - th->prio;
-        }
-    }
-
-    /* Update sleeping threads */
-    node = linked_list_first(&policy_unit->sleep_q);
-    
-    while(node)
-    {
-        
-        sleeping_thread = (sched_thread_t*)node;
-
-        /* If timeout has been reached, wake the thread */
-
-        if(__atomic_load_n(&sleeping_thread->flags, __ATOMIC_SEQ_CST) & 
-          THREAD_SLEEPING)
-        {
-            sleeping_thread->slept++;
-
-            if(sleeping_thread->slept >= sleeping_thread->to_sleep)
-            {            
-                /* Wake up the thread */
-                sched_wake_thread(sleeping_thread);
-            }
-        }
-        node = linked_list_next(node);
-    }
-
-    return(0);
 }
 
 static int simple_init
@@ -247,7 +190,7 @@ static int simple_init
 
     return(0);
 }
-
+#if 0
 static int simple_load_balancing
 (
     void *policy_data,
@@ -312,16 +255,16 @@ static int simple_load_balancing
     }
     return(status);
 }
-
+#endif
 static sched_policy_t policy = 
 {
     .policy_name        = "Simple",
     .thread_dequeue     = simple_next_thread,
     .thread_enqueue     = simple_put_thread ,
-    .thread_tick        = simple_thread_tick,
+    
     .init_policy        = simple_init,
     .thread_enqueue_new = simple_put_thread,
-    .load_balancing     = simple_load_balancing,
+    /*.load_balancing     = simple_load_balancing,*/
 };
 
 

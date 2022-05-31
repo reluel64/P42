@@ -105,6 +105,9 @@ typedef struct sched_exec_unit_t
                                     * execution unit*/ 
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t    idle;         /* our dearest idle task                         */
+    list_head_t       ready_q;      /* queue of ready threads on the current CPU     */
+    list_head_t       blocked_q;    /* queue of blocked threads                      */
+    list_head_t       sleep_q;      /* queue of sleeping threads                     */
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     device_t         *timer_dev;    /* timer device which is connected to this unit  */
