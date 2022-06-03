@@ -79,7 +79,7 @@ static void pci_test(void)
    kprintf("MCFG %x LEN %d\n",mcfg, mcfg->Header.Length);
 }
 
-static void kmain_sys_init(void *arg)
+void kmain_sys_init(void *arg)
 {
     int hr = 0;
     int min = 0;
@@ -224,16 +224,6 @@ void kmain()
     
     /* Initialize basic platform functionality */
     platform_early_init();
-
-
-    /* Prepare the initialization thread */
-    thread_create_static(&init_th, 
-                         kmain_sys_init,
-                         NULL, 
-                         0x8000, 
-                         200);
-
-    thread_start(&init_th);
 
     /* initialize the CPU driver and the BSP */
     if(cpu_init())
