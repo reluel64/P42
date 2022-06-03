@@ -23,11 +23,6 @@ static list_head_t units;
 static spinlock_t  units_lock;
 static sched_owner_t kernel;
 
-/* used only when there is no sched unit in place */
-static list_head_t   pre_policy_queue;;
-static spinlock_t pre_policy_lock;
-
-
 static void sched_idle_thread(void *pv);
 static void schedule_main(void);
 static uint32_t sched_tick
@@ -36,6 +31,20 @@ static uint32_t sched_tick
     void *isr_info
 );
 
+static int sched_dequeue_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t   **next
+);
+
+static int sched_enqueue_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t    *th
+);
+
+
+
 static void sched_context_switch
 (
     sched_thread_t *prev,
@@ -43,7 +52,6 @@ static void sched_context_switch
 );
 
 extern void cpu_signal_on(uint32_t id);
-extern int sched_simple_register(sched_policy_t **p);
 
 static int in_balance = 0;
 
@@ -84,7 +92,7 @@ void sched_thread_entry_point
     spinlock_unlock_int(&th->lock, int_flag);
 }
 
-int sched_enqueue_thread
+int sched_start_thread
 (
     sched_thread_t *th
 )
@@ -93,14 +101,6 @@ int sched_enqueue_thread
     sched_exec_unit_t *unit = NULL;
     uint8_t int_flag = 0;
     cpu = cpu_current_get();
-
-    if((cpu == NULL) || cpu->sched == NULL)
-    {
-        spinlock_lock_int(&pre_policy_lock, &int_flag);
-        linked_list_add_tail(&pre_policy_queue, &th->node);
-        spinlock_unlock_int(&pre_policy_lock, int_flag);
-        return(-1);
-    }
 
     unit = cpu->sched;
     
@@ -111,8 +111,8 @@ int sched_enqueue_thread
     /* this thread belongs to this unit */
     th->unit = unit;
 
-    /* Ask the policy to enqueue the thread */
-    unit->policy->thread_enqueue_new(unit->policy_data, th);
+    /* enqueue the thread */ 
+    sched_enqueue_thread(unit, th);
 
     /* Unlock everything */
     spinlock_unlock_int(&unit->lock, int_flag);
@@ -213,11 +213,10 @@ int sched_init(void)
 {
     /* Set up RW spinlock to protect execution unit list */
     spinlock_rw_init(&units_lock);
-    spinlock_init(&pre_policy_lock);
 
     /* Initialize units list */
     linked_list_init(&units);
-    linked_list_init(&pre_policy_queue);
+    
     return(0);
 }
 
@@ -228,7 +227,8 @@ int sched_init(void)
 int sched_unit_init
 (
     device_t *timer, 
-    cpu_t *cpu
+    cpu_t *cpu,
+    sched_thread_t *post_unit_init
 )
 {
     sched_exec_unit_t *unit       = NULL;
@@ -267,13 +267,6 @@ int sched_unit_init
     linked_list_init(&unit->sleep_q);
     linked_list_init(&unit->blocked_q);
 
-    /* For now we have only one policy - a primitive one */
-    sched_simple_register(&unit->policy);
-
-    /* Initialize the policy */
-
-    unit->policy->init_policy(unit);
-
     /* Initialize the idle thread
      * as we will switch to it when we finish 
      * intializing the scheduler unit
@@ -281,30 +274,10 @@ int sched_unit_init
     thread_create_static(&unit->idle, 
                          sched_idle_thread, 
                          unit, 
-                         PAGE_SIZE, 
+                         0x1000, 
                          255);
     
     unit->idle.unit = unit;
-
-    /* Execute the threads that are waiting in thre pre sched queue */
-    spinlock_lock_int(&pre_policy_lock, &int_flag);
-
-    node = linked_list_first(&pre_policy_queue);
-
-    while(node)
-    {
-        next_node = linked_list_next(node);
-        
-        pend_th = NODE_TO_THREAD(node);
-
-        linked_list_remove(&pre_policy_queue, node);
-        pend_th->unit = unit;
-        unit->policy->thread_enqueue_new(unit->policy_data, pend_th);
-
-        node = next_node;
-    }    
-
-    spinlock_unlock_int(&pre_policy_lock, int_flag);
 
     /* Add the unit to the list */
     spinlock_write_lock_int(&units_lock, &int_flag);
@@ -312,6 +285,12 @@ int sched_unit_init
     linked_list_add_tail(&units, &unit->node);
     
     spinlock_write_unlock_int(&units_lock, int_flag);
+
+    /* check if we have a thread to start at the end of the initalization */
+    if(post_unit_init != NULL)
+    {
+        sched_start_thread(post_unit_init);
+    }
 
     /* Link the execution unit to the timer provided by
      * platform's CPU driver
@@ -601,20 +580,21 @@ static int scheduler_balance
     uint8_t int_flag = 0;
     sched_policy_t *policy = NULL;
     int expected = 0;
-
+return(0);
     /* lock the unit */
     spinlock_lock_int(&unit->lock, &int_flag);
 
     if(__atomic_compare_exchange_n(&in_balance, &expected, 1, 
                                    0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
    {
+       #if 0
         policy = unit->policy;
 
         if(policy->load_balancing != NULL)
         {
             policy->load_balancing(unit->policy_data, &units);
         }
-
+#endif
         __atomic_clear(&in_balance, __ATOMIC_SEQ_CST);
    }
 
@@ -641,6 +621,140 @@ void schedule(void)
     }
 }
 
+static int sched_dequeue_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t   **next
+)
+{
+    list_node_t *th        = NULL;
+    list_node_t *next_th   = NULL;
+    sched_thread_t *thread = NULL;
+
+    /* Check blocked threads */
+    th = linked_list_first(&unit->blocked_q);
+
+    if(__atomic_fetch_and(&unit->flags, 
+                          ~UNIT_THREADS_UNBLOCK, 
+                         __ATOMIC_SEQ_CST) & 
+                         UNIT_THREADS_UNBLOCK)
+    {
+        while(th)
+        {
+            next_th = linked_list_next(th);
+
+            thread = NODE_TO_THREAD(th);
+
+            if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
+                THREAD_BLOCKED))
+            {
+                linked_list_remove(&unit->blocked_q, th);
+                linked_list_add_tail(&unit->ready_q, th);
+            }
+
+            th = next_th;
+        }
+    }
+    
+    /* Check sleeping threads */
+
+    if(__atomic_fetch_and(&unit->flags, 
+                          ~UNIT_THREADS_WAKE,
+                          __ATOMIC_SEQ_CST) & 
+                          UNIT_THREADS_WAKE)
+    {
+        
+        th = linked_list_first(&unit->sleep_q);
+
+        while(th)
+        {
+            next_th = linked_list_next(th);
+
+            thread = NODE_TO_THREAD(th);
+
+            if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
+                THREAD_SLEEPING))
+            {
+                linked_list_remove(&unit->sleep_q, th);
+                linked_list_add_tail(&unit->ready_q, th);
+            }
+
+            th = next_th;
+        }
+    }
+
+    th = linked_list_first(&unit->ready_q);
+
+    if(th == NULL)
+    {
+        return(-1);
+    }
+    
+    linked_list_remove(&unit->ready_q, th);
+
+    thread = NODE_TO_THREAD(th);
+
+    /* Mark the next thread as running */
+    __atomic_or_fetch(&thread->flags, 
+                      THREAD_RUNNING, 
+                      __ATOMIC_SEQ_CST);
+
+    *next = thread;
+
+    return(0);
+
+}
+
+static int sched_enqueue_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t    *th
+)
+{
+
+    uint32_t state = 0;
+    list_head_t *lh = NULL;
+
+    if(th == NULL)
+    {
+        return(-1);
+    }
+    
+    __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
+
+   state = __atomic_load_n(&th->flags, __ATOMIC_SEQ_CST) & THREAD_STATE_MASK;
+
+    switch(state)
+    {
+        case THREAD_BLOCKED:
+            lh = &unit->blocked_q;
+            break;
+
+        case THREAD_SLEEPING:
+            lh = &unit->sleep_q;
+            break;
+
+        case THREAD_READY:
+            lh = &unit->ready_q;
+            break;
+
+        case THREAD_NEW:
+             __atomic_and_fetch(&th->flags, ~THREAD_NEW, __ATOMIC_SEQ_CST);
+            lh = &unit->ready_q;
+            break;
+
+        default:
+            kprintf("%s %d\n",__FUNCTION__, __LINE__);
+            while(1);
+            break;
+    }
+
+    /* Add the thread in the corresponding queue */
+
+    linked_list_add_tail(lh, &th->node);
+
+    return(0);
+}
 
 static void schedule_main(void)
 {
@@ -658,7 +772,7 @@ static void schedule_main(void)
 
     cpu    = cpu_current_get();
     unit   = cpu->sched;
-    policy = unit->policy;
+    //policy = unit->policy;
    
     /* Lock the execution unit */
     spinlock_lock_int(&unit->lock, &int_flag);
@@ -679,11 +793,11 @@ static void schedule_main(void)
      */
     if(unit->current != NULL)
     {       
-            policy->thread_enqueue(unit->policy_data, prev_th);
+        sched_enqueue_thread(unit, prev_th);
     }
 
     /* Ask the policy for the next thread */
-    status = policy->thread_dequeue(unit->policy_data, 
+    status = sched_dequeue_thread(unit, 
                                     &next_th);
 
 
