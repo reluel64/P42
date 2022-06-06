@@ -80,9 +80,6 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
             return(-1);
         }
 
-        /* Acquire spinlock for the thread */
-        spinlock_lock(&thread->lock);
-
         if(wait_ms != WAIT_FOREVER)
         {
             block_flags = THREAD_SLEEPING;
@@ -96,10 +93,6 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
 
         /* Add it to the semaphore pend queue */
         linked_list_add_tail(&sem->pendq, &thread->pend_node); 
-
-        /* Release the spinlock of the thread */
-        
-        spinlock_unlock(&thread->lock);
 
         /* release the semaphore spinlock */
         spinlock_unlock_int(&sem->lock, int_state);
@@ -143,8 +136,6 @@ int sem_release(sem_t *sem)
     }
 
     thread = PEND_NODE_TO_THREAD(pend_node);
-   
-    spinlock_lock(&thread->lock);
     
     if(thread->flags & THREAD_BLOCKED)
     {
@@ -154,10 +145,6 @@ int sem_release(sem_t *sem)
     {
         sched_wake_thread(thread);
     }
-    
-    spinlock_unlock(&thread->lock);
-
-    sched_unblock_thread(thread);
 
     spinlock_unlock_int(&sem->lock, int_state);
 
