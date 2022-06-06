@@ -115,8 +115,6 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
             return(-1);
         }
 
-        thread->to_sleep = wait_ms;
-
         /* we are going to sleep */
         if(wait_ms != WAIT_FOREVER)
         {
