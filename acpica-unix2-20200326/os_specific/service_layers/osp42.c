@@ -666,6 +666,7 @@ AcpiOsMapMemory (
 
     ret_addr = (virt_addr_t)acpi_map(where, length, VM_ATTR_STRONG_UNCACHED | VM_ATTR_WRITABLE);
 
+
 #endif
     return ((void*)ret_addr);
 }
@@ -696,6 +697,7 @@ AcpiOsUnmapMemory (
     else
         pgmgr_boot_temp_unmap_big((virt_addr_t)where, length);
 #endif
+    acpi_unmap(where, length);
 
     return;
 }
