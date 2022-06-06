@@ -448,12 +448,14 @@ static int ioapic_toggle_mask
     redir = ioapic->redir_tbl;
 
     if(ioapic->redir_tbl_count < irq)
+    {
         return(-1);
+    }
 
     irq += IRQ0;
 
 
-    for(uint32_t i = 0; i < ioapic->redir_tbl_count; i++)
+    for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
     {
         if(redir[i].intvec == irq)
         {
