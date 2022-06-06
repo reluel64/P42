@@ -409,8 +409,11 @@ static int apic_dev_init(device_t *dev)
     kprintf("INIT_APIC 0x%x\n", dev);
 
     apic->apic_id = devmgr_dev_index_get(dev);
-
-    kprintf("APIC_BASE 0x%x APIC ID %d\n",apic_drv->paddr, apic->apic_id);
+    
+    if(apic_drv->x2 == 0)
+    {
+        kprintf("APIC_BASE 0x%x APIC ID %d\n",apic_drv->paddr, apic->apic_id);
+    }
 
     devmgr_dev_data_set(dev, apic);
 
@@ -422,7 +425,6 @@ static int apic_dev_init(device_t *dev)
                         &data, 
                         1);
     
-
     data  &= ~APIC_SVR_ENABLE_BIT;
 
     apic_drv->apic_write(apic_drv->vaddr, 
