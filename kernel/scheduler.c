@@ -51,8 +51,6 @@ static void sched_context_switch
     sched_thread_t *next
 );
 
-extern void cpu_signal_on(uint32_t id);
-
 static int in_balance = 0;
 
 void sched_thread_entry_point
@@ -525,7 +523,7 @@ static void sched_idle_thread
     /* Signal that the execution unit is up and running 
      * so that the BSP can continue waking up other cores
      */
-    
+
     cpu_signal_on(unit->cpu->cpu_id);
 #if 0
     /* When entering the idle loop, disable the timer
@@ -735,11 +733,6 @@ static int sched_enqueue_thread
             break;
 
         case THREAD_READY:
-            lh = &unit->ready_q;
-            break;
-
-        case THREAD_NEW:
-             __atomic_and_fetch(&th->flags, ~THREAD_NEW, __ATOMIC_SEQ_CST);
             lh = &unit->ready_q;
             break;
 

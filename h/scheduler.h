@@ -12,7 +12,6 @@
 #define THREAD_DEAD             (1 << 4)
 #define THREAD_ALLOCATED        (1 << 5)
 #define THREAD_NEED_RESCHEDULE  (1 << 6)
-#define THREAD_NEW              (1 << 7)
 #define CPU_AFFINITY_VECTOR     (0x8)
 
 #define UNIT_THREADS_WAKE        (1 << 0)
@@ -22,8 +21,7 @@
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
                           THREAD_BLOCKED  | \
-                          THREAD_SLEEPING | \
-                          THREAD_NEW)
+                          THREAD_SLEEPING)
 
 #define SCHED_MAX_PRIORITY 255
 
@@ -111,8 +109,8 @@ typedef struct sched_exec_unit_t
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     device_t         *timer_dev;    /* timer device which is connected to this unit  */
-    sched_policy_t    *policy;
-    void              *policy_data;
+  //  sched_policy_t    *policy;
+  //  void              *policy_data;
 }sched_exec_unit_t;
 
 typedef struct sched_owner_t
@@ -129,7 +127,8 @@ typedef struct sched_owner_t
 int sched_unit_init
 (
     device_t *timer, 
-    cpu_t *cpu
+    cpu_t *cpu,
+    sched_thread_t *post_unit_init
 );
 
 int sched_init(void);
@@ -190,7 +189,7 @@ void sched_sleep
     uint32_t delay
 );
 
-int sched_enqueue_thread
+int sched_start_thread
 (
     sched_thread_t *th
 );
