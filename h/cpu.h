@@ -31,11 +31,10 @@ int cpu_issue_ipi
     uint32_t cpu,
     uint32_t type
 );
-void cpu_ctx_save(virt_addr_t iframe, void *th);
-void cpu_ctx_restore(virt_addr_t iframe, void *th);
-void *cpu_ctx_init(void *th, void *exec_pt, void *exec_pv);
-int cpu_ctx_destroy(void *th);
 cpu_t *cpu_current_get(void);
 void cpu_resched(void);
-void cpu_signal_on(uint32_t cpu);
+void cpu_signal_on
+(
+    uint32_t cpu_id
+);
 #endif

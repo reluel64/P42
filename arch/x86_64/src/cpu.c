@@ -333,7 +333,8 @@ static int cpu_bring_ap_up
     ipi.type      = IPI_INIT;
     ipi.dest_cpu  = cpu;
     
-    __atomic_and_fetch(&cpu_on, 0, __ATOMIC_SEQ_CST);
+    __atomic_clear(&cpu_on, __ATOMIC_SEQ_CST);
+    
     intc_send_ipi(issuer, &ipi);
     
     /* Start-up SIPI */
@@ -361,12 +362,16 @@ static int cpu_bring_ap_up
             sched_sleep(1);
         }
     }
+    
     return(-1);
 }
 
-void cpu_signal_on(uint32_t id)
+void cpu_signal_on
+(
+    uint32_t cpu_id
+)
 {
-    __atomic_store_n(&cpu_on, id, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&cpu_on, cpu_id, __ATOMIC_SEQ_CST);
 }
 
 int cpu_issue_ipi
