@@ -18,7 +18,7 @@
 #include <apic_timer.h>
 #include <scheduler.h>
 #include <ioapic.h>
-
+#include <thread.h>
 extern void __cpu_switch_stack
 (
     virt_addr_t *new_top,
@@ -51,6 +51,7 @@ extern virt_addr_t isr_no_ec_sz_end;
 extern virt_addr_t isr_ec_sz_start;
 extern virt_addr_t isr_ec_sz_end;
 
+extern void kmain_sys_init(void *arg);
 
 
 #define _BSP_STACK_TOP ((virt_addr_t)&kstack_top)
@@ -60,7 +61,7 @@ extern virt_addr_t isr_ec_sz_end;
 
 static spinlock_t lock;
 static volatile int cpu_on = 0;
-static void cpu_entry_point(void);
+static void cpu_ap_entry_point(void);
 
 
 static int pcpu_is_bsp(void)
@@ -302,7 +303,7 @@ static void cpu_prepare_trampoline
     nx_on   [0] = pgmgr_nx_support();
     pt_base [0] = __read_cr3();
     stack   [0] = (virt_addr_t)_BSP_STACK_BASE;
-    entry_pt[0] = (virt_addr_t) cpu_entry_point;
+    entry_pt[0] = (virt_addr_t) cpu_ap_entry_point;
 }
 
 static int cpu_bring_ap_up
@@ -545,7 +546,7 @@ int cpu_ap_start
     return(0);
 }
 
-static void cpu_entry_point(void)
+static void cpu_ap_entry_point(void)
 {
     uint32_t cpu_id = 0;
     device_t *timer = NULL;
@@ -581,7 +582,8 @@ static void cpu_entry_point(void)
         timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
     }
 
-    sched_unit_init(timer, cpu);
+    /* this should not return - if it does, the loop below will halt the cpu */
+    sched_unit_init(timer, cpu, NULL);
 
     kprintf("HALTING CPU %x\n",cpu_id);
 
@@ -647,6 +649,8 @@ static int pcpu_dev_init(device_t *dev)
     cpu_platform_t        *pcpu           = NULL;
     cpu_platform_driver_t *pdrv           = NULL;
     uint32_t               cpu_id         = 0;
+    int                    no_apic        = 0;
+
     kprintf("INITIALIZING CPU DEVICE\n");
     cpu_int_lock();
     
@@ -675,7 +679,7 @@ static int pcpu_dev_init(device_t *dev)
 
     /* Store cpu id and proximity domain */
     cpu->cpu_id = cpu_id;
-    cpu->proximity_domain = cpu_get_domain(cpu_id);
+   // cpu->proximity_domain = cpu_get_domain(cpu_id);
 
     /* store per cpu private data */
     cpu->cpu_pv = pcpu;
@@ -685,34 +689,36 @@ static int pcpu_dev_init(device_t *dev)
 
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
-      
+
      /* Create the APIC instance of the core */
     if(!devmgr_dev_create(&apic_dev))
     {
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         devmgr_dev_name_set(apic_dev, APIC_DRIVER_NAME);
         devmgr_dev_type_set(apic_dev, INTERRUPT_CONTROLLER);
         devmgr_dev_index_set(apic_dev, cpu_id);
 
         if(devmgr_dev_add(apic_dev, dev))
         {
-            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
-            return(-1);
+            no_apic = 1;
         }
-
-        kprintf("DEV_TYPE %s\n",devmgr_dev_type_get(apic_dev));
     }
-    
-    /* Create the APIC TIMER instance of the core */
-    if(!devmgr_dev_create(&apic_timer_dev))
-    {
-        devmgr_dev_name_set(apic_timer_dev, APIC_TIMER_NAME);
-        devmgr_dev_type_set(apic_timer_dev, TIMER_DEVICE_TYPE);
-        devmgr_dev_index_set(apic_timer_dev, cpu_id);
+    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
 
-        if(devmgr_dev_add(apic_timer_dev, apic_dev))
+    if(!no_apic)
+    {
+       /* Create the APIC TIMER instance of the core */
+        if(!devmgr_dev_create(&apic_timer_dev))
         {
-            kprintf("%s %d failed to add device\n",__FUNCTION__,__LINE__);
-            return(-1);
+            devmgr_dev_name_set(apic_timer_dev, APIC_TIMER_NAME);
+            devmgr_dev_type_set(apic_timer_dev, TIMER_DEVICE_TYPE);
+            devmgr_dev_index_set(apic_timer_dev, cpu_id);
+    
+            if(devmgr_dev_add(apic_timer_dev, apic_dev))
+            {
+                devmgr_dev_delete(&apic_timer_dev);
+                return(-1);
+            }
         }
     }
 
@@ -741,7 +747,7 @@ static int pcpu_drv_init(driver_t *drv)
     cpu_platform_driver_t *cpu_drv   = NULL;
     device_t              *timer     = NULL;
     cpu_t                 *cpu       = NULL;
-    sched_thread_t        *init_th   = NULL;
+    static sched_thread_t init_th;
 
     spinlock_init(&lock);
 
@@ -755,7 +761,8 @@ static int pcpu_drv_init(driver_t *drv)
     if(cpu_drv->idt == (idt64_entry_t*)VM_INVALID_ADDRESS)
     {
         kprintf("Failed to allocate IDT\n");
-        while(1);
+        kfree(cpu_drv);
+        return(-1);
     }
   
     /* Setup the IDT */
@@ -782,7 +789,6 @@ static int pcpu_drv_init(driver_t *drv)
 
         if(devmgr_dev_add(cpu_bsp, NULL))
         {
-            kprintf("FAILED TO ADD BSP CPU\n");
             return(-1);
         }
 
@@ -794,8 +800,22 @@ static int pcpu_drv_init(driver_t *drv)
         {
             timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
         }
+        
 
-        if(sched_unit_init(timer, cpu))
+       /* Since we are going to jump in scheduler
+        * code during sched_unit_init, we need some kind of thread
+        * to continue the system initialization.
+        * The entry point for this thread is going to be kmain_sys_init
+        * which will carry the rest of initalization like
+        * Starting the APs, detecting more HW, etc.
+        */ 
+       thread_create_static(&init_th, 
+                            kmain_sys_init,
+                            NULL, 
+                            KMAIN_SYS_INIT_STACK_SIZE, 
+                            0);
+        
+        if(sched_unit_init(timer, cpu, &init_th))
         {
             return(-1);
         }
