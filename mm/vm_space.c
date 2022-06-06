@@ -349,10 +349,11 @@ int vm_space_free
 
     if(req_ext.flags & VM_LOCKED)
     {
+        
         vm_extent_insert(&ctx->alloc_mem,
                          ctx->alloc_per_slot,
                          &req_ext);
-        kprintf("MEMORY is locked\n");
+        kprintf("MEMORY %x - %x is locked\n", addr, len);
         return(VM_FAIL);
     }
 

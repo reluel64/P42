@@ -647,7 +647,7 @@ int vm_extent_join
     {
         return(VM_FAIL);
     }
-    else if(src->eflags != dest->eflags)
+    else if(src->flags != dest->flags)
     {
         return(VM_FAIL);
     }
