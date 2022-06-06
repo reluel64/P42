@@ -51,7 +51,7 @@ uint16_t pciCheckVendor(uint8_t bus, uint8_t slot) {
     /* vendors that == 0xFFFF, it must be a non-existent device. */
     if ((vendor = pciConfigReadWord(bus,slot,0,0)) != 0xFFFF) {
        device = pciConfigReadWord(bus,slot,0,2);
-       kprintf("HELLO WORLD %x %x\n",vendor, device);
+       kprintf("DEVICE 0x%x 0x%x\n",vendor, device);
     } return (vendor);
 }
 mutex_t mtx;
@@ -81,101 +81,12 @@ static void pci_test(void)
 
 void kmain_sys_init(void *arg)
 {
-    int hr = 0;
-    int min = 0;
-    int sec = 0;
-    mtx_init(&mtx, 0);
-    /* Start APs */
-    kprintf("starting APs\n");
-    
     kprintf("Platform init\n");
 
     platform_init();
-    virt_size_t alloc_sz = 1024 * 1024;
-    virt_addr_t addr = 0;
-vga_print("HELLO\n");
-  kprintf("BEFORE LOOP - ");
- // cpu_int_lock();
-         static sched_thread_t th[500];
-    mtx_acquire(&mtx, WAIT_FOREVER);
-    #if 0
-         for(int i = 0; i < sizeof(th) / sizeof(sched_thread_t); i++)
-         {
-            thread_create_static(&th[i], test_thread,i, 0x1000, 100);
-            thread_start(&th[i]);
-         }
-#endif
- mtx_release(&mtx);
-         
-    while(1)
-    {
-      //  mtx_acquire(&mtx, WAIT_FOREVER);
-     
- 
-      //   vm_list_entries();
-     // pgmgr_per_cpu_init();
 
-
-    for(int i  = 0; i < 100; i++)
-    {
-
-#if 1
-      addr = vm_alloc(NULL,0xffff800040001000 + alloc_sz , alloc_sz,0, VM_ATTR_WRITABLE);
-
-       // kprintf("DONE %x\n", addr);
-
-        vm_free(NULL,addr, alloc_sz);
-        alloc_sz += 1024 * 1024;
-     //   kprintf("AGAIN\n");
-#endif
-    }
-
-        //vm_free(NULL, addr, alloc_sz );
-     
-        vm_ctx_show(NULL);
-        kprintf("PHYS_MEMORY\n");
-        pfmgr_show_free_memory();
-       pci_test();
-      
-        vm_ctx_t test_ctx;
-
-        memset(&test_ctx, 0, sizeof(vm_ctx_t));
-
-        vm_user_ctx_init(&test_ctx);
-
-        vm_alloc(&test_ctx, VM_BASE_AUTO, 0x1000, 0, VM_ATTR_WRITABLE);
-        vm_ctx_show(&test_ctx);
-        kprintf("KERNEL\n");
-
-        vm_ctx_show(NULL);
-        while(1)
-        {
-            
-          kprintf("INT_CHECK %x\n",cpu_int_check());
-           // mtx_acquire(&mtx, WAIT_FOREVER);
-          //kprintf("CPU INT %d\n",cpu_int_check());
-        //  mtx_release(&mtx);
-        for(int i = 0; i < UINT32_MAX; i++);
-
-        kprintf("HELLO\n");
-        cpu_int_unlock();
-        //  sched_sleep(100);
-        }
-      //  kprintf("XXXX %d\n",cpu_int_check());
-      //  kprintf("TEST\n");
-    //    kprintf("XXXX %d\n",cpu_int_check());
-      
-    //    sched_sleep(100000);
-       // for(int i = 0; i < INT32_MAX / 2 - 1; i++);
-      //  kprintf("ENDED\n");
-    //    mtx_release(&mtx);
-
-    while(1);
-    }
+    vga_print("Platform init done\n");
     
-
-   vga_print("Hello World\n");
-
     for(int bus = 0; bus < 256; bus++)
     {
         for(int slot = 0; slot < 32; slot++)
@@ -184,7 +95,23 @@ vga_print("HELLO\n");
         }
     }
 
-    while(1);
+    virt_addr_t addr = vm_alloc(NULL, 0xffffffff84000000, 0x3000, 0, VM_ATTR_WRITABLE);
+
+    if(addr != VM_INVALID_ADDRESS)
+    {
+        vm_change_attr(NULL, addr, 0x1000, 0, VM_ATTR_WRITABLE, NULL);
+        vm_change_attr(NULL, addr + 0x2000, 0x1000, 0, VM_ATTR_WRITABLE, NULL);
+
+        kprintf("addr %x\n",addr);
+    }
+
+    vm_ctx_show(NULL);
+
+
+    while(1)
+    {
+        sched_sleep(1000);
+    }
 }
 
 /* Kernel entry point */
