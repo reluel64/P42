@@ -25,13 +25,15 @@ extern virt_addr_t kstack_top;
 
 #define PLATFORM_AP_RETRIES       (1)
 #define PLATFORM_AP_START_TIMEOUT (1000)
-
+#define PLATFORM_AP_ALL_CPUS      (-1)
 #define PLATFORM_RESCHED_VECTOR        (240)
 #define PLATFORM_PG_INVALIDATE_VECTOR  (239)
 #define PLATFORM_LOCAL_TIMER_VECTOR    (238)
 #define PLATFORM_PG_FAULT_VECTOR       (14)
 
 #define IRQ0                      (0x20)
+
+#define KMAIN_SYS_INIT_STACK_SIZE      (0x1000)
 
 /* Interrupt Descriptor */
 typedef struct _idt_entry

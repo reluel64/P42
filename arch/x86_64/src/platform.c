@@ -245,7 +245,7 @@ int platform_init(void)
     device_t *ioapic = NULL;
     device_t *apic_timer = NULL;
 
-    cpu_ap_start(-1, PLATFORM_AP_START_TIMEOUT);
+    cpu_ap_start(PLATFORM_AP_ALL_CPUS, PLATFORM_AP_START_TIMEOUT);
 
     /* Mask the PIT8254 */
     apic_timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, 0);
@@ -256,5 +256,7 @@ int platform_init(void)
         ioapic = devmgr_dev_get_by_name(IOAPIC_DRV_NAME, 0);
         intc_mask_irq(ioapic, 0);
     }
+
+    return(0);
 }
 
