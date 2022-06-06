@@ -1124,14 +1124,13 @@ int pfmgr_init(void)
         size = (hdr->struct_len % PAGE_SIZE) ? 
                 ALIGN_UP(hdr->struct_len, PAGE_SIZE) : 
                 hdr->struct_len;
-        kprintf("MAPPING\n");
+                
         hdr = (pfmgr_range_header_t*)vm_map(NULL,  
                                                VM_BASE_AUTO, 
                                                size,
                                                phys,
                                                0,
                                                VM_ATTR_WRITABLE);
-    kprintf("MAPPED\n");
         if(hdr == NULL)
         {
            
