@@ -51,6 +51,7 @@ static int thread_setup
         return(-1);
     }
 
+    /* clean up the stack */
     memset((void*)stack_origin, 0, stack_size);
 
     /* mark the first guard page as read-only */
@@ -66,10 +67,6 @@ static int thread_setup
                   PAGE_SIZE, 0, 
                   VM_ATTR_WRITABLE, 
                   NULL);
-
-
-    /* clean up the stack */
-    
 
     /* Clear memory */
     memset(th, 0, sizeof(sched_thread_t));
@@ -107,7 +104,7 @@ int thread_start
     sched_thread_t *th
 )
 {
-    sched_enqueue_thread(th);
+    sched_start_thread(th);
 }
 
 int thread_create_static
