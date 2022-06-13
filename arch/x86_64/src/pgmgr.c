@@ -161,7 +161,7 @@ static int pgmgr_alloc_pf(phys_addr_t *pf)
 {
     int ret = 0;
 
-    ret = pfmgr_alloc(1, 0, pgmgr_alloc_pf_cb, pf);
+    ret = pfmgr_alloc(0, 1, 0, pgmgr_alloc_pf_cb, pf);
 
     return(ret);
 }
@@ -862,7 +862,9 @@ static int pgmgr_iterate_levels
                                     PGMGR_MAX_TABLE_INDEX;
                     
                     if(ld->level[it_dat.entry] & PAGE_PRESENT)
+                    {
                         break;
+                    }
                 }
             }
             /* Check if we've max level and if we did, 
@@ -919,10 +921,11 @@ static int pgmgr_setup_remap_table
                      pgmgr_iter_alloc_level);
 
     /* Allocate pages */
-    status = pfmgr_alloc(0, 
-                          ALLOC_CB_STOP, 
-                          pgmgr_iterate_levels, 
-                          &lvl_dat);
+    status = pfmgr_alloc(0,
+                         0, 
+                         PHYS_ALLOC_CB_STOP, 
+                         pgmgr_iterate_levels, 
+                         &lvl_dat);
 
     if(status || lvl_dat.error)
     {
@@ -981,10 +984,11 @@ int pgmgr_allocate_backend
                      0, 
                      pgmgr_iter_alloc_level);
 
-    status = pfmgr_alloc(0, 
-                          ALLOC_CB_STOP,
-                          pgmgr_iterate_levels,
-                          &ld);
+    status = pfmgr_alloc(0,
+                         0, 
+                         PHYS_ALLOC_CB_STOP,
+                         pgmgr_iterate_levels,
+                         &ld);
 
     /* report how much did we actually built */
     if(out_len)
@@ -1065,9 +1069,10 @@ int pgmgr_allocate_pages
                      pgmgr_iter_alloc_page);
 
     status = pfmgr_alloc(0, 
-                          ALLOC_CB_STOP,
-                          pgmgr_iterate_levels,
-                          &ld);
+                         0, 
+                         PHYS_ALLOC_CB_STOP,
+                         pgmgr_iterate_levels,
+                         &ld);
 
     /* report how much did we actually allocated */
     
