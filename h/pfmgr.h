@@ -8,10 +8,13 @@
 
 
 #define LOW_MEMORY   (0x100000)
-#define ALLOC_CONTIG  (1 << 0)
-#define ALLOC_HIGHEST (1 << 2)
-#define ALLOC_ISA_DMA (1 << 3)
-#define ALLOC_CB_STOP (1 << 4)
+
+#define PHYS_ALLOC_CONTIG        (1 << 0)
+#define PHYS_ALLOC_HIGHEST       (1 << 2)
+#define PHYS_ALLOC_ISA_DMA       (1 << 3)
+#define PHYS_ALLOC_CB_STOP       (1 << 4)
+#define PHYS_ALLOC_PREFERED_ADDR (1 << 5)
+
 typedef struct pfmgr_cb_data_t pfmgr_cb_data_t;
 
 typedef int (*alloc_cb)(pfmgr_cb_data_t *cb_dat, void *pv);
@@ -26,8 +29,21 @@ typedef struct pfmgr_cb_data_t
 
 typedef struct pfmgr_t
 {
-    int  (*alloc)(phys_size_t pages, uint8_t flags, alloc_cb cb, void *pv);
-    int  (*dealloc)(free_cb cb, void *pv);
+    int  (*alloc)
+    (
+        phys_addr_t start, 
+        phys_size_t pages, 
+        uint8_t flags, 
+        alloc_cb cb, 
+        void *pv
+    );
+    
+    int  (*dealloc)
+    (
+        free_cb cb, 
+        void *pv
+    );
+
 }pfmgr_t;
 
 typedef struct pfmgr_base_t
@@ -68,8 +84,25 @@ typedef struct pfmgr_busy_range_t
 
 void     pfmgr_early_init(void);
 int      pfmgr_init(void);
-pfmgr_t *pfmgr_get(void);
-int pfmgr_show_free_memory(void);
+int pfmgr_alloc
+(
+    phys_addr_t start,
+    phys_size_t pf, 
+    uint8_t flags, 
+    alloc_cb cb, 
+    void *pv
+);
+
+int pfmgr_free
+(
+    free_cb cb,
+    void *cb_pv
+);
+
+int pfmgr_show_free_memory
+(
+    void
+);
 
 extern phys_addr_t KERNEL_LMA;
 extern phys_addr_t KERNEL_LMA_END;
