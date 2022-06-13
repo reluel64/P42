@@ -458,7 +458,8 @@ static int pfmgr_lkup_bmp_for_free_pf
 (
     pfmgr_free_range_t *freer,
     phys_addr_t        *start,
-    phys_size_t        *pf
+    phys_size_t        *pf,
+    uint32_t           flags
 )
 {
     pfmgr_range_header_t *hdr = NULL;
@@ -475,8 +476,9 @@ static int pfmgr_lkup_bmp_for_free_pf
     
     /* Check if there's anything interesting here */
     if(freer->avail_pf == 0)
+    {
         return(status);
-    
+    }
     
     hdr        = &freer->hdr;
     start_addr = *start;
@@ -496,10 +498,12 @@ static int pfmgr_lkup_bmp_for_free_pf
         /* Start after ISA DMA */
         start_addr = ISA_DMA_MEMORY_LENGTH;
     }
-
+ 
     pf_pos = BYTES_TO_PF(start_addr - hdr->base);
-    
-    while((pf_pos < freer->total_pf) && (req_pf > pf_ret) && 
+
+
+    while(pf_pos < freer->total_pf &&
+          (req_pf > pf_ret) && 
           (pf_ret < freer->avail_pf) && !stop)
     {
         pf_ix       = POS_TO_IX(pf_pos);
@@ -522,14 +526,19 @@ static int pfmgr_lkup_bmp_for_free_pf
         if((mask_frames == PF_PER_ITEM) && 
            (freer->bmp[bmp_pos] & mask) == 0)
         {
-            if(pf_ret == 0)
-                start_addr = hdr->base + PF_TO_BYTES(pf_pos);
-
             pf_ret += PF_PER_ITEM;
+
+            if(pf_ret == 0)
+            {
+                start_addr = hdr->base + PF_TO_BYTES(pf_pos);
+            }
+
             pf_pos += PF_PER_ITEM;
         }
         else
         {
+            /* Allocate from low to high */
+
             /* Slower path - check each page frame */
             for(phys_size_t i = 0; i < mask_frames; i++)
             {
@@ -538,34 +547,100 @@ static int pfmgr_lkup_bmp_for_free_pf
                     break;
                     
                 mask = ((virt_addr_t)1 << (pf_ix + i)); 
+
                 if((freer->bmp[bmp_pos] & mask) == 0)
                 {
                     if(pf_ret == 0)
+                    {
                         start_addr = hdr->base + PF_TO_BYTES(pf_pos);
-                        
+                    }   
                     pf_ret ++;
                 }
+
                 /* Stop looking if pf_ret > 0 */
                 else if(pf_ret > 0)
                 {
-                    stop = 1;
-                    break;
+                    /* if we want contigous memory, we must reset the
+                     * the returned frames to keep looking
+                     */
+                    if(flags & ALLOC_CONTIG)
+                    {
+                        pf_ret = 0;
+                    }
+                    else
+                    {
+                       stop = 1;
+                       break;
+                    }
                 }
                 pf_pos++;
             }
         }
+#if 0
+        else /* ALLOC_HIGHEST */
+        {
+            /* Allocate the highest amount of memory */
+
+            /* Slower path - check each page frame */
+            for(phys_size_t i = mask_frames - 1; i > 0; i--)
+            {
+                /* check if we might go over the total pf */
+                if((pf_pos == 0))
+                    break;
+                    
+                mask = ((virt_addr_t)1 << (pf_ix + i)); 
+
+                if((freer->bmp[bmp_pos] & mask) == 0)
+                {
+                    if(pf_ret == 0)
+                    {
+                        start_addr = hdr->base + PF_TO_BYTES(pf_pos);
+                    }
+                    else if (start_addr > hdr->base + PF_TO_BYTES(pf_pos))
+                    {
+                        start_addr = hdr->base + PF_TO_BYTES(pf_pos);
+                    }
+
+                    pf_ret ++;
+                }
+
+                /* Stop looking if pf_ret > 0 */
+                else if(pf_ret > 0)
+                {
+                    /* if we want contigous memory, we must reset the
+                     * the returned frames to keep looking
+                     */
+                    if(flags & ALLOC_CONTIG)
+                    {
+                        pf_ret = 0;
+                    }
+                    else
+                    {
+                       stop = 1;
+                       break;
+                    }
+                }
+                pf_pos--;
+            }
+        }
+#endif
     }
 
     /* No page frame available */
     if(pf_ret == 0)
+    {
         status = -1;
+    }
     /* page frames available but not as required */
     else if(pf_ret < req_pf)
+    {
         status = 0;
+    }
     /* page frames available at least as required */
     else
+    {
         status = 1;
-    
+    }
     *start = start_addr;
     *pf    = pf_ret;
  
@@ -614,8 +689,8 @@ static int pfmgr_mark_bmp
           (freer->bmp[bmp_pos] & mask) == 0)
         {
             freer->bmp[bmp_pos] |= mask;
-            pf_pos += mask_frames ;
-            pf     -= mask_frames;
+            pf_pos += PF_PER_ITEM ;
+            pf     -= PF_PER_ITEM;
             freer->avail_pf -= PF_PER_ITEM;
         }
         else
@@ -698,9 +773,9 @@ static int pfmgr_clear_bmp
         {
             
             freer->bmp[bmp_pos] &= ~mask;
-            pf_pos += mask_frames ;
-            pf     -= mask_frames;
-            freer->avail_pf += mask_frames;
+            pf_pos          += PF_PER_ITEM ;
+            pf              -= PF_PER_ITEM;
+            freer->avail_pf += PF_PER_ITEM;
         }
         else
         {
@@ -730,7 +805,7 @@ static int pfmgr_clear_bmp
 int pfmgr_show = 0;
 /* pfmgr_alloc - allocates page frames */
 
-static int pfmgr_alloc
+static int _pfmgr_alloc
 (
     phys_size_t pf, 
     uint8_t flags, 
@@ -757,12 +832,20 @@ static int pfmgr_alloc
 
     spinlock_lock_int(&pfmgr_lock, &int_flag);
     
-    fnode = linked_list_first(&base.freer);
+    /* If we require the highest memory possible, we should
+     * start from the end to the beginning
+     */
+    
+    fnode = (flags & ALLOC_HIGHEST) ?  
+            linked_list_last(&base.freer) :
+            linked_list_first(&base.freer);
+
     req_pf = pf;
     
     while(fnode)
     {
         free_range = (pfmgr_free_range_t*) fnode;
+
         if(req_pf == 0)
         {
             if(flags & ALLOC_CB_STOP)
@@ -775,8 +858,13 @@ static int pfmgr_alloc
                 return(-1);
             }
         }
-
-        next_fnode = linked_list_next(fnode);
+        
+        /* If we require the highest memory possible, we 
+         * should traverse the list in reverse
+         */
+        next_fnode = (flags & ALLOC_HIGHEST) ? 
+                     linked_list_prev(fnode) :
+                     linked_list_next(fnode);
 
         /* Don't do stuff in the lower memory */
         if(free_range->hdr.base  < LOW_MEMORY)
@@ -834,7 +922,8 @@ static int pfmgr_alloc
         /* Look for available page frames within range */
         lkup_sts   = pfmgr_lkup_bmp_for_free_pf(free_range, 
                                                 &addr, 
-                                                &avail_pf);
+                                                &avail_pf, 
+                                                flags);
 #if 0
        kprintf("PRE_POST: 0x%x -> 0x%x\n",addr, avail_pf);                                      
 #endif
@@ -851,7 +940,8 @@ static int pfmgr_alloc
                 avail_pf              = req_pf;
                 lkup_sts              = pfmgr_lkup_bmp_for_free_pf(free_range, 
                                                                   &addr, 
-                                                                  &avail_pf);
+                                                                  &avail_pf,
+                                                                  flags);
             }
             
             if(lkup_sts < 0)
@@ -893,6 +983,7 @@ static int pfmgr_alloc
                 spinlock_unlock_int(&pfmgr_lock, int_flag);
                 return(-1);
             }
+            
             /* decrease the required pfs */
             alloc_len  += cb_dat.used_bytes;
             used_pf = BYTES_TO_PF(cb_dat.used_bytes);
@@ -991,7 +1082,7 @@ static int pfmgr_addr_to_free_range
 
 /* pfmgr_free - frees page frames */
 
-static int pfmgr_free
+static int _pfmgr_free
 (
     free_cb cb, 
     void *pv
@@ -1176,27 +1267,58 @@ int pfmgr_init(void)
             hdr = (pfmgr_range_header_t*)((uint8_t*)hdr + 
                   sizeof(pfmgr_busy_range_t));
         }
-   
+
       phys = (phys_addr_t)hdr->next_range;
       linked_list_add_tail(&base.busyr, &hdr->node);
 
 
     }while(phys != 0);
 
-    pfmgr_interface.alloc   = pfmgr_alloc;
-    pfmgr_interface.dealloc = pfmgr_free;
+    pfmgr_interface.alloc   = _pfmgr_alloc;
+    pfmgr_interface.dealloc = _pfmgr_free;
   
     kprintf("Page frame manager is initialized\n");
     return(0);
 }
 
-pfmgr_t *pfmgr_get(void)
+int pfmgr_free
+(
+    free_cb cb,
+    void *cb_pv
+)
 {
-    return(&pfmgr_interface);
+    int ret = -1;
+
+    if(pfmgr_interface.dealloc != NULL)
+    {
+        ret = pfmgr_interface.dealloc(cb, cb_pv);
+    }
+
+    return(ret);
 }
 
+int pfmgr_alloc
+(
+    phys_size_t pf, 
+    uint8_t flags, 
+    alloc_cb cb, 
+    void *pv
+)
+{
+    int ret = -1;
 
-int pfmgr_show_free_memory(void)
+    if(pfmgr_interface.alloc != NULL)
+    {
+        ret = pfmgr_interface.alloc(pf, flags, cb, pv);
+    }
+
+    return(ret);
+}
+
+int pfmgr_show_free_memory
+(
+    void
+)
 {
     pfmgr_free_range_t *freer = NULL;
     phys_size_t free_mem = 0;
