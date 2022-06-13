@@ -729,10 +729,6 @@ int vm_change_attr
     new_mem_flags = (current_mem_flags & ~clear_mem_flags) & 
                     (current_mem_flags | set_mem_flags);
 
-    kprintf("CURRENT FLAGS %x NEW_FLAGS %x CLEAR %x\n",current_mem_flags, 
-                                                       new_mem_flags, 
-                                                       clear_mem_flags);
-
     if(status != 0)
     {
         spinlock_unlock_int(&ctx->lock, int_flags);
