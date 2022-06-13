@@ -37,7 +37,6 @@ typedef struct pgmgr_t
 
 /* locals */
 static pgmgr_t pgmgr;
-static pfmgr_t *pfmgr        = NULL;
 
 static int         pgmgr_page_fault_handler
 (
@@ -162,7 +161,7 @@ static int pgmgr_alloc_pf(phys_addr_t *pf)
 {
     int ret = 0;
 
-    ret = pfmgr->alloc(1, 0, pgmgr_alloc_pf_cb, pf);
+    ret = pfmgr_alloc(1, 0, pgmgr_alloc_pf_cb, pf);
 
     return(ret);
 }
@@ -184,7 +183,7 @@ static int pgmgr_free_pf
     phys_addr_t addr
 )
 {
-    return(pfmgr->dealloc(pgmgr_free_pf_cb, &addr));
+    return(pfmgr_free(pgmgr_free_pf_cb, &addr));
 }
 
 static int pgmgr_attr_translate
@@ -920,7 +919,7 @@ static int pgmgr_setup_remap_table
                      pgmgr_iter_alloc_level);
 
     /* Allocate pages */
-    status = pfmgr->alloc(0, 
+    status = pfmgr_alloc(0, 
                           ALLOC_CB_STOP, 
                           pgmgr_iterate_levels, 
                           &lvl_dat);
@@ -982,7 +981,7 @@ int pgmgr_allocate_backend
                      0, 
                      pgmgr_iter_alloc_level);
 
-    status = pfmgr->alloc(0, 
+    status = pfmgr_alloc(0, 
                           ALLOC_CB_STOP,
                           pgmgr_iterate_levels,
                           &ld);
@@ -1023,7 +1022,7 @@ int pgmgr_release_backend
                      0, 
                      pgmgr_iter_free_level);
 
-    status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
+    status = pfmgr_free(pgmgr_iterate_levels, &ld);
 
     /* report how much did we actually allocated */
     
@@ -1046,7 +1045,7 @@ int pgmgr_allocate_pages
     pgmgr_ctx_t *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
-    virt_size_t      *out_len,
+    virt_size_t *out_len,
     uint32_t    vm_attr
 )
 {
@@ -1065,7 +1064,7 @@ int pgmgr_allocate_pages
                      attr_mask, 
                      pgmgr_iter_alloc_page);
 
-    status = pfmgr->alloc(0, 
+    status = pfmgr_alloc(0, 
                           ALLOC_CB_STOP,
                           pgmgr_iterate_levels,
                           &ld);
@@ -1091,7 +1090,7 @@ int pgmgr_release_pages
     pgmgr_ctx_t *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
-    virt_size_t      *out_len
+    virt_size_t *out_len
 )
 {
     phys_addr_t attr_mask = 0;
@@ -1107,7 +1106,7 @@ int pgmgr_release_pages
                      0, 
                      pgmgr_iter_free_page);
 
-    status = pfmgr->dealloc(pgmgr_iterate_levels, &ld);
+    status = pfmgr_free(pgmgr_iterate_levels, &ld);
 
     /* report how much did we actually allocated */
     
@@ -1355,7 +1354,7 @@ int pgmgr_kernel_ctx_init
     /* use the new page table */
     __write_cr3(ctx->pg_phys);
 
-    /* Initializae per-CPU stuff */
+    /* Initialize per-CPU stuff */
     pgmgr_per_cpu_init();
 
     /* mark that we create the kernel context */
@@ -1379,8 +1378,6 @@ int pgmgr_init(void)
 
     kprintf("PML5       %d\n", pgmgr.pml5_support);
     kprintf("NX support %d\n", pgmgr.nx_support);
-
-    pfmgr = pfmgr_get();
 
     /* Populate PAT */
     pat->fields.pa0 = PAT_WRITE_BACK;
