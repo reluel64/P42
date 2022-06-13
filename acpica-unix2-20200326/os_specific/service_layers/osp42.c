@@ -697,7 +697,7 @@ AcpiOsUnmapMemory (
     else
         pgmgr_boot_temp_unmap_big((virt_addr_t)where, length);
 #endif
-    acpi_unmap(where, length);
+    acpi_unmap((virt_addr_t)where, length);
 
     return;
 }
