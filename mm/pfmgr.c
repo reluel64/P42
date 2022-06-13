@@ -335,6 +335,7 @@ static void pfmgr_init_busy_callback
 
 int pfmgr_early_alloc_pf
 (
+    phys_addr_t start,
     phys_size_t pf, 
     uint8_t flags, 
     alloc_cb cb, 
@@ -483,12 +484,12 @@ static int pfmgr_lkup_bmp_for_free_pf
     hdr        = &freer->hdr;
     start_addr = *start;
     req_pf     = *pf;
-
+    
     if(!pfmgr_in_range(hdr->base, hdr->len, start_addr,0))
     {
-        start_addr = hdr->base;
+        return(-1);
     }
-    
+
     /* Skip ISA DMA */
     if(pfmgr_touches_range(0, 
                            ISA_DMA_MEMORY_LENGTH, 
@@ -563,7 +564,7 @@ static int pfmgr_lkup_bmp_for_free_pf
                     /* if we want contigous memory, we must reset the
                      * the returned frames to keep looking
                      */
-                    if(flags & ALLOC_CONTIG)
+                    if(flags & PHYS_ALLOC_CONTIG)
                     {
                         pf_ret = 0;
                     }
@@ -807,6 +808,7 @@ int pfmgr_show = 0;
 
 static int _pfmgr_alloc
 (
+    phys_addr_t start,
     phys_size_t pf, 
     uint8_t flags, 
     alloc_cb cb, 
@@ -836,7 +838,7 @@ static int _pfmgr_alloc
      * start from the end to the beginning
      */
     
-    fnode = (flags & ALLOC_HIGHEST) ?  
+    fnode = (flags & PHYS_ALLOC_HIGHEST) ?  
             linked_list_last(&base.freer) :
             linked_list_first(&base.freer);
 
@@ -848,7 +850,7 @@ static int _pfmgr_alloc
 
         if(req_pf == 0)
         {
-            if(flags & ALLOC_CB_STOP)
+            if(flags & PHYS_ALLOC_CB_STOP)
             {
                 req_pf = free_range->avail_pf;
             }
@@ -862,7 +864,7 @@ static int _pfmgr_alloc
         /* If we require the highest memory possible, we 
          * should traverse the list in reverse
          */
-        next_fnode = (flags & ALLOC_HIGHEST) ? 
+        next_fnode = (flags & PHYS_ALLOC_HIGHEST) ? 
                      linked_list_prev(fnode) :
                      linked_list_next(fnode);
 
@@ -890,7 +892,7 @@ static int _pfmgr_alloc
             free_range->next_lkup = 0;
         }
 
-        if(flags & ALLOC_CONTIG)
+        if(flags & PHYS_ALLOC_CONTIG)
         {
             /* Just a small check to see at least if we have the 
              * enough available frames. We will check later 
@@ -911,8 +913,15 @@ static int _pfmgr_alloc
         /* help the lookup a bit by starting the lookup from the previously
          * known to be free address
          */
-        addr       = free_range->hdr.base + 
-                     PF_TO_BYTES(free_range->next_lkup);
+        if(flags & PHYS_ALLOC_PREFERED_ADDR)
+        {
+            addr = start;
+        }
+        else
+        {
+            addr = free_range->hdr.base + 
+                    PF_TO_BYTES(free_range->next_lkup);
+        }
         avail_pf   = req_pf;   
         used_pf    = 0; 
 #if 0
@@ -932,8 +941,9 @@ static int _pfmgr_alloc
         {
             /* Check if next_lkup > 0 and if it is, 
              * try again with it set to 0 
+             * Also, if we preffer an address, try to satisfy only that
              */
-            if(free_range->next_lkup > 0)
+            if(free_range->next_lkup > 0 && (~flags & PHYS_ALLOC_PREFERED_ADDR))
             {
                 free_range->next_lkup = 0;
                 addr                  = free_range->hdr.base;
@@ -951,12 +961,14 @@ static int _pfmgr_alloc
             }
         }
         
+
+        
         /* Always update the next lookup */
         free_range->next_lkup = BYTES_TO_PF((addr - free_range->hdr.base)) +
                                 avail_pf;
      
         /* Contiguous pages should be satisfied from one lookup */
-        if((flags & ALLOC_CONTIG) && lkup_sts < 1)
+        if((flags & PHYS_ALLOC_CONTIG) && lkup_sts < 1)
         {
             fnode = next_fnode;
             continue;
@@ -999,7 +1011,7 @@ static int _pfmgr_alloc
             free_range->next_lkup = BYTES_TO_PF (addr - free_range->hdr.base  + 
                                                  cb_dat.used_bytes);
 
-            if(flags & ALLOC_CB_STOP)
+            if(flags & PHYS_ALLOC_CB_STOP)
             {
                 /* We're done here */
                 if(cb_status == 0)
@@ -1025,7 +1037,7 @@ static int _pfmgr_alloc
         fnode = next_fnode;
     }
 
-    if(!(flags & ALLOC_CB_STOP))
+    if(!(flags & PHYS_ALLOC_CB_STOP))
     {
         spinlock_unlock_int(&pfmgr_lock, int_flag);
 
@@ -1204,8 +1216,6 @@ int pfmgr_init(void)
     linked_list_init(&base.freer);
     kprintf("Initializing Page Frame Manager\n");
 
-   
-    kprintf("LOCK_ACQUIRED\n");
     phys = base.physf_start;
 
     do
@@ -1299,6 +1309,7 @@ int pfmgr_free
 
 int pfmgr_alloc
 (
+    phys_addr_t start,
     phys_size_t pf, 
     uint8_t flags, 
     alloc_cb cb, 
@@ -1309,7 +1320,7 @@ int pfmgr_alloc
 
     if(pfmgr_interface.alloc != NULL)
     {
-        ret = pfmgr_interface.alloc(pf, flags, cb, pv);
+        ret = pfmgr_interface.alloc(start, pf, flags, cb, pv);
     }
 
     return(ret);
