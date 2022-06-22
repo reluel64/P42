@@ -5,9 +5,6 @@
 #include <mutex.h>
 #include <utils.h>
 
-#define PEND_NODE_TO_THREAD(x) ((sched_thread_t*) \
-                                ((uint8_t*)(x) -  \
-                                offsetof(sched_thread_t, pend_node)))
 
 mutex_t *mtx_init(mutex_t *mtx, int options)
 {

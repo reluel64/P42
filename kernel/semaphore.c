@@ -4,10 +4,6 @@
 #include <scheduler.h>
 #include <semaphore.h>
 
-#define PEND_NODE_TO_THREAD(x) ((sched_thread_t*) \
-                                ((uint8_t*)(x) -  \
-                                offsetof(sched_thread_t, pend_node)))
-
 sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count)
 {
 
