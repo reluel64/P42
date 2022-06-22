@@ -35,6 +35,11 @@ extern virt_addr_t kstack_top;
 
 #define KMAIN_SYS_INIT_STACK_SIZE      (0x1000)
 
+#define KERNEL_CODE_SEGMENT            (0x08)
+#define KERNEL_DATA_SEGMENT            (0x10)
+#define USER_CODE_SEGMENT              (0x18)
+#define USER_DATA_SEGMENT              (0x20)
+
 /* Interrupt Descriptor */
 typedef struct _idt_entry
 {

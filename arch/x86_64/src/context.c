@@ -29,8 +29,19 @@ int context_init
     vm_ctx_t      *vm_ctx    = NULL;
     virt_size_t   rsp0       = 0;
 
-   // owner = th->owner;
-   // vm_ctx = owner->vm_ctx;
+    owner = th->owner;
+
+    if(owner == NULL)
+    {
+        return(-1);
+    }
+
+    vm_ctx = owner->vm_ctx;
+
+    if(vm_ctx == NULL)
+    {
+        return(-1);
+    }
 
     th->context = (virt_addr_t)kcalloc(1, CONTEXT_SIZE);
 
@@ -56,23 +67,22 @@ int context_init
     /* Fill the context */
     context = (virt_addr_t*)th->context;
 
-#if 0
-    if(owner->user_space)
+
+    if(owner->user)
     {
-        context[CS_INDEX] = 0x18;
-        context[DS_INDEX] = 0x20;
+        context[CS_INDEX] = USER_CODE_SEGMENT;
+        context[DS_INDEX] = USER_DATA_SEGMENT;
     }
     else
-#endif
     {
-        context[CS_INDEX] = 0x8;
-        context[DS_INDEX] = 0x10;
+        context[CS_INDEX] = KERNEL_CODE_SEGMENT;
+        context[DS_INDEX] = KERNEL_DATA_SEGMENT;
     }
 
     context[RIP_INDEX]  = (virt_addr_t)sched_thread_entry_point;
     context[RSP_INDEX]  = th->stack_origin + th->stack_sz;
     context[RBP_INDEX]  = th->stack_origin + th->stack_sz;
-    context[CR3_INDEX]  = __read_cr3();
+    context[CR3_INDEX]  = vm_ctx->pgmgr.pg_phys;
     context[TH_INDEX ]  = (virt_addr_t)th;
     context[RSP0_INDEX] = rsp0;
 

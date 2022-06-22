@@ -27,10 +27,20 @@
 
 
 #define NODE_TO_THREAD(x) (sched_thread_t*)(((uint8_t*)(x)) -  \
-                          offsetof(sched_thread_t, node))
+                          offsetof(sched_thread_t, sched_node))
+
+#define PEND_NODE_TO_THREAD(x) ((sched_thread_t*) \
+                                ((uint8_t*)(x) -  \
+                                offsetof(sched_thread_t, pend_node)))
+
+#define OWNER_NODE_TO_THREAD(x) ((sched_thread_t*) \
+                                ((uint8_t*)(x) -  \
+                                offsetof(sched_thread_t, owner_node)))
 
 typedef struct sched_exec_unit_t sched_exec_unit_t;
 typedef struct sched_thread_t    sched_thread_t;
+typedef unsigned char cpu_aff_t[CPU_AFFINITY_VECTOR] ;
+
 typedef struct sched_policy_t
 {
     char *policy_name;
@@ -75,8 +85,9 @@ typedef struct sched_policy_t
 typedef struct sched_thread_t
 {
     
-    list_node_t        node;         /* node in the queue                             */
+    list_node_t        sched_node;   /* node in the queue                             */
     list_node_t        pend_node;    /* node for synchronization                      */
+    list_node_t        owner_node;   /* node for the onwer                            */
     virt_addr_t        stack_origin; /* start of memory allocated for the stack       */
     virt_size_t        stack_sz;     /* stack size                                    */  
     uint32_t           flags;        /* thread flags                                  */
@@ -92,7 +103,7 @@ typedef struct sched_thread_t
     uint32_t          to_sleep;      /* amount in ms to sleep                         */
     uint32_t          remain;        /* reamining time before task switch             */
     void              *rval;         /* return value                                  */
-    uint64_t          affinity[CPU_AFFINITY_VECTOR];
+    cpu_aff_t         affinity;
 
 }sched_thread_t;
 
@@ -120,7 +131,7 @@ typedef struct sched_owner_t
     uint32_t    owner_id;
     void       *vm_ctx;
     uint8_t    user;
-    
+    spinlock_t th_lst_lock;
 }sched_owner_t;
 
 

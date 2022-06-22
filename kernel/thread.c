@@ -14,21 +14,24 @@ static void thread_entry_point
 
 static int thread_setup
 (
-    void *out_th,
-    void (*th_entry)(void *arg),
-    void *arg,
-    size_t stack_sz,
-    uint32_t prio
+    void      *out_th,
+    void      (*th_entry)(void *arg),
+    void      *arg,
+    size_t    stack_sz,
+    uint32_t  prio,
+    cpu_aff_t *affiity,
+    void      *owner
 )
 {
     sched_thread_t *th = NULL;
+    sched_owner_t  *ow  = NULL;
     virt_addr_t    stack_origin = 0;
     virt_size_t    stack_size = 0;
 
     int             ret = 0;
     
     th = out_th;
-
+    ow = owner;
     if(th_entry == NULL)
     {
         return(-1);
@@ -40,7 +43,7 @@ static int thread_setup
     /* thake into account the guard pages */
     stack_size += (PAGE_SIZE  << 1);
 
-    stack_origin = vm_alloc(NULL, 
+    stack_origin = vm_alloc(ow->vm_ctx, 
                             VM_BASE_AUTO,
                             stack_size,
                             0,
@@ -55,14 +58,14 @@ static int thread_setup
     memset((void*)stack_origin, 0, stack_size);
 
     /* mark the first guard page as read-only */
-    vm_change_attr(NULL, 
+    vm_change_attr(ow->vm_ctx, 
                   stack_origin,
                   PAGE_SIZE, 0, 
                   VM_ATTR_WRITABLE, 
                   NULL);
 
     /* mark the last guard page as read only */
-    vm_change_attr(NULL, 
+    vm_change_attr(ow->vm_ctx, 
                   stack_origin + stack_size - PAGE_SIZE,
                   PAGE_SIZE, 0, 
                   VM_ATTR_WRITABLE, 
@@ -76,6 +79,7 @@ static int thread_setup
     th->entry_point  = th_entry;
     th->stack_sz     = stack_sz;
     th->flags        = THREAD_READY;
+    th->owner        = owner;
 
     /* we skip the guard page */
     th->stack_origin = stack_origin + PAGE_SIZE;
@@ -85,12 +89,22 @@ static int thread_setup
 
     if(ret < 0)
     {
-        vm_free(NULL, stack_origin, stack_size);
+        vm_free(ow->vm_ctx, stack_origin, stack_size);
         return(-1);
     }
 
-    /* make the thread available to all cpus */
-    memset(th->affinity, 0xff, sizeof(th->affinity));
+    if(affiity == NULL)
+    {
+        /* make the thread available to all cpus */
+        memset(&th->affinity, 0xff, sizeof(cpu_aff_t));
+    }
+    else
+    {
+        memcpy(&th->affinity, affiity, sizeof(cpu_aff_t));
+    }
+
+    /* Add the thread to the owner */
+    owner_add_thread(owner, out_th);
 
     /* Initialize spinlock */
     spinlock_init(&th->lock);
@@ -113,29 +127,50 @@ int thread_create_static
     void (*th_entry)(void *arg),
     void *arg,
     size_t stack_sz,
-    uint32_t prio
+    uint32_t prio,
+    cpu_aff_t *affinity,
+    void *owner
 )
 {
-    if(out_th == NULL)
-        return(-1);
+    int ret = -1;
+    sched_thread_t *th = NULL;
 
-    return(thread_setup(out_th, 
-                          th_entry, 
-                          arg, 
-                          stack_sz, 
-                          prio));
+    /* do some sanity checks */
+    if((out_th   == NULL) || 
+       (owner    == NULL) || 
+       (th_entry == NULL))
+    {
+        return(ret);
+    }
+
+    ret = thread_setup(out_th, 
+                       th_entry, 
+                       arg, 
+                       stack_sz, 
+                       prio,
+                       affinity,
+                       owner);
+    
+    th = out_th;
 }
 
 void *thread_create
 (
-    void (*th_entry)(void *arg),
-    void *arg,
-    size_t stack_sz,
-    uint32_t prio
+    void     (*th_entry)(void *arg),
+    void      *arg,
+    size_t    stack_sz,
+    uint32_t  prio,
+    cpu_aff_t affinity,
+    void      *owner
 )
 {
     sched_thread_t *th = NULL;
     int status = 0;
+
+    if((owner == NULL) || (th_entry == NULL))
+    {
+        return(-1);
+    }
 
     th = kcalloc(sizeof(sched_thread_t), 1);
 
@@ -148,7 +183,9 @@ void *thread_create
                           th_entry,
                           arg,
                           stack_sz,
-                          prio);
+                          prio,
+                          affinity,
+                          owner);
 
     if(status < 0)
     {

@@ -14,14 +14,18 @@
 #include <thread.h>
 #include <isr.h>
 #include <platform.h>
+#include <owner.h>
 
 #define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
 #define SCHEDULER_TICK_MS 1
 
+extern vm_ctx_t vm_kernel_ctx;
+
+sched_owner_t kernel_owner;
 
 static list_head_t units;
 static spinlock_t  units_lock;
-static sched_owner_t kernel;
+
 
 static void sched_idle_thread(void *pv);
 static void schedule_main(void);
@@ -42,8 +46,6 @@ static int sched_enqueue_thread
     sched_exec_unit_t *unit,
     sched_thread_t    *th
 );
-
-
 
 static void sched_context_switch
 (
@@ -215,6 +217,10 @@ int sched_init(void)
     /* Initialize units list */
     linked_list_init(&units);
     
+    /* intialize the owner */
+
+    owner_kernel_init();
+
     return(0);
 }
 
@@ -273,7 +279,9 @@ int sched_unit_init
                          sched_idle_thread, 
                          unit, 
                          0x1000, 
-                         255);
+                         255,
+                         NULL,
+                         &kernel_owner);
     
     unit->idle.unit = unit;
 
@@ -744,7 +752,7 @@ static int sched_enqueue_thread
 
     /* Add the thread in the corresponding queue */
 
-    linked_list_add_tail(lh, &th->node);
+    linked_list_add_tail(lh, &th->sched_node);
 
     return(0);
 }
