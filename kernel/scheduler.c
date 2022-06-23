@@ -19,16 +19,19 @@
 #define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
 #define SCHEDULER_TICK_MS 1
 
-extern vm_ctx_t vm_kernel_ctx;
-
-sched_owner_t kernel_owner;
-
 static list_head_t units;
 static spinlock_t  units_lock;
 
+static void sched_idle_thread
+(
+    void *pv
+);
 
-static void sched_idle_thread(void *pv);
-static void schedule_main(void);
+static void schedule_main
+(
+    void
+);
+
 static uint32_t sched_tick
 (
     void *unit,
@@ -53,19 +56,17 @@ static void sched_context_switch
     sched_thread_t *next
 );
 
-static int in_balance = 0;
-
 void sched_thread_entry_point
 (
     sched_thread_t *th
 )
 {
     int             int_status   = 0;
-    void *(*entry_point)(void *) = NULL;
+    th_entry_point_t entry_point = NULL;
     uint8_t int_flag = 0;
     void *ret_val = NULL;
 
-    entry_point = th->entry_point;
+    entry_point = (th_entry_point_t)th->entry_point;
    
     /* during startup of the thread, unlock the scheduling unit 
      * on which we are running.
@@ -275,13 +276,12 @@ int sched_unit_init
      * as we will switch to it when we finish 
      * intializing the scheduler unit
      */ 
-    thread_create_static(&unit->idle, 
+    kthread_create_static(&unit->idle, 
                          sched_idle_thread, 
                          unit, 
                          0x1000, 
                          255,
-                         NULL,
-                         &kernel_owner);
+                         NULL);
     
     unit->idle.unit = unit;
 
@@ -583,30 +583,31 @@ static int scheduler_balance
     sched_exec_unit_t *unit
 )
 {
+#if 0
     uint8_t int_flag = 0;
     sched_policy_t *policy = NULL;
     int expected = 0;
-return(0);
+
     /* lock the unit */
     spinlock_lock_int(&unit->lock, &int_flag);
 
     if(__atomic_compare_exchange_n(&in_balance, &expected, 1, 
                                    0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
    {
-       #if 0
+
         policy = unit->policy;
 
         if(policy->load_balancing != NULL)
         {
             policy->load_balancing(unit->policy_data, &units);
         }
-#endif
+
         __atomic_clear(&in_balance, __ATOMIC_SEQ_CST);
    }
 
 
    spinlock_unlock_int(&unit->lock, int_flag);
-
+#endif
     return(0);
 }
 

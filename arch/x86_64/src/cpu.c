@@ -50,9 +50,9 @@ extern virt_addr_t isr_no_ec_sz_start;
 extern virt_addr_t isr_no_ec_sz_end;
 extern virt_addr_t isr_ec_sz_start;
 extern virt_addr_t isr_ec_sz_end;
-extern sched_owner_t kernel_owner;
 
-extern void kmain_sys_init(void *arg);
+
+extern void *kmain_sys_init(void *arg);
 
 
 #define _BSP_STACK_TOP ((virt_addr_t)&kstack_top)
@@ -816,13 +816,12 @@ static int pcpu_drv_init(driver_t *drv)
         * Starting the APs, detecting more HW, etc.
         */ 
        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
-       thread_create_static(&init_th, 
+       kthread_create_static(&init_th, 
                             kmain_sys_init,
                             NULL, 
                             KMAIN_SYS_INIT_STACK_SIZE, 
                             0,
-                            NULL,
-                            &kernel_owner);
+                            NULL);
         
         if(sched_unit_init(timer, cpu, &init_th))
         {
