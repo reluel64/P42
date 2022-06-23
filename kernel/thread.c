@@ -3,19 +3,13 @@
 #include <utils.h>
 #include <vm.h>
 #include <liballoc.h>
-
-static void thread_entry_point
-(
-    sched_thread_t *th
-)
-{
-    
-}
+#include <thread.h>
+#include <owner.h>
 
 static int thread_setup
 (
     void      *out_th,
-    void      (*th_entry)(void *arg),
+    th_entry_point_t entry_pt,
     void      *arg,
     size_t    stack_sz,
     uint32_t  prio,
@@ -32,7 +26,8 @@ static int thread_setup
     
     th = out_th;
     ow = owner;
-    if(th_entry == NULL)
+
+    if(entry_pt == NULL)
     {
         return(-1);
     }
@@ -76,7 +71,7 @@ static int thread_setup
 
     th->prio         = prio;
     th->arg          = arg;
-    th->entry_point  = th_entry;
+    th->entry_point  = entry_pt;
     th->stack_sz     = stack_sz;
     th->flags        = THREAD_READY;
     th->owner        = owner;
@@ -124,7 +119,7 @@ int thread_start
 int thread_create_static
 (
     void *out_th,
-    void (*th_entry)(void *arg),
+    th_entry_point_t entry_pt,
     void *arg,
     size_t stack_sz,
     uint32_t prio,
@@ -138,13 +133,13 @@ int thread_create_static
     /* do some sanity checks */
     if((out_th   == NULL) || 
        (owner    == NULL) || 
-       (th_entry == NULL))
+       (entry_pt == NULL))
     {
         return(ret);
     }
 
     ret = thread_setup(out_th, 
-                       th_entry, 
+                       entry_pt, 
                        arg, 
                        stack_sz, 
                        prio,
@@ -156,20 +151,20 @@ int thread_create_static
 
 void *thread_create
 (
-    void     (*th_entry)(void *arg),
+    th_entry_point_t entry_pt,
     void      *arg,
     size_t    stack_sz,
     uint32_t  prio,
-    cpu_aff_t affinity,
+    cpu_aff_t *affinity,
     void      *owner
 )
 {
     sched_thread_t *th = NULL;
     int status = 0;
 
-    if((owner == NULL) || (th_entry == NULL))
+    if((owner == NULL) || (entry_pt == NULL))
     {
-        return(-1);
+        return(NULL);
     }
 
     th = kcalloc(sizeof(sched_thread_t), 1);
@@ -180,7 +175,7 @@ void *thread_create
     } 
     
     status = thread_setup(th, 
-                          th_entry,
+                          entry_pt,
                           arg,
                           stack_sz,
                           prio,
@@ -194,4 +189,55 @@ void *thread_create
     }
 
     return(th);
+}
+
+
+void *kthread_create
+(
+    th_entry_point_t entry_pt,
+    void *arg,
+    size_t    stack_sz,
+    uint32_t  prio,
+    cpu_aff_t *affinity
+)
+{
+    sched_owner_t *ko = NULL;
+    void *th_ret = NULL;
+
+    ko = owner_kernel_get();
+
+    th_ret = thread_create(entry_pt,
+                           arg,
+                           stack_sz,
+                           prio,
+                           affinity,
+                           ko);
+
+    return(th_ret);
+}
+
+int kthread_create_static
+(
+    void *out_th,
+    th_entry_point_t entry_pt,
+    void *arg,
+    size_t    stack_sz,
+    uint32_t  prio,
+    cpu_aff_t *affinity
+)
+{
+    int th_ret = 0;
+    sched_owner_t *ko = NULL;
+    
+    ko = owner_kernel_get();
+
+    th_ret = thread_create_static(out_th,
+                                  entry_pt,
+                                  arg,
+                                  stack_sz,
+                                  prio,
+                                  affinity,
+                                  ko);
+
+    return(th_ret);
 }
