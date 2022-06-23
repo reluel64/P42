@@ -9,12 +9,14 @@
 mutex_t *mtx_init(mutex_t *mtx, int options)
 {
     if(mtx == NULL)
+    {
         return(NULL);
-
+    }
+    
     mtx->opts = options;
 
-    __atomic_store_n(&mtx->rlevel, 0, __ATOMIC_RELEASE);
-    __atomic_store_n(&mtx->owner, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&mtx->rlevel, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&mtx->owner, 0, __ATOMIC_SEQ_CST);
     linked_list_init(&mtx->pendq);
     spinlock_init(&mtx->lock);
 
@@ -54,7 +56,6 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
     while(1)
     {
-
         expected = NULL;
 
         /* Try to become the owner of the mutex*/
@@ -62,8 +63,8 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
                                        &expected,
                                        thread,
                                        0,
-                                       __ATOMIC_ACQUIRE,
-                                       __ATOMIC_RELAXED
+                                       __ATOMIC_SEQ_CST,
+                                       __ATOMIC_SEQ_CST
                                        ))
         {
             /* set recursion level to 1 */
@@ -81,15 +82,16 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
                                        &expected,
                                        thread,
                                        0,
-                                       __ATOMIC_ACQUIRE,
-                                       __ATOMIC_RELAXED
+                                       __ATOMIC_SEQ_CST,
+                                       __ATOMIC_SEQ_CST
                                        ))
         {
             /* if we are already the owner, increase the recursion level */
             
             if(mtx->opts & MUTEX_RECUSRIVE)
-                __atomic_add_fetch(&mtx->rlevel, 1, __ATOMIC_ACQUIRE);
-
+            {
+                __atomic_add_fetch(&mtx->rlevel, 1, __ATOMIC_SEQ_CST);
+            }
             spinlock_unlock_int(&mtx->lock, int_state);
             return(0);
         }
@@ -165,8 +167,8 @@ int mtx_release(mutex_t *mtx)
                                        &expected,
                                        0,
                                        0,
-                                       __ATOMIC_ACQUIRE,
-                                       __ATOMIC_RELAXED
+                                       __ATOMIC_SEQ_CST,
+                                       __ATOMIC_SEQ_CST
                                        ))
     {
         spinlock_unlock_int(&mtx->lock, int_state);
@@ -176,7 +178,7 @@ int mtx_release(mutex_t *mtx)
     if(mtx->opts & MUTEX_RECUSRIVE)
     {
         /* reduce the recursion level */
-        if(__atomic_sub_fetch(&mtx->rlevel, 1, __ATOMIC_RELEASE) > 0)
+        if(__atomic_sub_fetch(&mtx->rlevel, 1, __ATOMIC_SEQ_CST) > 0)
         {
             spinlock_unlock_int(&mtx->lock, int_state);
             return(0);
@@ -189,7 +191,7 @@ int mtx_release(mutex_t *mtx)
     if(pend_node == NULL)
     {
         /* if we don't have a new owner, clear oursevles */
-        __atomic_clear(&mtx->owner, __ATOMIC_RELEASE);
+        __atomic_clear(&mtx->owner, __ATOMIC_SEQ_CST);
         spinlock_unlock_int(&mtx->lock, int_state);
         return(0);
     }
@@ -197,13 +199,17 @@ int mtx_release(mutex_t *mtx)
     thread = PEND_NODE_TO_THREAD(pend_node);
 
     /* Set the new owner */
-    __atomic_store_n(&mtx->owner, thread, __ATOMIC_RELEASE);
+    __atomic_store_n(&mtx->owner, thread, __ATOMIC_SEQ_CST);
 
     /* Wake up the thread */
     if(thread->flags & THREAD_BLOCKED)
+    {
         sched_unblock_thread(thread);
+    }
     else
+    {
         sched_wake_thread(thread);
+    }
 
     spinlock_unlock_int(&mtx->lock, int_state);
 

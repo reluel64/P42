@@ -8,11 +8,13 @@ sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count)
 {
 
     if(sem == NULL)
+    {
         return(NULL);
-
+    }
+    
     sem->max_count = max_count;
 
-    __atomic_store_n(&sem->count, init_val, __ATOMIC_RELEASE);
+    __atomic_store_n(&sem->count, init_val, __ATOMIC_SEQ_CST);
 
     linked_list_init(&sem->pendq);
 
@@ -32,7 +34,9 @@ sem_t *sem_create(uint32_t init_val, uint32_t max_count)
 
     /* check if we've failed to set up the semaphore */
     if(ret_sem != sem)
+    {
         kfree(sem);
+    }
 
     return(ret_sem);
 }
@@ -51,9 +55,9 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
      * Otherwise, we will need to block the task
      */
     
-    if(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) > 0)
+    if(__atomic_load_n(&sem->count, __ATOMIC_SEQ_CST) > 0)
     {
-        __atomic_sub_fetch(&sem->count, 1, __ATOMIC_ACQUIRE);
+        __atomic_sub_fetch(&sem->count, 1, __ATOMIC_SEQ_CST);
         spinlock_unlock_int(&sem->lock, int_state);
         return(0);
     }
@@ -61,7 +65,7 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
     thread = sched_thread_self();
 
     /* We will be able to acquire the semaphore here */
-    while(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) < 1)
+    while(__atomic_load_n(&sem->count, __ATOMIC_SEQ_CST) < 1)
     {
         
         if(block_flags & THREAD_SLEEPING)
@@ -101,7 +105,7 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
         linked_list_remove(&sem->pendq, &thread->pend_node);
     }
     
-    __atomic_sub_fetch(&sem->count, 1, __ATOMIC_ACQUIRE);
+    __atomic_sub_fetch(&sem->count, 1, __ATOMIC_SEQ_CST);
     
     spinlock_unlock_int(&sem->lock, int_state);
 
@@ -117,9 +121,9 @@ int sem_release(sem_t *sem)
     
     spinlock_lock_int(&sem->lock, &int_state);
 
-    if(__atomic_load_n(&sem->count, __ATOMIC_ACQUIRE) < sem->max_count)
+    if(__atomic_load_n(&sem->count, __ATOMIC_SEQ_CST) < sem->max_count)
     {
-        __atomic_add_fetch(&sem->count, 1, __ATOMIC_RELEASE);
+        __atomic_add_fetch(&sem->count, 1, __ATOMIC_SEQ_CST);
     }
 
     /* Get the first pending task */
