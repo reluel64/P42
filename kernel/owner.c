@@ -1,13 +1,14 @@
 #include <scheduler.h>
 #include <liballoc.h>
 #include <vm.h>
+#include <utils.h>
 
-extern sched_owner_t kernel_owner;
+
 extern vm_ctx_t      vm_kernel_ctx;
 
 static list_head_t owners;
 static spinlock_t lock = SPINLOCK_INIT;
-
+static sched_owner_t kernel_owner;
 
 
 int _owner_setup
@@ -114,11 +115,10 @@ int owner_remove_thread
 
 }
 
-#if 0
-int owner_create
+sched_owner_t *owner_kernel_get
 (
-    sched_owner_t *owner
-    vm_ctx_t *ctx,
-
+    void
 )
-#endif
+{
+    return(&kernel_owner);
+}
