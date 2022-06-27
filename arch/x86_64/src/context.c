@@ -23,9 +23,7 @@ int context_init
 )
 {
     sched_owner_t *owner     = NULL;
-    virt_addr_t   stack      = 0;
     virt_addr_t   *context   = NULL;
-    virt_size_t   stack_size = 0;
     vm_ctx_t      *vm_ctx    = NULL;
     virt_size_t   rsp0       = 0;
 
@@ -53,11 +51,10 @@ int context_init
     /* allocate the RSP0 that will be used when switching 
      * from user mode to kernel mode
      */
-    rsp0 = vm_alloc(NULL, VM_BASE_AUTO, PAGE_SIZE, 0, VM_ATTR_WRITABLE);
+    rsp0 = vm_alloc(vm_ctx, VM_BASE_AUTO, PAGE_SIZE, 0, VM_ATTR_WRITABLE);
 
     if(rsp0 == VM_INVALID_ADDRESS)
     {
-        vm_free(NULL, stack, stack_size);
         kfree((void*)th->context);
         return(-1);
     }
@@ -85,6 +82,48 @@ int context_init
     context[CR3_INDEX]  = vm_ctx->pgmgr.pg_phys;
     context[TH_INDEX ]  = (virt_addr_t)th;
     context[RSP0_INDEX] = rsp0;
+
+    return(0);
+}
+
+int context_destroy
+(
+    sched_thread_t *th
+)
+{
+    sched_owner_t *owner     = NULL;
+    virt_addr_t   stack      = 0;
+    virt_addr_t   *context   = NULL;
+    vm_ctx_t      *vm_ctx    = NULL;
+    virt_size_t   rsp0       = 0;
+
+    if(th == NULL)
+    {
+        return(-1);
+    }
+
+    context = (virt_addr_t*)th->context;
+
+    if(context == NULL)
+    {
+        return(-1);
+    }
+    
+    
+    rsp0 = context[RSP0_INDEX];
+    owner = th->owner;
+    vm_ctx = owner->vm_ctx;
+
+    if(rsp0 != VM_INVALID_ADDRESS)
+    {
+        /* sanitize the RSP0 stack */
+        memset((void*) rsp0, 0, PAGE_SIZE);
+        vm_free(owner->vm_ctx, rsp0, PAGE_SIZE);
+    }
+
+    /* sanitize context memory */
+    memset(context, 0, CONTEXT_SIZE);
+    kfree(context);
 
     return(0);
 }
