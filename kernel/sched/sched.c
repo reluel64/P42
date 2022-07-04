@@ -22,7 +22,7 @@
 static list_head_t units;
 static spinlock_t  units_lock;
 
-static void sched_idle_thread
+static void *sched_idle_thread
 (
     void *pv
 );
@@ -106,7 +106,6 @@ int sched_start_thread
     th->unit = unit;
 
     /* enqueue the thread */ 
-    
     unit->policy.enqueue(unit, th);
 
     /* Unlock everything */
@@ -478,7 +477,7 @@ static uint32_t sched_tick
             th->remain = 255 - th->prio;
         }
     }
-    
+
     if(unit->policy.tick != NULL)
     {
         unit->policy.tick(unit);
@@ -492,7 +491,7 @@ static uint32_t sched_tick
 }
 
 /******************************************************************************/
-static void sched_idle_thread
+static void *sched_idle_thread
 (
     void *pv
 )
@@ -526,6 +525,8 @@ static void sched_idle_thread
     {
         cpu_halt();
     }
+
+    return(NULL);
 }
 
 static void sched_context_switch
@@ -616,10 +617,25 @@ static void sched_enq
 {
 
     uint32_t state = 0;
+    sched_thread_t *prev_thread = NULL;
+
+    if(unit->current == NULL)
+    {
+        prev_thread = &unit->idle;
+    }
+    else
+    {
+        prev_thread = unit->current;
+    }
+
+    /* Clear thread's running flag */
+    __atomic_and_fetch(&prev_thread->flags, 
+                          ~THREAD_RUNNING, 
+                          __ATOMIC_SEQ_CST);
 
     if(unit->current)
     {
-        *prev_th = unit->current;
+        prev_thread = unit->current;
 
         state = __atomic_load_n(&unit->current->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_STATE_MASK;
@@ -643,8 +659,10 @@ static void sched_enq
     }
     else
     {
-        *prev_th = &unit->idle;
+        prev_thread = &unit->idle;
     }
+
+    *prev_th = prev_thread;
 }
 
 /* Dequeue a thread */
@@ -655,7 +673,7 @@ static void sched_deq
     sched_thread_t   **next_th
 )
 {
-    uint32_t deq_status = 0;
+    int deq_status = 0;
     sched_thread_t *next_thread = NULL;
 
     deq_status = unit->policy.dequeue(unit, &next_thread);
@@ -669,14 +687,12 @@ static void sched_deq
     {
         unit->current = next_thread;
     }
-
        /* Set thread's running flag */
     __atomic_or_fetch(&next_thread->flags, 
                       THREAD_RUNNING, 
                       __ATOMIC_SEQ_CST);
 
     *next_th = next_thread;
-
 }
 
 static void sched_main(void)
@@ -695,19 +711,17 @@ static void sched_main(void)
 
     cpu    = cpu_current_get();
     unit   = cpu->sched;
-   
+    
     /* Lock the execution unit */
     spinlock_lock_int(&unit->lock, &int_flag);
 
-    /* If we are not coming from the idle task, tell the policy
-     * to handle the thread
-     */
+    /* Add the thread to the policy queue */
+
     sched_enq(unit, &prev_th);
 
     /* Ask the policy for the next thread */
     sched_deq(unit, &next_th);
-
-
+    
     /* Switch context */
     sched_context_switch(prev_th, next_th);
     
