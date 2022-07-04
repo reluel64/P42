@@ -38,7 +38,7 @@ static int basic_deq_thread
         {
             next_th = linked_list_next(th);
 
-            thread = NODE_TO_THREAD(th);
+            thread = SCHED_NODE_TO_THREAD(th);
 
             if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_BLOCKED))
@@ -65,7 +65,7 @@ static int basic_deq_thread
         {
             next_th = linked_list_next(th);
 
-            thread = NODE_TO_THREAD(th);
+            thread = SCHED_NODE_TO_THREAD(th);
 
             if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
                 THREAD_SLEEPING))
@@ -87,7 +87,7 @@ static int basic_deq_thread
     
     linked_list_remove(&policy->ready_q, th);
 
-    thread = NODE_TO_THREAD(th);
+    thread = SCHED_NODE_TO_THREAD(th);
 
     /* Mark the next thread as running */
     __atomic_or_fetch(&thread->flags, 
@@ -111,11 +111,6 @@ static int basic_enq_thread
     list_head_t *lh = NULL;
     basic_policy_t *policy = NULL;
 
-    if(unit->current == NULL)
-    {
-        return(-1);
-    }
-    
     policy = unit->policy.pv;
     
     __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
@@ -166,7 +161,7 @@ static int basic_tick
     while(node)
     {
         
-        th = (sched_thread_t*)node;
+        th = SCHED_NODE_TO_THREAD(node);
 
         /* If timeout has been reached, wake the thread */
 
@@ -204,7 +199,7 @@ static int basic_init
     linked_list_init(&bp->sleep_q);
     linked_list_init(&bp->block_q);
 
-    
+    unit->policy.pv = bp;
 
     return(0);
 }
@@ -214,6 +209,7 @@ static sched_policy_t basic_policy =
     .dequeue     = basic_deq_thread,
     .enqueue     = basic_enq_thread,
     .tick        = basic_tick,
+    .init        = basic_init,
     .policy_name = "basic",
     .pv          = NULL
 };
