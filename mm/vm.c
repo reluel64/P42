@@ -579,7 +579,7 @@ virt_addr_t vm_map
     int status = 0;
     uint8_t int_status = 0;
     
-    if(len % PAGE_SIZE || phys % PAGE_SIZE)
+    if((len % PAGE_SIZE) || (phys % PAGE_SIZE))
     {
         return(VM_INVALID_ADDRESS);
     }
