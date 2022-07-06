@@ -307,9 +307,10 @@ int sched_unit_init
         kprintf("No timer - will rely on resched IPIs only\n");
     }
 
-    /* From now, we are entering the unit's idle routine */
-    sched_context_switch(NULL, &unit->idle);
+    unit->flags |= UNIT_START;
 
+    /* Enter the scheduler's code */
+    sched_main();
     /* make the compiler happy  - we would never reach this*/
     return(0);
 
@@ -453,6 +454,7 @@ static uint32_t sched_tick
     uint8_t           int_flag      = 0;
     list_node_t       *node         = NULL;
     sched_thread_t    *th           = NULL;
+    uint32_t          next_tick     = UINT32_MAX;
 
     unit = pv_unit;
 
@@ -480,7 +482,7 @@ static uint32_t sched_tick
 
     if(unit->policy.tick != NULL)
     {
-        unit->policy.tick(unit);
+        unit->policy.tick(unit, &next_tick);
     }
 
     /* all good, unlock the unit */
@@ -621,17 +623,33 @@ static void sched_enq
 
     if(unit->current == NULL)
     {
-        prev_thread = &unit->idle;
+        /* If the flag UNIT_START is set, then we do not
+         * have a previous thread so we will just clear the flag.
+         * Trying to set the prev_thread to the idle thread when the UNIT_START
+         * is in place will have disastreous results as the context of the idle
+         * task will be overwirtten right from the start with wrong info
+         */
+        if(unit->flags & UNIT_START)
+        {
+            unit->flags &= ~UNIT_START;
+        }
+        else
+        {
+            prev_thread = &unit->idle;
+        }
     }
     else
     {
         prev_thread = unit->current;
     }
 
-    /* Clear thread's running flag */
-    __atomic_and_fetch(&prev_thread->flags, 
+    if(prev_thread)
+    {
+        /* Clear thread's running flag */
+        __atomic_and_fetch(&prev_thread->flags, 
                           ~THREAD_RUNNING, 
                           __ATOMIC_SEQ_CST);
+    }
 
     if(unit->current)
     {
@@ -656,10 +674,6 @@ static void sched_enq
         {
             kprintf("no enqueue function\n");
         }
-    }
-    else
-    {
-        prev_thread = &unit->idle;
     }
 
     *prev_th = prev_thread;
@@ -721,7 +735,7 @@ static void sched_main(void)
 
     /* Ask the policy for the next thread */
     sched_deq(unit, &next_th);
-    
+
     /* Switch context */
     sched_context_switch(prev_th, next_th);
     
