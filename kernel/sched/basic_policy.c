@@ -146,12 +146,15 @@ static int basic_enq_thread
 
 static int basic_tick
 (
-    sched_exec_unit_t *unit
+    sched_exec_unit_t *unit,
+    uint32_t          *next_sleep
 )
 {
-    list_node_t *node = NULL;
-    sched_thread_t *th = NULL;
-    basic_policy_t *policy = NULL;
+    list_node_t    *node        = NULL;
+    sched_thread_t *th          = NULL;
+    basic_policy_t *policy      = NULL;
+    
+    (*next_sleep)  = UINT32_MAX;
 
     policy = unit->policy.pv;
 
@@ -174,6 +177,10 @@ static int basic_tick
             {            
                 /* Wake up the thread */
                 sched_wake_thread(th);
+            }
+            else
+            {
+                (*next_sleep) = min(*next_sleep, th->to_sleep - th->slept);
             }
         }
         node = linked_list_next(node);
