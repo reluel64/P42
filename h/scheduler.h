@@ -17,6 +17,8 @@
 #define UNIT_THREADS_WAKE        (1 << 0)
 #define UNIT_THREADS_UNBLOCK     (1 << 1)
 #define UNIT_RESCHEDULE          (1 << 2)
+#define UNIT_START               (1 << 3)
+
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
@@ -26,59 +28,48 @@
 #define SCHED_MAX_PRIORITY 255
 
 
-#define NODE_TO_THREAD(x) (sched_thread_t*)(((uint8_t*)(x)) -  \
-                          offsetof(sched_thread_t, sched_node))
+#define SCHED_NODE_TO_THREAD(x) (sched_thread_t*) (((uint8_t*)(x)) -  \
+                                 offsetof(sched_thread_t, sched_node))
 
-#define PEND_NODE_TO_THREAD(x) ((sched_thread_t*) \
-                                ((uint8_t*)(x) -  \
+#define PEND_NODE_TO_THREAD(x) ((sched_thread_t*) ((uint8_t*)(x) -  \
                                 offsetof(sched_thread_t, pend_node)))
 
-#define OWNER_NODE_TO_THREAD(x) ((sched_thread_t*) \
-                                ((uint8_t*)(x) -  \
+#define OWNER_NODE_TO_THREAD(x) ((sched_thread_t*) (uint8_t*)(x) -  \
                                 offsetof(sched_thread_t, owner_node)))
 
 typedef struct sched_exec_unit_t sched_exec_unit_t;
 typedef struct sched_thread_t    sched_thread_t;
 typedef unsigned char cpu_aff_t[CPU_AFFINITY_VECTOR] ;
 
+
 typedef struct sched_policy_t
 {
     char *policy_name;
 
-    int (*thread_dequeue)
+    int (*dequeue)
     (
-        void *policy_data,
+        sched_exec_unit_t *unit,
         sched_thread_t    **next
     );
 
-    int (*thread_enqueue)
+    int (*enqueue)
     (
-        void *policy_data,
-        sched_thread_t *th
+        sched_exec_unit_t *unit,
+        sched_thread_t *prev
     );
 
-    int (*thread_tick)
+    int (*tick)
     (
-        void *policy_data,
-        sched_thread_t *th
+        sched_exec_unit_t *unit,
+        uint32_t *next_tick
     );
 
-    int (*load_balancing)
-    (
-        void *policy_data,
-        list_head_t    *units
-    );
-
-    int (*init_policy)
+    int(*init)
     (
         sched_exec_unit_t *unit
     );
 
-    int (*thread_enqueue_new)
-    (   
-        void *policy_data,
-        sched_thread_t *th
-    );
+    void *pv;
 
 }sched_policy_t;
 
@@ -114,14 +105,11 @@ typedef struct sched_exec_unit_t
                                     * execution unit*/ 
     sched_thread_t   *current;      /* current thread                                */
     sched_thread_t    idle;         /* our dearest idle task                         */
-    list_head_t       ready_q;      /* queue of ready threads on the current CPU     */
-    list_head_t       blocked_q;    /* queue of blocked threads                      */
-    list_head_t       sleep_q;      /* queue of sleeping threads                     */
+    list_head_t       dead_q;      /* queue of dead threads on the current CPU     */
     spinlock_t        lock;         /* lock to protect the queues                    */
     uint32_t          flags;        /* flags for the execution unit                  */
     device_t         *timer_dev;    /* timer device which is connected to this unit  */
-  //  sched_policy_t    *policy;
-  //  void              *policy_data;
+    sched_policy_t    policy;
 }sched_exec_unit_t;
 
 typedef struct sched_owner_t
