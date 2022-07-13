@@ -569,7 +569,7 @@ static int xapic_write
     uint32_t           reg_offset = 0;
     volatile uint32_t *offset     = NULL;
     uint32_t           reg_val    = 0;
-
+    uint8_t            int_flag   = 0;
     if(cnt == 0)
         return(0);
 
@@ -586,8 +586,13 @@ static int xapic_write
         case LOCAL_APIC_ID_REGISTER:
         case LOCAL_APIC_VERSION_REGISTER:
         case PROCESSOR_PRIORITY_REGISTER:
+        {
+            if(int_flag)
+            {
+                cpu_int_unlock();
+            }
             return(-1);
-        
+        }
         case INTERRUPT_COMMAND_REGISTER:
             if(cnt > 1)
             {
@@ -598,6 +603,11 @@ static int xapic_write
 
         default:
             offset[0] = data[0];
+    }
+
+    if(int_flag)
+    {
+        cpu_int_unlock();
     }
 
     return(0);
@@ -613,9 +623,17 @@ static int xapic_read
 {
     uint32_t reg_offset = 0;
     volatile uint32_t *offset = NULL;
+    uint8_t int_flag = 0;
 
     if(cnt == 0)
         return(0);
+
+    int_flag = cpu_int_check();
+
+    if(int_flag)
+    {
+        cpu_int_lock();
+    }
 
     reg_offset = (~APIC_REGISTER_START & reg) * 0x10; 
 
@@ -656,9 +674,21 @@ static int xapic_read
 
         case EOI_REGISTER:
         case SELF_IPI_REGISTER:
+        {
+            if(int_flag)
+            {
+                cpu_int_unlock();
+            }
             return(-1);
+        }
 
     }
+
+    if(int_flag)
+    {
+        cpu_int_unlock();
+    }
+
     return(0);
 }
 
@@ -671,10 +701,18 @@ static int x2apic_write
 )
 {
     uint64_t reg_val = 0;
+    uint8_t  int_flag = 0;
 
     if(cnt == 0)
         return(0);
-  
+    
+    int_flag = cpu_int_check();
+
+    if(int_flag)
+    {
+        cpu_int_lock();
+    }
+
     switch(reg)
     {
         case IN_SERVICE_REGISTER:
@@ -684,8 +722,14 @@ static int x2apic_write
         case LOCAL_APIC_ID_REGISTER:
         case LOCAL_APIC_VERSION_REGISTER:
         case PROCESSOR_PRIORITY_REGISTER:
-            return(-1);
+        {
+            if(int_flag)
+            {
+                cpu_int_unlock();
+            }
 
+            return(-1);
+        }
         case INTERRUPT_COMMAND_REGISTER:
           
             if(cnt > 1)
@@ -701,6 +745,11 @@ static int x2apic_write
 
     __wrmsr(reg, reg_val);
 
+    if(int_flag)
+    {
+        cpu_int_unlock();
+    }
+
     return(0);
 }
 
@@ -713,9 +762,16 @@ static int x2apic_read
 )
 {
     uint64_t reg_val = 0;
-
+    uint8_t  int_flag = 0;
     if(cnt == 0)
         return(0);
+
+    int_flag = cpu_int_check();
+
+    if(int_flag)
+    {
+        cpu_int_lock();
+    }
 
     switch(reg)
     {
@@ -759,9 +815,21 @@ static int x2apic_read
 
         case EOI_REGISTER:
         case SELF_IPI_REGISTER:
+        {
+            if(int_flag)
+            {
+                cpu_int_unlock();
+            }
             return(-1);
+        }
 
     }
+
+    if(int_flag)
+    {
+        cpu_int_unlock();
+    } 
+
     return(0);
 }
 
