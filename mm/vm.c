@@ -157,7 +157,12 @@ static int vm_setup_protected_regions
     for(uint32_t i = 0; i < rsrvd_count; i++)
     {
         kprintf("Reserving 0x%x - 0x%x\n", re[i].base, re[i].length);
-        if(vm_space_alloc(ctx, re[i].base, re[i].length, re[i].flags, re[i].eflags) == VM_INVALID_ADDRESS)
+        
+        if(vm_space_alloc(ctx, 
+                          re[i].base, 
+                          re[i].length, 
+                          re[i].flags, 
+                          re[i].eflags) == VM_INVALID_ADDRESS)
         {
             kprintf("FAILED to reserve memory\n");
             while(1);
