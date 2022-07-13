@@ -24,7 +24,7 @@ extern virt_addr_t kstack_top;
 #define MAX_HANDLERS       IDT_TABLE_COUNT
 
 #define PLATFORM_AP_RETRIES       (1)
-#define PLATFORM_AP_START_TIMEOUT (1000)
+#define PLATFORM_AP_START_TIMEOUT (5000)
 #define PLATFORM_AP_ALL_CPUS      (-1)
 #define PLATFORM_RESCHED_VECTOR        (240)
 #define PLATFORM_PG_INVALIDATE_VECTOR  (239)
