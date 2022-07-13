@@ -899,7 +899,7 @@ void* liballoc_alloc(size_t pages)
 int liballoc_free(void*p, size_t pages)
 {
     int ret = 0;
-    kprintf("FREEING MEMORY FROM LIBALLOC\n");
+ 
     ret = vm_free(NULL, (virt_addr_t)p, pages * PAGE_SIZE);
  
     return(ret);
