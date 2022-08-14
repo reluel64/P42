@@ -683,7 +683,7 @@ static int pfmgr_mark_bmp
         /* Do not mark more than remaining frames */
         mask_frames = min(mask_frames, pf);
 
-        /* Do not makr more than available frames */
+        /* Do not mark more than available frames */
         mask_frames = min(mask_frames, freer->avail_pf);
 
         if((mask_frames == PF_PER_ITEM) && 
