@@ -190,8 +190,9 @@ int pgmgr_allocate_pages
     pgmgr_ctx_t *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
-    virt_size_t      *out_len,
-    uint32_t    vm_attr
+    virt_size_t *out_len,
+    uint32_t    vm_attr,
+    uint32_t    alloc_flags
 );
 
 int pgmgr_release_pages

@@ -1050,14 +1050,23 @@ int pgmgr_allocate_pages
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len,
-    uint32_t    vm_attr
+    uint32_t    vm_attr,
+    uint32_t    alloc_attr
 )
 {
-    phys_addr_t attr_mask = 0;
+    phys_addr_t        attr_mask = 0;
     pgmgr_level_data_t ld;
-    int status = 0;
-
+    uint8_t            pfmgr_flags = PHYS_ALLOC_CB_STOP;
+    int                status = 0;
+    
+    /* Translate the flags */
     pgmgr_attr_translate(&attr_mask, vm_attr);
+
+    /* Translate pfmgr flags */
+    if(alloc_attr & VM_CONTIG_PHYS)
+    {
+        pfmgr_flags |= PHYS_ALLOC_CONTIG;
+    }
 
     /* Allocate pages */
     PGMGR_FILL_LEVEL(&ld, 
@@ -1070,7 +1079,7 @@ int pgmgr_allocate_pages
 
     status = pfmgr_alloc(0, 
                          0, 
-                         PHYS_ALLOC_CB_STOP,
+                         pfmgr_flags,
                          pgmgr_iterate_levels,
                          &ld);
 
@@ -1509,7 +1518,9 @@ void pgmgr_invalidate
     virt_size_t len
 )
 {
-    virt_addr_t cr3 = __read_cr3();
+    virt_addr_t cr3 = 0;
+
+    cr3 = __read_cr3();
 
     if(cr3 == ctx->pg_phys)
     {
