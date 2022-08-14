@@ -277,6 +277,16 @@ static int vm_ctx_init
     return(VM_OK);
 }
 
+static int vm_adjust_for_guard
+(
+    vm_ctx_t *ctx,
+    virt_addr_t *vaddr,
+    virt_size_t *len
+)
+{
+    
+}
+
 int vm_init(void)
 {
     int status = 0;
@@ -509,7 +519,8 @@ virt_addr_t vm_alloc
                                           space_addr,
                                           len,
                                           &out_len,
-                                          mem_flags);
+                                          mem_flags,
+                                          alloc_flags);
 
             if(status != 0)
             {
@@ -821,20 +832,23 @@ int vm_change_attr
 
 int vm_unmap
 (
-    vm_ctx_t *ctx, 
+    vm_ctx_t    *ctx, 
     virt_addr_t vaddr, 
     virt_size_t len
 )
 {
-    int status = 0;
-    virt_size_t out_len = 0;
-    uint8_t int_flags = 0;
+    int         status    = 0;
+    virt_size_t out_len   = 0;
+    uint8_t     int_flags = 0;
 
     if(ctx == NULL)
+    {
        ctx = &vm_kernel_ctx;
-     
+    }
+
     /* vaddr and len must be page aligned */
-    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE) || (vaddr == VM_INVALID_ADDRESS))
+    if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE) || 
+       (vaddr == VM_INVALID_ADDRESS))
     {
         return(VM_FAIL);
     }
@@ -891,6 +905,8 @@ int vm_free
     uint8_t int_flags = 0;
     int status = 0;
     uint32_t old_flags = 0;
+    
+
 
     if(ctx == NULL)
         ctx = &vm_kernel_ctx;
