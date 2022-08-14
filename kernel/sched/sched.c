@@ -310,7 +310,8 @@ int sched_unit_init
     unit->flags |= UNIT_START;
 
     /* Enter the scheduler's code */
-    sched_main();
+    schedule();
+    
     /* make the compiler happy  - we would never reach this*/
     return(0);
 
@@ -513,7 +514,7 @@ static void *sched_idle_thread
      */
 
     cpu_signal_on(unit->cpu->cpu_id);
-#if 0
+#if 1
     /* When entering the idle loop, disable the timer
      * for the AP CPU as currently it does not have anything
      * to handle
@@ -627,7 +628,7 @@ static void sched_enq
          * have a previous thread so we will just clear the flag.
          * Trying to set the prev_thread to the idle thread when the UNIT_START
          * is in place will have disastreous results as the context of the idle
-         * task will be overwirtten right from the start with wrong info
+         * task will be overwirtten right from the start with wrong values
          */
         if(unit->flags & UNIT_START)
         {
