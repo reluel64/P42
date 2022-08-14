@@ -385,7 +385,7 @@ static int ioapic_device_init
         
         polarity = (int_flags & 0x3);
         trigger = (int_flags >> 2) & 0x3;
-
+        /* Adjust polarity */
         switch(polarity)
         {
             default:
@@ -399,6 +399,7 @@ static int ioapic_device_init
                 break;
         }
 
+        /* adjust tirgger */
         switch(trigger)
         {
             default:
