@@ -23,7 +23,6 @@ mutex_t *mtx_init(mutex_t *mtx, int options)
     return(mtx);
 }
 
-
 mutex_t *mtx_create(int options)
 {
     mutex_t *mtx = NULL;
@@ -44,10 +43,10 @@ mutex_t *mtx_create(int options)
 
 int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 {
-    uint8_t int_state = 0;
-    void           *expected = NULL;
-    sched_thread_t *thread = NULL;
-    uint32_t block_flags = 0;
+    uint8_t         int_state   = 0;
+    void           *expected    = NULL;
+    sched_thread_t *thread      = NULL;
+    uint32_t        block_flags = 0;
 
     spinlock_lock_int(&mtx->lock, &int_state);
 
@@ -95,7 +94,6 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
             spinlock_unlock_int(&mtx->lock, int_state);
             return(0);
         }
-
 
         /* if we the thread has the sleeping flag set,
          * then we already timed out so we will just exit
@@ -149,12 +147,12 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
 
 int mtx_release(mutex_t *mtx)
 {
-    uint8_t int_state = 0;
-    sched_thread_t *self = NULL;
-    sched_thread_t *thread = NULL;
-    sched_exec_unit_t *unit = NULL;
-    list_node_t    *pend_node = NULL;
-    void *expected = NULL;
+    uint8_t           int_state  = 0;
+    sched_thread_t    *self      = NULL;
+    sched_thread_t    *thread    = NULL;
+    sched_exec_unit_t *unit      = NULL;
+    list_node_t       *pend_node = NULL;
+    void              *expected  = NULL;
 
     spinlock_lock_int(&mtx->lock, &int_state);
 

@@ -6,7 +6,6 @@
 
 sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count)
 {
-
     if(sem == NULL)
     {
         return(NULL);
@@ -43,8 +42,7 @@ sem_t *sem_create(uint32_t init_val, uint32_t max_count)
 
 int sem_acquire(sem_t *sem, uint32_t wait_ms)
 {
-    uint8_t int_state = 0;
-    int th_int_state = 0;
+    uint8_t         int_state = 0;
     sched_thread_t *thread = NULL;
     uint32_t        block_flags = 0;
 
@@ -114,10 +112,10 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
 
 int sem_release(sem_t *sem)
 {
-    uint8_t int_state = 0;
-    sched_thread_t *thread = NULL;
-    sched_exec_unit_t *unit = NULL;
-    list_node_t    *pend_node = NULL;
+    uint8_t           int_state  = 0;
+    sched_thread_t    *thread    = NULL;
+    sched_exec_unit_t *unit      = NULL;
+    list_node_t       *pend_node = NULL;
     
     spinlock_lock_int(&sem->lock, &int_state);
 
