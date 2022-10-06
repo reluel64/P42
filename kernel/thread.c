@@ -128,7 +128,6 @@ int thread_create_static
 )
 {
     int ret = -1;
-    sched_thread_t *th = NULL;
 
     /* do some sanity checks */
     if((out_th   == NULL) || 
@@ -145,8 +144,7 @@ int thread_create_static
                        prio,
                        affinity,
                        owner);
-    
-    th = out_th;
+    return(ret);
 }
 
 void *thread_create
