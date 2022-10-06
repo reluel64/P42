@@ -321,7 +321,8 @@ int vm_init(void)
                                   vm_base,
                                   VM_SLOT_SIZE,
                                   NULL,
-                                  VM_ATTR_WRITABLE);
+                                  VM_ATTR_WRITABLE,
+                                  0);
                                   
     if(status != 0)
     {
@@ -346,7 +347,8 @@ int vm_init(void)
                                   vm_base + VM_SLOT_SIZE,
                                   VM_SLOT_SIZE,
                                   NULL,
-                                  VM_ATTR_WRITABLE);
+                                  VM_ATTR_WRITABLE, 
+                                  0);
     
     if(status != 0)
     {

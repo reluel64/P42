@@ -76,7 +76,8 @@ int vm_extent_alloc_slot
                                   fext.base,
                                   VM_SLOT_SIZE,
                                   NULL,
-                                  VM_ATTR_WRITABLE);
+                                  VM_ATTR_WRITABLE, 
+                                  0);
     
     if(status != 0)
     {
@@ -255,7 +256,8 @@ int vm_extent_release_slot
                                      aext.base, 
                                      VM_SLOT_SIZE,
                                      NULL,
-                                     aext.eflags);
+                                     aext.eflags,
+                                     0);
 
         if(status != 0)
         {
@@ -299,7 +301,8 @@ int vm_extent_release_slot
                                      aext.base, 
                                      VM_SLOT_SIZE,
                                      NULL,
-                                     aext.eflags);
+                                     aext.eflags,
+                                     0);
         /* STOP */
         if(status != 0)
         {
