@@ -230,6 +230,11 @@ virt_addr_t vm_space_alloc
                 status = vm_extent_insert(&ctx->free_mem,
                                           ctx->free_per_slot,
                                           &req_ext);
+
+                if(status != VM_OK)
+                {
+                    return(VM_FAIL);
+                }
             }
         }
     }
@@ -283,13 +288,13 @@ virt_addr_t vm_space_alloc
          */
 
         kprintf("FAILED\n");
-        status = vm_space_undo(&ctx->alloc_mem, 
-                               &ctx->free_mem,
-                               ctx->alloc_per_slot,
-                               ctx->free_per_slot,
-                               &req_ext,
-                               &alloc_ext,
-                               &rem_ext);
+        vm_space_undo(&ctx->alloc_mem, 
+                       &ctx->free_mem,
+                       ctx->alloc_per_slot,
+                       ctx->free_per_slot,
+                       &req_ext,
+                       &alloc_ext,
+                       &rem_ext);
 
         return(VM_INVALID_ADDRESS);
     }
@@ -430,6 +435,11 @@ int vm_space_free
             status = vm_extent_insert(&ctx->alloc_mem,
                                   ctx->alloc_per_slot,
                                   &rem_ext);
+
+             if(status != VM_OK)
+             {
+                return(VM_FAIL);
+             }
 
         }
     }
