@@ -73,22 +73,29 @@ int linked_list_remove(list_head_t *lh, list_node_t *ln)
      *  then we will need to update the head
      */
     if(ln->prev == NULL)
+    {
         lh->list.next = ln->next;
-    
+    }
     /* Otherwise, just relink the adjacent nodes */
     else
+    {
         ln->prev->next = ln->next;
-    
+    }
     /* If this is the last node,
      * then the tail needs to be updated */
     if(ln->next == NULL)
+    {
         lh->list.prev  = ln->prev;
-
+    }
     /* Otherwise, relink the adjacent nodes */
     else
+    {
         ln->next->prev = ln->prev;
+    }
     
     lh->count--;
+
+    return(0);
 }
 
 int linked_list_find_node(list_head_t *lh, list_node_t *ln)
@@ -100,7 +107,9 @@ int linked_list_find_node(list_head_t *lh, list_node_t *ln)
     while(work_ln)
     {
         if(work_ln == ln)
+        {
             return(0);
+        }
 
         work_ln = linked_list_next(work_ln);
 

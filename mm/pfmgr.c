@@ -181,11 +181,13 @@ static void pfmgr_init_free_callback
     void *pv
 )
 {
-    pfmgr_init_t *init = pv;
+    pfmgr_init_t       *init = NULL;
     pfmgr_free_range_t *freer = NULL;
     pfmgr_free_range_t local_freer;
-    phys_addr_t track_addr = 0;
-    phys_addr_t track_len = 0;
+    phys_addr_t        track_addr = 0;
+    phys_addr_t        track_len = 0;
+
+    init = pv;
 
     if(e->type != MEMORY_USABLE || 
       !(e->flags & MEMORY_ENABLED))
