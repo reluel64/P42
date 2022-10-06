@@ -92,7 +92,6 @@ int context_destroy
 )
 {
     sched_owner_t *owner     = NULL;
-    virt_addr_t   stack      = 0;
     virt_addr_t   *context   = NULL;
     vm_ctx_t      *vm_ctx    = NULL;
     virt_size_t   rsp0       = 0;
@@ -134,8 +133,7 @@ void context_switch
     sched_thread_t *next
 )
 {
-    gdt_update_tss(next->unit->cpu->cpu_pv, 
-                  ((virt_addr_t*)next->context)[RSP0_INDEX]);
+
 
     if(prev != NULL)
     {
@@ -143,6 +141,9 @@ void context_switch
     }
     else if(next != NULL)
     {
+        gdt_update_tss(next->unit->cpu->cpu_pv, 
+                      ((virt_addr_t*)next->context)[RSP0_INDEX]);
+
         __context_switch(0, next->context);
     }
     else
