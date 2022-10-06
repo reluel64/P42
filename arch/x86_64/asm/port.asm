@@ -1,4 +1,5 @@
 ; Port based I/O routines 
+[BITS 64]
 
 global __inb
 global __outb

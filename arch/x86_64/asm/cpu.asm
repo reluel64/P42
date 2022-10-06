@@ -1,4 +1,4 @@
-BITS 64 
+[BITS 64]
 global __wbinvd
 global __pause
 global __cpu_switch_stack
