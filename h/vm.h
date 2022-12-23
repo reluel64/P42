@@ -6,7 +6,7 @@
 #include <linked_list.h> 
 #include <pgmgr.h>
 
-
+/* Memory flags */
 #define VM_ATTR_WRITABLE          PGMGR_WRITABLE
 #define VM_ATTR_USER              PGMGR_USER
 #define VM_ATTR_WRITE_THROUGH     PGMGR_WRITE_THROUGH
@@ -17,14 +17,19 @@
 #define VM_ATTR_WRITE_COMBINE     PGMGR_WRITE_COMBINE
 #define VM_ATTR_EXECUTABLE        PGMGR_EXECUTABLE
 
-#define VM_LOW_MEM   (1 << 0) /* Low memory is used            */
-#define VM_HIGH_MEM  (1 << 1) /* High memory is used           */
-#define VM_MAPPED    (1 << 2) /* Memory is used for mapping    */
-#define VM_ALLOCATED (1 << 3) /* Memory is used for allocation */
-#define VM_PERMANENT (1 << 4) /* Memory cannot be swaped       */
-#define VM_LOCKED    (1 << 5) /* Memory cannot be freed        */
-#define VM_LAZY      (1 << 7) /* Memory will be alocated when needed */
-#define VM_LAZY_FREE (1 << 8) /* Free memory lazily            */
+
+
+/* Allocation Flags */
+#define VM_LOW_MEM     (1 << 0)  /* Low memory is used                  */
+#define VM_HIGH_MEM    (1 << 1)  /* High memory is used                 */
+#define VM_MAPPED      (1 << 2)  /* Memory is used for mapping          */
+#define VM_ALLOCATED   (1 << 3)  /* Memory is used for allocation       */
+#define VM_PERMANENT   (1 << 4)  /* Memory cannot be swaped             */
+#define VM_LOCKED      (1 << 5)  /* Memory cannot be freed              */
+#define VM_LAZY        (1 << 7)  /* Memory will be alocated when needed */
+#define VM_LAZY_FREE   (1 << 8)  /* Free memory lazily                  */
+#define VM_GUARD_PAGES (1 << 9)  /* VM has guard pages                  */
+#define VM_CONTIG_PHYS (1 << 10) /* Backing memory is contigous        */
 
 
 #define VM_BASE_AUTO (~0ull)    /* Find the best memory from the either high
@@ -37,10 +42,14 @@
 
 #define VM_CTX_PREFER_HIGH_MEMORY VM_HIGH_MEM
 #define VM_CTX_PREFER_LOW_MEMORY  VM_LOW_MEM
+#define VM_CTX_HAS_GUARD_PAGES    VM_GUARD_PAGES
+
+#define VM_CTX_GUARD_PAGES_COUNT  (1)
 
 #define VM_REGION_MASK (VM_LOW_MEM | VM_HIGH_MEM)
 #define VM_MEM_TYPE_MASK (VM_ALLOCATED | VM_MAPPED)
 
+/* Errors */
 #define VM_OK (0x0)
 #define VM_FAIL (-1)
 #define VM_NOMEM (-2)
@@ -65,12 +74,14 @@ typedef struct vm_ctx_t
                           * we will keep the structures for the current context
                           * This must be available only in kernel context
                           */
-    pgmgr_ctx_t pgmgr;  /* backing page manager */
+    pgmgr_ctx_t pgmgr;    /* backing page manager */
     
     spinlock_t   lock;
     uint32_t     flags;
+    uint8_t      guard_pages;
     virt_size_t  alloc_track_size;
     virt_size_t  free_track_size;
+
 }vm_ctx_t;
 
 /* Virtual memory extent */
