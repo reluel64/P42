@@ -224,6 +224,7 @@ set_pg_base:
     mov eax, 0x7
     cpuid
     test ecx, (1 << 16)
+
     jz	enable_paging
 
 ; otherwise enable PML5 and then paging
