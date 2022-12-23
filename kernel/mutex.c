@@ -6,24 +6,34 @@
 #include <utils.h>
 
 
-mutex_t *mtx_init(mutex_t *mtx, int options)
+mutex_t *mtx_init
+(
+    mutex_t *mtx, 
+    int options
+)
 {
-    if(mtx == NULL)
+    if(mtx == NULL || 
+      ((options & MUTEX_TASK_ORDER) == MUTEX_TASK_ORDER))
     {
         return(NULL);
     }
     
     mtx->opts = options;
 
-    __atomic_store_n(&mtx->rlevel, 0, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&mtx->owner, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&mtx->rlevel,     0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&mtx->owner,      0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&mtx->owner_prio, 0, __ATOMIC_SEQ_CST);
+    
     linked_list_init(&mtx->pendq);
     spinlock_init(&mtx->lock);
 
     return(mtx);
 }
 
-mutex_t *mtx_create(int options)
+mutex_t *mtx_create
+(
+    int options
+)
 {
     mutex_t *mtx = NULL;
     mutex_t *ret_mtx = NULL;
@@ -31,23 +41,33 @@ mutex_t *mtx_create(int options)
     mtx = kcalloc(1, sizeof(mutex_t));
 
     if(mtx == NULL)
+    {
         return(NULL);
+    }
 
     ret_mtx = mtx_init(mtx, options);
 
     if(ret_mtx != mtx)
-            kfree(mtx);
+    {
+        kfree(mtx);
+    }
 
     return(ret_mtx);
 }
 
-int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
+int mtx_acquire
+(
+    mutex_t *mtx, 
+    uint32_t wait_ms
+)
 {
-    uint8_t         int_state   = 0;
-    void           *expected    = NULL;
-    sched_thread_t *thread      = NULL;
-    uint32_t        block_flags = 0;
-
+    uint8_t         int_state    = 0;
+    void           *expected     = NULL;
+    sched_thread_t *thread       = NULL;
+    uint32_t        block_flags  = 0;
+    list_node_t     *iter_node   = NULL;
+    sched_thread_t  *iter_thread = NULL;
+    
     spinlock_lock_int(&mtx->lock, &int_state);
 
     thread = sched_thread_self();
@@ -66,6 +86,7 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
                                        __ATOMIC_SEQ_CST
                                        ))
         {
+            
             /* set recursion level to 1 */
             __atomic_store_n(&mtx->rlevel, 1, __ATOMIC_RELEASE);
 
@@ -130,8 +151,38 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
     #ifdef MTX_DEBUG
         kprintf("BLOCKING %x\n",thread);
     #endif
-    
-        linked_list_add_tail(&mtx->pendq, &thread->pend_node);
+
+        /* insert the mutex in the queue based on either
+         * FIFO or Priority
+         */
+        if(mtx->opts & MUTEX_FIFO)
+        {
+            linked_list_add_tail(&mtx->pendq, &thread->pend_node);
+        }
+        else
+        {
+            iter_node = linked_list_first(&mtx->pendq);
+            
+            while(iter_node)
+            {
+                iter_thread = PEND_NODE_TO_THREAD(iter_node);
+
+                if(iter_thread->prio > thread->prio)
+                {
+                    linked_list_add_before(&mtx->pendq, 
+                                           iter_node, 
+                                           &thread->pend_node);
+                    break;
+                }
+
+                iter_node = linked_list_next(iter_node);
+            }
+
+            if(iter_node == NULL)
+            {
+                linked_list_add_tail(&mtx->pendq, &thread->pend_node);
+            }
+        }
 
         spinlock_unlock_int(&mtx->lock, int_state);
 
@@ -145,7 +196,10 @@ int mtx_acquire(mutex_t *mtx, uint32_t wait_ms)
     return(0);
 }
 
-int mtx_release(mutex_t *mtx)
+int mtx_release
+(
+    mutex_t *mtx
+)
 {
     uint8_t           int_state  = 0;
     sched_thread_t    *self      = NULL;
