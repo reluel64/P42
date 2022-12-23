@@ -146,7 +146,6 @@ int pci_enumerate
     for(uint32_t i = 0; i < mcfg_alloc_count; i++)
     {
         /* go through each bus */
-        
         for(uint32_t bus = allocation[i].StartBusNumber; 
                      bus < allocation[i].EndBusNumber;
                      bus++
@@ -176,32 +175,34 @@ int pci_enumerate
                     {
                         continue;
                     }
-
+                   
                     /* Invalid data? skip */
                     if((phc->vendor_id == INVALID_VID)  && 
                        (phc->device_id == INVALID_PID))
                     {
+
                         vm_unmap(NULL, 
                                 (virt_addr_t)phc, 
                                 PCI_MCFG_CONF_SPACE_SIZE);
- 
+
                         continue;
                     }
-                   
-                    kprintf("DID %x VID %x Class " \
-                            "%x Subclass %x ProgIf %x " \
-                            "Header Type %x\n", phc->device_id, phc->vendor_id, 
-                                                phc->class_code, phc->subclass, 
+
+                    kprintf("PHC %x -> DID %x VID %x Class %x"\
+                            "Subclass %x ProgIf %x " \
+                            "Header Type %x\n", phc, phc->device_id, phc->vendor_id, 
+                                                phc->class_code, phc->subclass, phc->prog_if, 
                                                 phc->header_type);
 
                     vm_unmap(NULL, (virt_addr_t)phc, PCI_MCFG_CONF_SPACE_SIZE);
+
                 }
             }
         }
     }
 
     AcpiPutTable((ACPI_TABLE_HEADER*)mcfg);
-
+    kprintf("END CALL\n");
     return(0);
 } 
 

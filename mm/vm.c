@@ -683,6 +683,7 @@ virt_addr_t vm_map
             /* If we are successful, we have to update the 
              * changes
              */
+
             pgmgr_invalidate(&ctx->pgmgr,
                                  ret_address,
                                  len);

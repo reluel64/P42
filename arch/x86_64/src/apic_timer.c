@@ -11,7 +11,7 @@
 #include <platform.h>
 #include <utils.h>
 
-#define APIC_TIMER_INTERVAL_MS 1 /* 1ms */
+#define APIC_TIMER_INTERVAL 1000000 /* 1ms */
 
 typedef struct apic_timer_t
 {
@@ -33,18 +33,24 @@ static int apic_timer_isr(void *drv, isr_info_t *inf)
     dev = devmgr_dev_get_by_name(APIC_TIMER_NAME, inf->cpu_id);
 
     if(dev == NULL)
+    {
         return(-1);
-  
+    }
+    
     timer = devmgr_dev_data_get(dev);
 
     if(timer == NULL)
+    {
         return(-1);
+    }
 
     spinlock_read_lock_int(&timer->lock, &int_flag);
 
     /* Call the callback */
     if(timer->func != NULL)
+    {
         timer->func(timer->func_data, inf);
+    }
 
     spinlock_read_unlock_int(&timer->lock, int_flag);
 
@@ -111,7 +117,7 @@ static int apic_timer_init(device_t *dev)
                             &data, 
                             1);
 
-    timer_dev_loop_delay(pit, APIC_TIMER_INTERVAL_MS);
+    timer_dev_delay_poll(pit, APIC_TIMER_INTERVAL);
 
     /* restore the status of the interrupt flag */
     if(!int_status) 
@@ -123,7 +129,7 @@ static int apic_timer_init(device_t *dev)
                            1);
 
     apic_timer->calib_value = UINT32_MAX - data;
-
+ 
      /* disable the timer */
     data = 0;
 
@@ -275,7 +281,7 @@ static int apic_timer_reset(device_t *dev)
 static int apic_timer_resolution_get
 (
     device_t    *dev, 
-    timer_int_t *tm_res
+    timer_interval_t *tm_res
 )
 {
     apic_timer_t *timer = NULL;
@@ -285,7 +291,7 @@ static int apic_timer_resolution_get
     if(timer == NULL || tm_res == NULL)
         return(-1);
 
-    memcpy(tm_res, &timer->tm_res, sizeof(timer_int_t));
+    memcpy(tm_res, &timer->tm_res, sizeof(timer_interval_t));
 
     return(0);
 }

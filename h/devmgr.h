@@ -65,7 +65,7 @@ static int devmgr_add_device_to_drv
 
 int devmgr_init(void);
 int devmgr_dev_create(device_t **dev);
-int devmgr_dev_delete(device_t *dev);
+int devmgr_dev_delete(device_t **dev);
 int devmgr_dev_add(device_t *dev, device_t *parent);
 int devmgr_drv_add(driver_t *drv);
 int devmgr_drv_remove(driver_t *drv);

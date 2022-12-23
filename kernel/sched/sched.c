@@ -437,7 +437,7 @@ void sched_sleep
 )
 {
     sched_thread_t *self = NULL;
-    self = sched_thread_self();    
+    self = sched_thread_self();
     sched_sleep_thread(self, delay);
     schedule();
 }
@@ -521,7 +521,9 @@ static void *sched_idle_thread
      */ 
 
     if(unit->cpu->cpu_id > 0)
+    {
         timer_dev_disable(unit->timer_dev);
+    }
 #endif
 
     while(1)
@@ -722,7 +724,6 @@ static void sched_main(void)
     int               status = 0;
     int               balance_sts = -1;
     uint8_t           int_flag = 0;
-
 
     cpu    = cpu_current_get();
     unit   = cpu->sched;

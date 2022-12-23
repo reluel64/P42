@@ -12,7 +12,7 @@
 #define FB_LEN        (VGA_MAX_ROW * VGA_MAX_COL * sizeof(uint16_t))
 #define FB_ALLOC_SIZE  ALIGN_UP(FB_LEN, PAGE_SIZE)
 
-typedef struct _vga
+typedef struct vga_t
 {
     uint16_t *base;
     uint8_t row;
