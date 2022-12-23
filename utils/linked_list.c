@@ -7,7 +7,10 @@
  * linked_list_init - initializes list head 
  */
 
-int linked_list_init(list_head_t *lh)
+int linked_list_init
+(
+    list_head_t *lh
+)
 {
     if(lh == NULL)
         return(-1);
@@ -19,7 +22,11 @@ int linked_list_init(list_head_t *lh)
     return(0);
 }
 
-int linked_list_add_head(list_head_t *lh, list_node_t *ln)
+int linked_list_add_head
+(
+    list_head_t *lh, 
+    list_node_t *ln
+)
 {
    if(lh->list.prev == NULL && lh->list.next == NULL)
    {
@@ -43,7 +50,11 @@ int linked_list_add_head(list_head_t *lh, list_node_t *ln)
    return(0);
 }
 
-int linked_list_add_tail(list_head_t *lh, list_node_t *ln)
+int linked_list_add_tail
+(
+    list_head_t *lh, 
+    list_node_t *ln
+)
 {
     if(lh->list.next == NULL && lh->list.prev == NULL)
     {
@@ -67,7 +78,49 @@ int linked_list_add_tail(list_head_t *lh, list_node_t *ln)
     return(0);
 }
 
-int linked_list_remove(list_head_t *lh, list_node_t *ln)
+int linked_list_add_after
+(
+    list_head_t *lh, 
+    list_node_t *an, 
+    list_node_t *nn
+)
+{
+    if(lh->list.prev == nn)
+    {
+        lh->list.prev = nn;
+    }
+    nn->next = an->next;
+    nn->prev = an;
+    an->next = nn;
+    lh->count++;
+    return(0);
+}
+
+int linked_list_add_before
+(
+    list_head_t *lh, 
+    list_node_t *bn, 
+    list_node_t *nn
+)
+{
+
+    if(lh->list.next == nn)
+    {
+        lh->list.next = nn;
+    }
+    nn->prev = bn->prev;
+    nn->next = bn;
+    bn->prev = nn;
+    lh->count++;
+
+    return(0);
+}
+
+int linked_list_remove
+(
+    list_head_t *lh, 
+    list_node_t *ln
+)
 {
     /* if this is the first node,
      *  then we will need to update the head
@@ -98,7 +151,11 @@ int linked_list_remove(list_head_t *lh, list_node_t *ln)
     return(0);
 }
 
-int linked_list_find_node(list_head_t *lh, list_node_t *ln)
+int linked_list_find_node
+(
+    list_head_t *lh, 
+    list_node_t *ln
+)
 {
     list_node_t *work_ln = NULL;
 
@@ -118,27 +175,42 @@ int linked_list_find_node(list_head_t *lh, list_node_t *ln)
     return(-1);
 }
 
-list_node_t *linked_list_first(list_head_t *lh)
+list_node_t *linked_list_first
+(
+    list_head_t *lh
+)
 {
     return(lh->list.next);
 }
 
-list_node_t *linked_list_next(list_node_t *ln)
+list_node_t *linked_list_next
+(
+    list_node_t *ln
+)
 {
     return(ln->next);
 }
 
-list_node_t *linked_list_last(list_head_t *lh)
+list_node_t *linked_list_last
+(
+    list_head_t *lh
+)
 {
     return(lh->list.prev);
 }
 
-list_node_t *linked_list_prev(list_node_t *ln)
+list_node_t *linked_list_prev
+(
+    list_node_t *ln
+)
 {
     return(ln->prev);
 }
 
-size_t linked_list_count(list_head_t *lh)
+size_t linked_list_count
+(
+    list_head_t *lh
+)
 {
     return(lh->count);
 }
