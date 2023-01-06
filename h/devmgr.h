@@ -53,15 +53,10 @@ typedef struct dev_srch_t
     char *dev_name;
 }dev_srch_t;
 
-
 int devmgr_init(void);
 int devmgr_add_drv(driver_t *drv);
 int devmgr_remove_drv(driver_t *drv);
-static int devmgr_add_device_to_drv
-(
-    device_t *dev, 
-    const driver_t *drv
-);
+
 
 int devmgr_init(void);
 int devmgr_dev_create(device_t **dev);

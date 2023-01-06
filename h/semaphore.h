@@ -11,8 +11,27 @@ typedef struct sem_t
     uint32_t          max_count;
 }sem_t;
 
-sem_t *sem_create(uint32_t init_val, uint32_t max_val);
-sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count);
-int sem_acquire(sem_t *sem, uint32_t wait_ms);
-int sem_release(sem_t *sem);
+sem_t *sem_create
+(
+    uint32_t init_val, 
+    uint32_t max_val
+);
+
+sem_t *sem_init
+(
+    sem_t *sem, 
+    uint32_t init_val, 
+    uint32_t max_count
+);
+
+int sem_acquire
+(
+    sem_t *sem, 
+    uint32_t wait_ms
+);
+
+int sem_release
+(
+    sem_t *sem
+);
 #endif

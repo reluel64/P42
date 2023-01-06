@@ -89,7 +89,7 @@ typedef struct vm_extent_t
 {
     virt_addr_t base;
     virt_size_t length;
-    uint32_t flags;
+    uint32_t    flags;
 
     union 
     {
@@ -163,7 +163,10 @@ int vm_fault_handler
     uint32_t    reason
 );
 
-int vm_init(void);
+int vm_init
+(
+    void
+);
 
 void vm_ctx_show
 (

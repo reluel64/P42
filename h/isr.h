@@ -23,10 +23,11 @@ typedef struct isr_t
     uint8_t allocated;
 }isr_t;
 
+int isr_init
+(
+    void
+);
 
-
-
-int isr_init(void);
 isr_t *isr_install
 (
     interrupt_handler_t ih, 
@@ -35,12 +36,11 @@ isr_t *isr_install
     uint8_t  eoi,
     isr_t *isr_slot
 );
+
 int isr_uninstall
 (
     isr_t *isr,
     uint8_t eoi
 );
-
-
 
 #endif

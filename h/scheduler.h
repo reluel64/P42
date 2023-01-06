@@ -75,7 +75,6 @@ typedef struct sched_policy_t
 
 typedef struct sched_thread_t
 {
-    
     list_node_t        sched_node;   /* node in the queue                             */
     list_node_t        pend_node;    /* node for synchronization                      */
     list_node_t        owner_node;   /* node for the onwer                            */

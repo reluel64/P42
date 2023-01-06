@@ -18,7 +18,7 @@
 typedef struct pfmgr_cb_data_t pfmgr_cb_data_t;
 
 typedef int (*alloc_cb)(pfmgr_cb_data_t *cb_dat, void *pv);
-typedef int     (*free_cb) (pfmgr_cb_data_t *cb_dat, void *pv);
+typedef int (*free_cb) (pfmgr_cb_data_t *cb_dat, void *pv);
 
 typedef struct pfmgr_cb_data_t
 {
@@ -81,9 +81,16 @@ typedef struct pfmgr_busy_range_t
 }pfmgr_busy_range_t;
 
 
+void pfmgr_early_init
+(
+    void
+);
 
-void     pfmgr_early_init(void);
-int      pfmgr_init(void);
+int pfmgr_init
+(
+    void
+);
+
 int pfmgr_alloc
 (
     phys_addr_t start,
@@ -121,8 +128,6 @@ extern phys_addr_t _rodata;
 extern phys_addr_t _rodata_end;
 extern phys_addr_t _bss;
 extern phys_addr_t _bss_end;
-
-
 
 #define _KERNEL_LMA         (((phys_addr_t)&KERNEL_LMA))
 #define _KERNEL_LMA_END     (((phys_addr_t)&KERNEL_LMA_END))
