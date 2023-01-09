@@ -22,7 +22,6 @@ static int vm_virt_is_present
     uint32_t ent_per_slot
 );
 
-
 /* allocate tracking slot */
 
 int vm_extent_alloc_slot
@@ -121,10 +120,16 @@ int vm_extent_alloc_slot
     fext.base   += VM_SLOT_SIZE;
     fext.length -= VM_SLOT_SIZE;
 
-    /* insert the remaining free memory in the list */
-    vm_extent_insert(&vm_kernel_ctx.free_mem, 
-                     vm_kernel_ctx.free_per_slot, 
-                     &fext);
+    /* insert the remaining free memory in the list - this should work */
+    status = vm_extent_insert(&vm_kernel_ctx.free_mem, 
+                              vm_kernel_ctx.free_per_slot, 
+                              &fext);
+    
+    if(status != VM_OK)
+    {
+        kprintf("Cannot insert free memory back\n");
+        while(1);
+    }
     
     
     /* prepare to add the new slot to the allocated memory */
@@ -184,8 +189,9 @@ int vm_extent_release_slot
     uint32_t      ext_per_slot
 )
 {
-    vm_extent_t aext = VM_EXTENT_INIT;
-    int status = 0;
+    vm_extent_t aext   = VM_EXTENT_INIT;
+    int         status = 0;
+
     if(slot->avail != ext_per_slot)
     {
         return(VM_FAIL);
@@ -333,17 +339,23 @@ static inline int vm_is_in_range
     virt_size_t end       = 0;
 
     if(len >= 1)
+    {
         limit = len - 1;
-    
+    }
+
     if(req_len >= 1)
+    {
         req_limit = req_len - 1;
+    }
 
     req_end = req_base + req_limit;
     end     = base     + limit;
     
     if(req_base >= base && req_end <= end)
+    {
         return(1);
-    
+    }
+
     return(0);
 }
 
@@ -429,7 +441,7 @@ int vm_extent_insert
         {
             for(uint32_t i = 0; i < ext_per_slot; i++)
             {
-                c_ext = &hdr->array[i];    
+                c_ext = &hdr->extents[i];    
                 /* Try to join the extents */
                 if(vm_extent_join(ext, c_ext) == VM_OK)
                 {
@@ -504,7 +516,7 @@ int vm_extent_extract
 
         for(uint32_t i = 0; i < ext_per_slot; i++)
         {
-            cext = &hdr->array[i];
+            cext = &hdr->extents[i];
 
             if(cext->length == 0)
             {
@@ -545,7 +557,9 @@ int vm_extent_extract
         }
 
         if(found)
+        {
             break;
+        }
 
         hn = next_hn;
     }
@@ -559,7 +573,9 @@ int vm_extent_extract
     hdr = VM_EXTENT_TO_HEADER(best);
 
     if(hdr->avail < ext_per_slot)
+    {
         hdr->avail++;
+    }
 
     /* export the slot */ 
     memcpy(ext, best, sizeof(vm_extent_t));
@@ -712,7 +728,7 @@ int vm_extent_merge
             
             for(uint32_t d_ix = 0; d_ix < ext_per_slot; d_ix++)
             {
-                dst_ext = &dst_hdr->array[d_ix];
+                dst_ext = &dst_hdr->extents[d_ix];
 
                 src_ln = linked_list_first(lh);
                 /* cycle throught extents that might be merged */
@@ -729,13 +745,15 @@ int vm_extent_merge
 
                     for(uint32_t s_ix = 0; s_ix < ext_per_slot; s_ix++)
                     {
-                        src_ext = &src_hdr->array[s_ix];
+                        src_ext = &src_hdr->extents[s_ix];
 
                         /* skip empty extents and ourselves */
                         
                         if((src_ext->length == 0) || (src_ext == dst_ext))
+                        {
                             continue;
-
+                        }
+                        
                         /* Try to merge, and if we merged, increase the 
                          * available extents in the source slot
                          * because the extent from the source slot has been 
@@ -749,9 +767,13 @@ int vm_extent_merge
                             memset(src_ext, 0, sizeof(vm_extent_t));
 
                             if(src_hdr->avail < ext_per_slot)
+                            {
                                 src_hdr->avail++;
+                            }
                             else
+                            {
                                 kprintf("SOMETHING IS WRONG\n");
+                            }
                         }
                     }
 
@@ -808,7 +830,7 @@ int vm_extent_compact_all_hdr
 
         for(uint32_t i = 0; i < ext_per_slot; i++)
         {
-            cursor = &hdr->array[i];
+            cursor = &hdr->extents[i];
 
             if(empty_ext == NULL)
             {
@@ -858,7 +880,7 @@ int vm_extent_compact_hdr
 
     for(uint32_t i = 0; i < ext_per_slot; i++)
     {
-        cursor = &hdr->array[i];
+        cursor = &hdr->extents[i];
 
         if(empty_ext == NULL)
         {
@@ -906,7 +928,7 @@ int vm_extent_defragment
 
         for(uint32_t si = 0; si < ext_per_slot; si++)
         {
-            src_ext = &dst_hdr->array[si];
+            src_ext = &dst_hdr->extents[si];
 
             /* skip empty extents */
             if(src_ext->length == 0)
@@ -929,7 +951,7 @@ int vm_extent_defragment
                 
                 for(uint32_t di = 0 ; di < ext_per_slot; di++)
                 {
-                    dst_ext = &dst_hdr->array[di];
+                    dst_ext = &dst_hdr->extents[di];
 
                     /* if we found an empty extent, we can insert it here */
                     if(dst_ext->length == 0)

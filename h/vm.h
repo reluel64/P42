@@ -109,7 +109,7 @@ typedef struct vm_slot_hdr_t
     list_node_t node;
     uint32_t avail;
     uint8_t  type;
-    vm_extent_t array[];
+    vm_extent_t extents[];
 }vm_slot_hdr_t;
 
 

@@ -44,7 +44,7 @@ void vm_ctx_show
         kprintf("============================================\n");
         for(uint16_t i = 0; i < ctx->free_per_slot; i++)
         {
-            e  = &hdr->array[i];
+            e  = &hdr->extents[i];
 
             if(e->length != 0)
             {
@@ -74,7 +74,7 @@ void vm_ctx_show
         kprintf("============================================\n");
         for(uint16_t i = 0; i < ctx->alloc_per_slot; i++)
         {
-            e  = &hdr->array[i];
+            e  = &hdr->extents[i];
             if(e->length != 0)
             {
                 kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, 
@@ -912,8 +912,10 @@ int vm_free
 
 
     if(ctx == NULL)
+    {
         ctx = &vm_kernel_ctx;
-     
+    }
+    
     /* Check if vaddr and len are page aligned */
     if((vaddr % PAGE_SIZE) || 
        (len % PAGE_SIZE)   || 

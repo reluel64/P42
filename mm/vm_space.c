@@ -19,11 +19,11 @@ static int vm_space_undo
 
 virt_addr_t vm_space_alloc
 (
-    vm_ctx_t *ctx,
+    vm_ctx_t    *ctx,
     virt_addr_t addr,
     virt_size_t len,
-    uint32_t flags,
-    uint32_t eflags
+    uint32_t    flags,
+    uint32_t    eflags
 )
 {
     vm_extent_t req_ext       = VM_EXTENT_INIT;
@@ -39,7 +39,7 @@ virt_addr_t vm_space_alloc
 
     if(addr == VM_BASE_AUTO)
     {
-    /* check if we're stupid or not */
+        /* check if we're stupid or not */
         if((flags & VM_REGION_MASK) == VM_REGION_MASK)
         {
             return(VM_INVALID_ADDRESS);
@@ -55,16 +55,21 @@ virt_addr_t vm_space_alloc
     {
         return(VM_INVALID_ADDRESS);
     }
+
     /* clear the extent */
     memset(&req_ext, 0, sizeof(vm_extent_t));
 
     if(len % PAGE_SIZE)
+    {
         len = ALIGN_UP(len, PAGE_SIZE);
+    }
 
     if(addr != VM_BASE_AUTO)
     {
         if(addr % PAGE_SIZE)
+        {
             addr = ALIGN_DOWN(addr, PAGE_SIZE);
+        }
     }
     
     /* fill up the request extent */
@@ -243,7 +248,6 @@ virt_addr_t vm_space_alloc
                                ctx->alloc_per_slot, 
                               &alloc_ext);
 
-    
      /* Hehe... no slots?....again?...try to allocate */
     if(status == VM_NOMEM)
     {
@@ -517,11 +521,15 @@ static int vm_space_undo
     /* Do some sanity checks */
 
     if(ext_left->base + ext_left->length > ext_mid->base)
+    {
         return(-1);
+    }
 
     if(ext_mid->base + ext_mid->length > ext_right->base)
+    {
         return(-1);
-
+    }
+    
     status = vm_extent_extract(undo_to, 
                                undo_to_ext_cnt,
                                ext_left);
