@@ -106,40 +106,40 @@ static int vm_setup_protected_regions
     {
         /* Reserve kernel image - only the higher half */
         {
-            .base    =  (virt_addr_t)&_code,
-            .length  =  (virt_addr_t)&_code_end - (virt_addr_t)&_code,
-            .flags   = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
-            .eflags  = VM_ATTR_EXECUTABLE
+            .base   =  (virt_addr_t)&_code,
+            .length =  (virt_addr_t)&_code_end - (virt_addr_t)&_code,
+            .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
+            .eflags = VM_ATTR_EXECUTABLE
         },
         {
-            .base   =  (virt_addr_t)&_data,
-            .length =  (virt_addr_t)&_data_end -  (virt_addr_t)&_data,
-            .flags   = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
-            .eflags  = VM_ATTR_WRITABLE
+            .base   = (virt_addr_t)&_data,
+            .length = (virt_addr_t)&_data_end -  (virt_addr_t)&_data,
+            .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
+            .eflags = VM_ATTR_WRITABLE
         },
         {
-            .base   =  (virt_addr_t)&_rodata,
+            .base   = (virt_addr_t)&_rodata,
             .length = (virt_addr_t)&_rodata_end - (virt_addr_t)&_rodata,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
             .eflags = 0
         },
         {
             .base   = (virt_addr_t)&_bss,
-            .length =  (virt_addr_t)&_bss_end - (virt_addr_t)&_bss,
+            .length = (virt_addr_t)&_bss_end - (virt_addr_t)&_bss,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
             .eflags = VM_ATTR_WRITABLE
         },
         /* Reserve remapping table */
         {
-            .base   =  REMAP_TABLE_VADDR,
-            .length =  REMAP_TABLE_SIZE,
+            .base   = REMAP_TABLE_VADDR,
+            .length = REMAP_TABLE_SIZE,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
             .eflags = VM_ATTR_WRITABLE,
         },
         /* reserve head of tracking for free addresses */
         {
-            .base   =  (virt_addr_t)linked_list_first(&ctx->free_mem),
-            .length =  VM_SLOT_SIZE,
+            .base   = (virt_addr_t)linked_list_first(&ctx->free_mem),
+            .length = VM_SLOT_SIZE,
             .flags  = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
             .eflags = VM_ATTR_WRITABLE,
         },
@@ -760,7 +760,6 @@ int vm_change_attr
                               len, 
                               current_alloc_flags, 
                               new_mem_flags);
-                                 kprintf("FREED %x - %x\n",vaddr, len);
 
      if(new_mem == VM_INVALID_ADDRESS)
      {

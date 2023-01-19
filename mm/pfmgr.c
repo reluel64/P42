@@ -403,7 +403,9 @@ int pfmgr_early_alloc_pf
             }
 
             if(pf_ix == 0 || bmp == NULL)
+            {
                 bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + bmp_off);
+            }
 
             if((bmp[0] & ((virt_addr_t)1 << pf_ix)) == 0)
             {
@@ -963,8 +965,6 @@ static int _pfmgr_alloc
             }
         }
         
-
-        
         /* Always update the next lookup */
         free_range->next_lkup = BYTES_TO_PF((addr - free_range->hdr.base)) +
                                 avail_pf;
@@ -1039,7 +1039,7 @@ static int _pfmgr_alloc
         fnode = next_fnode;
     }
 
-    if(!(flags & PHYS_ALLOC_CB_STOP))
+    if(~flags & PHYS_ALLOC_CB_STOP)
     {
         spinlock_unlock_int(&pfmgr_lock, int_flag);
 
@@ -1166,8 +1166,9 @@ static int _pfmgr_free
         next_addr = BYTES_TO_PF(addr - freer->hdr.base);
      
         if(next_addr < freer->next_lkup)
+        {
             freer->next_lkup = next_addr;
-
+        }
 
     }while(again > 0);
     
@@ -1176,8 +1177,10 @@ static int _pfmgr_free
 #endif
 
     if(again < 0)
+    {
         err = -1;
-    
+    }
+
     spinlock_unlock_int(&pfmgr_lock, int_flag);
     
     return(err);
@@ -1236,9 +1239,9 @@ int pfmgr_init(void)
                                                VM_ATTR_WRITABLE);
         if(hdr == NULL)
         {
-           
             return(-1);
         }
+        
         phys = (phys_addr_t)hdr->next_range;
 
         linked_list_add_tail(&base.freer, &hdr->node);

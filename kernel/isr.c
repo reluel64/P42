@@ -171,12 +171,12 @@ void isr_dispatcher
     cpu_t             *cpu       = NULL;
     int               int_status = 0;
     isr_info_t        inf = {.cpu_id = 0, .iframe = 0};
-    
+  
     if(index >= MAX_HANDLERS)
     {
         return;
     }
-
+  
     int_lst = &handlers[index];
 
     inf.iframe = iframe;
@@ -212,8 +212,9 @@ void isr_dispatcher
         intr = (isr_t*)node;
 
         if(intr->ih)
+        {
             intr->ih(intr->pv, &inf);
-
+        }
         node = linked_list_next(node);
     }
 
