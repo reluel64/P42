@@ -36,7 +36,6 @@ int vm_extent_alloc_slot
     vm_extent_t   alloc_ext = VM_EXTENT_INIT;
     int          status = 0;
 
-    kprintf("+++++++++++++++++++++++++++++++++++++++++++\n");
     memset(&fext, 0, sizeof(vm_extent_t));
 
     /* we want tracking memory to come from the high memory area */

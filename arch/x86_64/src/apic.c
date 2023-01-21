@@ -349,8 +349,10 @@ static int apic_probe(device_t *dev)
     ACPI_TABLE_MADT        *madt    = NULL;
 
     if(!devmgr_dev_name_match(dev, APIC_DRIVER_NAME))
+    {
         return(-1);
-
+    }
+    
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
     if(ACPI_FAILURE(status))
@@ -733,7 +735,7 @@ static int x2apic_write
         case INTERRUPT_COMMAND_REGISTER:
           
             if(cnt > 1)
-            {
+            {     
                 reg_val = data[1];
                 reg_val <<= 32;
             }

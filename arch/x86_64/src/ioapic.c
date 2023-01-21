@@ -523,11 +523,14 @@ static int ioapic_init(device_t *dev)
     return(status);
 }
 
-static int ioapic_drv_init(driver_t *drv)
+static int ioapic_drv_init
+(
+    driver_t *drv
+)
 {
-    uint32_t ioapic_cnt = 0;
-    device_t    *dev       = NULL;
-    
+    uint32_t   ioapic_cnt = 0;
+    device_t   *dev       = NULL;
+    intc_api_t *funcs      = NULL;
 
     ioapic_iterate(ioapic_count, &ioapic_cnt);
     
@@ -551,13 +554,15 @@ static int ioapic_drv_init(driver_t *drv)
 
     /* We are using I/O APIC so PIC must be disabled */
     dev = devmgr_dev_get_by_name(PIC8259_DRIVER_NAME, 0);
+    funcs = devmgr_dev_api_get(dev);
 
-    intc_disable(dev);
+    if(funcs != NULL && funcs->disable != NULL)
+    {
+        funcs->disable(dev);
+    }
 
     return(0);
 }
-
-
 
 static intc_api_t api = 
 {
