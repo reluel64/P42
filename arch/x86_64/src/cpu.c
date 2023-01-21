@@ -19,15 +19,18 @@
 #include <scheduler.h>
 #include <ioapic.h>
 #include <thread.h>
+
+#define _BSP_STACK_TOP    ((virt_addr_t)&kstack_top)
+#define _BSP_STACK_BASE   ((virt_addr_t)&kstack_base)
+#define _TRAMPOLINE_BEGIN ((virt_addr_t)&__start_ap_begin)
+#define _TRAMPOLINE_END   ((virt_addr_t)&__start_ap_end)
+
 extern void __cpu_switch_stack
 (
     virt_addr_t *new_top,
     virt_addr_t *new_pos,
     virt_addr_t *old_base
 );
-
-
-
 
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
@@ -55,10 +58,7 @@ extern virt_addr_t isr_ec_sz_end;
 extern void *kmain_sys_init(void *arg);
 
 
-#define _BSP_STACK_TOP ((virt_addr_t)&kstack_top)
-#define _BSP_STACK_BASE ((virt_addr_t)&kstack_base)
-#define _TRAMPOLINE_BEGIN ((virt_addr_t)&__start_ap_begin)
-#define _TRAMPOLINE_END ((virt_addr_t)&__start_ap_end)
+
 
 static spinlock_t lock;
 static volatile int cpu_on = 0;
@@ -316,6 +316,7 @@ static int cpu_bring_ap_up
 {
     ipi_packet_t ipi;
     uint32_t expected = 0;
+    intc_api_t *api = NULL;
 
     /* wipe the ipi garbage */
     memset(&ipi, 0, sizeof(ipi_packet_t));
@@ -335,18 +336,25 @@ static int cpu_bring_ap_up
     ipi.dest_cpu  = cpu;
     
     __atomic_clear(&cpu_on, __ATOMIC_SEQ_CST);
-    
-    intc_send_ipi(issuer, &ipi);
-    
+
+    api = devmgr_dev_api_get(issuer);
+
+    if((api == NULL) || (api->send_ipi == NULL))
+    {
+        return(-1);
+    }
+
+    api->send_ipi(issuer, &ipi);
+
     /* Start-up SIPI */
     ipi.type = IPI_START_AP;
 
     sched_sleep(10);
-   
+
     /* Start up the CPU */
     for(uint16_t attempt = 0; attempt < PLATFORM_AP_RETRIES; attempt++)
     {
-        intc_send_ipi(issuer, &ipi);
+        api->send_ipi(issuer, &ipi);
 
         /* wait for about 10ms */
  
@@ -363,7 +371,7 @@ static int cpu_bring_ap_up
             sched_sleep(1);
         }
     }
-    
+
     return(-1);
 }
 
@@ -383,8 +391,10 @@ int cpu_issue_ipi
 )
 {
     ipi_packet_t ipi;
-    device_t *dev   = NULL;
-    uint32_t cpu_id = 0;
+    device_t     *dev   = NULL;
+    uint32_t     cpu_id = 0;
+    intc_api_t   *api   = NULL;
+    int          status = -1;
 
     memset(&ipi, 0, sizeof(ipi_packet_t));
 
@@ -408,10 +418,16 @@ int cpu_issue_ipi
 
     cpu_id = cpu_id_get();
     dev    = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
+    api    = devmgr_dev_api_get(dev);
 
-    intc_send_ipi(dev, &ipi);
+    if(api == NULL || api->send_ipi == NULL)
+    {
+        return(status);
+    }
+    
+    status = api->send_ipi(dev, &ipi);
 
-    return(0);
+    return(status);
 }
 
 int cpu_ap_start
@@ -420,18 +436,18 @@ int cpu_ap_start
     uint32_t timeout
 )
 {
-    int                    status      = 0;
-    virt_addr_t            trampoline  = 0;
-    virt_size_t            tramp_size  = 0;
-    device_t               *dev        = NULL;
-    uint32_t               cpu_id      = 0;
-    ACPI_TABLE_MADT        *madt       = NULL;
-    ACPI_MADT_LOCAL_APIC   *lapic      = NULL;
-    ACPI_MADT_LOCAL_X2APIC *x2lapic    = NULL;
-    ACPI_SUBTABLE_HEADER   *subhdr     = NULL;
-    int                    use_x2_apic = 0;
-    uint32_t               started_cpu = 1;
-    uint8_t                start_ap    = 0;
+    int                    status       = 0;
+    virt_addr_t            trampoline   = 0;
+    virt_size_t            tramp_size   = 0;
+    device_t               *dev         = NULL;
+    uint32_t               cpu_id       = 0;
+    ACPI_TABLE_MADT        *madt        = NULL;
+    ACPI_MADT_LOCAL_APIC   *lapic       = NULL;
+    ACPI_MADT_LOCAL_X2APIC *x2lapic     = NULL;
+    ACPI_SUBTABLE_HEADER   *subhdr      = NULL;
+    int                    use_x2_apic  = 0;
+    uint32_t               started_cpu  = 1;
+    uint32_t               start_cpu_id = 0;
 
     cpu_id = cpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
@@ -443,6 +459,11 @@ int cpu_ap_start
     {
         kprintf("MADT table not available\n");
         return(0);
+    }
+
+    if(madt == NULL)
+    {
+        kprintf("COULD NOT GET MADT\n");
     }
 
     tramp_size = ALIGN_UP( _TRAMPOLINE_END - _TRAMPOLINE_BEGIN, PAGE_SIZE);
@@ -463,6 +484,7 @@ int cpu_ap_start
     /* prepare trampoline code */
     cpu_prepare_trampoline(trampoline);
 
+#if 0
     /* check if are going to use x2APIC */
     for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
         i < madt->Header.Length;
@@ -476,60 +498,55 @@ int cpu_ap_start
             break;
         }
     }
+#endif
 
     for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
         (i < madt->Header.Length) && (started_cpu < num);
         i += subhdr->Length)
     {
         subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
-        start_ap = 0;
+        start_cpu_id = -1;
 
-        if(use_x2_apic)
+        if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_X2APIC)
         {
-            if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_X2APIC)
+            x2lapic = (ACPI_MADT_LOCAL_X2APIC*)subhdr;
+  
+            if(cpu_id == x2lapic->LocalApicId)
             {
-                x2lapic = (ACPI_MADT_LOCAL_X2APIC*)subhdr;
-
-                if(cpu_id == x2lapic->LocalApicId)
-                {
-                    continue;
-                }
-                else if(((x2lapic->LapicFlags & 0x1) == 0) &&
-                        ((x2lapic->LapicFlags & 0x2) == 0))
-                {
-                    continue;
-                }
-                else
-                {
-                    start_ap = 1;
-                }
+                continue;
+            }
+            else if(((x2lapic->LapicFlags & 0x1) == 0) &&
+                    ((x2lapic->LapicFlags & 0x2) == 0))
+            {
+                continue;
+            }
+            else
+            {
+                start_cpu_id = x2lapic->LocalApicId;
             }
         }
-        else
+        else if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_APIC)
         {
-            if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_APIC)
-            {
-                lapic = (ACPI_MADT_LOCAL_APIC*)subhdr;
+            lapic = (ACPI_MADT_LOCAL_APIC*)subhdr;
 
-                if(cpu_id == lapic->Id)
-                {
-                    continue;
-                }
-                else if(((lapic->LapicFlags & 0x1) == 0) &&
-                        ((lapic->LapicFlags & 0x2) == 0))
-                {
-                    continue;
-                }
-                else
-                {
-                    start_ap = 1;
-                }
+            if(cpu_id == lapic->Id)
+            {
+                continue;
+            }
+            else if(((lapic->LapicFlags & 0x1) == 0) &&
+                    ((lapic->LapicFlags & 0x2) == 0))
+            {
+                continue;
+            }
+            else
+            {
+                start_cpu_id = lapic->Id;
             }
         }
 
-        if(start_ap == 1)
-        {
-            if(cpu_bring_ap_up(dev, lapic->Id, timeout) == 0)
+        if(start_cpu_id != -1)
+        {  
+            if(cpu_bring_ap_up(dev, start_cpu_id, timeout) == 0)
             {
                 started_cpu++;
             }
@@ -685,6 +702,7 @@ static int pcpu_dev_init(device_t *dev)
 
     /* Store cpu id and proximity domain */
     cpu->cpu_id = cpu_id;
+
    // cpu->proximity_domain = cpu_get_domain(cpu_id);
 
     /* store per cpu private data */
@@ -842,7 +860,9 @@ cpu_t *cpu_current_get(void)
     int_state = cpu_int_check();
 
     if(int_state)
+    {
         cpu_int_lock();
+    }
 
     cpu_id = cpu_id_get();
     
@@ -850,8 +870,10 @@ cpu_t *cpu_current_get(void)
     cpu = devmgr_dev_data_get(dev);
 
     if(int_state)
+    {
         cpu_int_unlock();
-
+    }
+    
     return(cpu);
 }
 
