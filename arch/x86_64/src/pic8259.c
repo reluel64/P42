@@ -19,7 +19,7 @@
 
 static int pic8259_isr(void *pv, uint64_t ec)
 {
-    kprintf("8259ISR\n");
+    kprintf("%s %d %d\n",__FILE__,__FUNCTION__,__LINE__);
     __outb(PIC1_COMMAND,( 1<<5 ));
     __outb(PIC2_COMMAND,( 1<<5 ));
     return(0);
@@ -32,7 +32,9 @@ static int pic8259_probe(device_t *dev)
     ACPI_TABLE_MADT        *madt    = NULL;
 
     if(!devmgr_dev_name_match(dev, PIC8259_DRIVER_NAME))
+    {
         return(-1);
+    }
 
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
