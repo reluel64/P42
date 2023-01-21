@@ -7,10 +7,15 @@
 #include <cpu.h>
 #include <platform.h>
 
+
+/* local variables */
+static timer_dev_t system_timer;
+
+
 static int timer_compare
 (
-    timer_interval_t *t1,
-    timer_interval_t *t2
+    time_spec_t *t1,
+    time_spec_t *t2
 )
 {
     if(t1->seconds > t2->seconds)
@@ -38,41 +43,41 @@ static int timer_compare
 
 static uint8_t timer_increment
 (
-    timer_interval_t *timer,
-    timer_interval_t *increment
+    time_spec_t       *timer,
+    const time_spec_t *step
 )
 {
     /* check if we are overflowing the nanoseconds
      * if we do, increase the seconds and calculate the difference
      * of the nanoseconds
      */
-    if(increment->nanosec + timer->nanosec >= 1000000000ull)
+    if(step->nanosec + timer->nanosec >= 1000000000ull)
     {
-        increment->seconds++;
-        timer->nanosec = increment->nanosec;
+        timer->seconds++;
+        timer->nanosec = step->nanosec;
     }
     else
     {
-        timer->nanosec += increment->nanosec;
+        timer->nanosec += step->nanosec;
     }
 
     /* increment seconds */
-    timer->seconds += increment->seconds;
+    timer->seconds += step->seconds;
 
     return(0);
 }
 
 static uint8_t timer_expired
 (
-    timer_interval_t *to_sleep,
-    timer_interval_t *cursor
+    time_spec_t *target,
+    time_spec_t *current
 )
 {
     /* Check if we went past the required seconds */
-    if(to_sleep->seconds <= cursor->seconds)
+    if(target->seconds <= current->seconds)
     {
         /* If we reached the target seconds, then check the nanoseconds */
-        if(to_sleep->nanosec <= cursor->nanosec)
+        if(target->nanosec <= current->nanosec)
         {
             return(1);
         }
@@ -83,29 +88,37 @@ static uint8_t timer_expired
 
 static uint32_t timer_queue_callback
 (
-    void *tm,
-    void *isr_inf
+    void        *tm,
+    const time_spec_t *step,
+    const void        *isr_inf
 )
 { 
     timer_dev_t *tm_dev  = NULL;
     timer_t     *c       = NULL;
     timer_t     *n       = NULL;
-    uint8_t     int_flag = 0;
     uint8_t     status   = 0;
 
     tm_dev = tm;
-
-    spinlock_lock_int(&tm_dev->lock_q, &int_flag);
-
+    
+    spinlock_lock(&tm_dev->lock_q);
+   static uint32_t  prev_sec = 0;
     /* increment our timer */
-    timer_increment(&tm_dev->current_increment, &tm_dev->step);
+    timer_increment(&tm_dev->current_increment, step);
 
+    if(prev_sec != tm_dev->current_increment.seconds)
+    {
+        prev_sec = tm_dev->current_increment.seconds;
+        //kprintf("SEC %d NSEC %d\n",tm_dev->current_increment.seconds, tm_dev->current_increment.nanosec);
+    }
+#if 0
     /* if the smallest timer did not expire, just bail out */
     if(!timer_expired(&tm_dev->next_increment, &tm_dev->current_increment))
     {
         spinlock_unlock_int(&tm_dev->lock_q, int_flag);
         return(0);
     }
+#endif
+
 
     c = (timer_t*)linked_list_first(&tm_dev->timer_q);
 
@@ -113,232 +126,160 @@ static uint32_t timer_queue_callback
     {
         n = (timer_t*)linked_list_next(&c->node);
 
-        /* If timer is not initialized, skip it until next cycle */
-        if(c->flags & TIMER_NOT_INIT)
-        {
-            c->flags &= ~TIMER_NOT_INIT;
-            c = n;
-            continue;
-        }
-
-        timer_increment(&c->cursor, &tm_dev->next_increment);
+        timer_increment(&c->cursor, step);
 
         status = timer_expired(&c->to_sleep, &c->cursor);
 
         /* Do stuff */
 
         if(status)
-        {
-            status = c->callback(c->arg, isr_inf, &c->to_sleep);
-
-            if(status == 0)
-            {
-                linked_list_remove(&tm_dev->timer_q, &c->node);
-            }
-            else
-            {
-                c->cursor.nanosec = 0;
-                c->cursor.seconds = 0;
-            }
+        {            
+              kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+            linked_list_remove(&tm_dev->timer_q, &c->node);
+            c->callback(c->arg, isr_inf);
         }
 
         c = n;
     }
 
-    spinlock_unlock_int(&tm_dev->lock_q, int_flag);
-
-    return(0);
-}
-
-/* connect timer callback 
- * the callback till be called on every tick of the timer 
- * */
-
-int timer_dev_connect_cb
-(
-    device_t *dev,
-    timer_dev_cb_t cb,
-    void *cb_pv
-)
-{
-    timer_api_t *api = NULL;
-
-    if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
-    {
-        return(-1);
-    }
-
-    api = devmgr_dev_api_get(dev);
-
-    if(api == NULL)
-    {
-        return(-1);
-    }
-
-    api->install_cb(dev, cb, cb_pv);
-
-    return(0);
-}
-
-int timer_dev_disconnect_cb
-(
-    device_t *dev,
-    timer_dev_cb_t cb,
-    void *cb_pv
-)
-{
-    timer_api_t *api = NULL;
-
-    if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
-    {
-        return(-1);
-    }
-
-    api = devmgr_dev_api_get(dev);
-
-    if(api == NULL)
-    {
-        return(-1);
-    }
-
-    api->uninstall_cb(dev, cb, cb_pv);
-
-    return(0);
-}
-
-int timer_dev_disable(device_t *dev)
-{
-    timer_api_t *api = NULL;
-
-    if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
-    {
-        return(-1);
-    }
-
-    api = devmgr_dev_api_get(dev);
-
-    if(api->disable)
-    {
-        api->disable(dev);
-    }
-
-    return(0);
-}
-
-int timer_dev_enable(device_t *dev)
-{
-    timer_api_t *api = NULL;
+    spinlock_lock(&tm_dev->lock_pend_q);
     
-    if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
+    c = (timer_t*) linked_list_first(&tm_dev->pend_q);
+
+    while(c)
     {
-        return(-1);
+        n = (timer_t*)linked_list_next(&c->node);
+        linked_list_remove(&tm_dev->pend_q, &c->node);
+        linked_list_add_tail(&tm_dev->timer_q, &c->node);    
+        c = n;
     }
 
-    api = devmgr_dev_api_get(dev);
+    spinlock_unlock(&tm_dev->lock_pend_q);
 
-    if(api->enable)
-    {
-        api->enable(dev);
-    }
+    spinlock_unlock(&tm_dev->lock_q);
 
     return(0);
 }
 
-int timer_dev_reset(device_t *dev)
-{
-    timer_api_t *api = NULL;
-
-    if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
-    {
-        return(-1);
-    }
-
-    api = devmgr_dev_api_get(dev);
-
-    if(api->reset)
-    {
-        api->reset(dev);
-    }
-
-    return(0);
-}
-
-int timer_dev_read
+int timer_set_system_timer
 (
-    device_t *dev,
-    uint64_t *val
+    device_t *dev
 )
 {
-    timer_api_t *api = NULL;
+    uint8_t     int_flag = 0;
+    timer_api_t *func = NULL;
 
-    if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
+    if(dev == NULL)
     {
         return(-1);
     }
 
-    api = devmgr_dev_api_get(dev);
+    func = devmgr_dev_api_get(dev);
 
-    if(api->read_timer)
+    if(func == NULL || func->set_handler == NULL)
     {
-        api->read_timer(dev, val);
+        return(-1);
     }
+
+    spinlock_lock_int(&system_timer.lock_q, &int_flag);
+
+    system_timer.backing_dev = dev;
+    func->set_handler(dev, timer_queue_callback, &system_timer);
+
+    spinlock_unlock_int(&system_timer.lock_q, int_flag);
 
     return(0);
 }
 
-int timer_dev_init
-(
-    timer_dev_t *timer_dev, 
-    device_t    *dev
-)
+int timer_system_init(void)
 {
-    if((timer_dev == NULL) || (dev == NULL))
-    {
-        return(-1);
-    }
-
-    linked_list_init(&timer_dev->timer_q);
-    spinlock_init(&timer_dev->lock_q);
-
-    /* Check if the tm_dev is a timer device */
-
-    if(!devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
-    {
-        return(-1);
-    }
-
+    memset(&system_timer, 0, sizeof(timer_dev_t));
+    linked_list_init(&system_timer.timer_q);
+    spinlock_init(&system_timer.lock_q);
+    
     return(0);
 }
 
-int timer_dev_start
+
+int timer_enqeue
 (
-    timer_t *t, 
-    timer_dev_cb_t cb,
-    void *arg,
-    uint32_t delay,
-    timer_dev_t *tm_dev
+    timer_dev_t     *timer_dev,
+    time_spec_t     *ts,
+    timer_handler_t func,
+    void            *arg
 )
 {
-    uint8_t int_flag = 0;
-    if(t == NULL || cb == NULL || delay == 0 || tm_dev == NULL)
+    uint8_t int_sts = 0;
+    timer_dev_t *tmd = NULL;
+    timer_t     *tm = NULL;
+
+    if(timer_dev == NULL)
+    {
+        tmd = &system_timer;
+    }
+    else
+    {
+        tmd = timer_dev;
+    }
+    
+    if(func == NULL || ts == NULL)
+    {
         return(-1);
+    }
 
-    t->callback = cb;
-    t->arg      = arg;
-    t->delay    = delay;
-    t->cursor   = 0;
-    t->flags    = TIMER_NOT_INIT;
+    tm = (timer_t*)kcalloc(sizeof(timer_t), 1);
 
-    memset(&t->cursor, 0, sizeof(timer_interval_t));
+    tm->arg = arg;
+    tm->callback = func;
+    tm->to_sleep = *ts;
     
-    /* Protect the queue */
-    spinlock_write_lock_int(&tm_dev->lock_q, &int_flag);
-    
-    /* Add the timer to the queue */
-    linked_list_add_tail(&tm_dev->timer_q, &t->node);
-    
-    /* Release the queue */
-    spinlock_write_unlock_int(&tm_dev->lock_q, int_flag);
+    spinlock_lock_int(&tmd->lock_pend_q, &int_sts);   
 
+    linked_list_add_tail(&tmd->pend_q, &tm->node);
+    
+    spinlock_unlock_int(&tmd->lock_pend_q, int_sts);
+    
+    return(0);
+}
+
+int timer_enqeue_static
+(
+    timer_dev_t     *timer_dev,
+    time_spec_t     *ts,
+    timer_handler_t func,
+    void            *arg,
+    timer_t         *tm
+)
+{
+    uint8_t int_sts = 0;
+    timer_dev_t *tmd = NULL;
+
+    if(timer_dev == NULL)
+    {
+        tmd = &system_timer;
+    }
+    else
+    {
+        tmd = timer_dev;
+    }
+    
+    if(tm == NULL || func == NULL || ts == NULL)
+    {
+        kprintf("INVALID PARAMS %x %x %x\n",tm, func,ts);
+        return(-1);
+    }
+    
+    memset(tm, 0, sizeof(timer_t));
+
+    tm->arg = arg;
+    tm->callback = func;
+    tm->to_sleep = *ts;
+
+    spinlock_lock_int(&tmd->lock_pend_q, &int_sts);   
+
+    linked_list_add_tail(&tmd->pend_q, &tm->node);
+    
+    spinlock_unlock_int(&tmd->lock_pend_q, int_sts);
+    
     return(0);
 }

@@ -11,15 +11,13 @@
 #include <platform.h>
 #include <utils.h>
 
-#define APIC_TIMER_INTERVAL 1000000 /* 1ms */
-
 typedef struct apic_timer_t
 {
-    spinlock_t lock;
-    uint32_t calib_value;
-    timer_dev_cb_t func;
-    void *func_data;
-    timer_int_t tm_res;
+    spinlock_t           lock;
+    uint32_t             calib_value;
+    timer_tick_handler_t handler;
+    void                *handler_data;
+    time_spec_t          tm_res;
 }apic_timer_t;
 
 static isr_t timer_isr;
@@ -44,16 +42,16 @@ static int apic_timer_isr(void *drv, isr_info_t *inf)
         return(-1);
     }
 
-    spinlock_read_lock_int(&timer->lock, &int_flag);
-
+    spinlock_read_lock(&timer->lock);
+    
     /* Call the callback */
-    if(timer->func != NULL)
+    if(timer->handler != NULL)
     {
-        timer->func(timer->func_data, inf);
+        timer->handler(timer->handler_data, &timer->tm_res, inf);
     }
 
-    spinlock_read_unlock_int(&timer->lock, int_flag);
-
+    spinlock_read_unlock(&timer->lock);
+ 
     return(0);
 }
 
@@ -68,8 +66,26 @@ static int apic_timer_probe(device_t *dev)
     return(-1);
 }
 
-static int apic_timer_init(device_t *dev)
+static uint32_t apic_timer_loop
+(
+    void *arg,
+    const void *isr
+)
 {
+    uint8_t *flag = NULL;
+
+    flag = arg;
+
+    if(flag != NULL)
+    {
+        (*flag) = 1;
+    }
+
+    return(0);
+}
+
+static int apic_timer_init(device_t *dev)
+{  
     device_t           *apic_dev    = NULL;
     driver_t           *apic_drv    = NULL;
     apic_device_t      *apic        = NULL;
@@ -79,6 +95,10 @@ static int apic_timer_init(device_t *dev)
     uint32_t            data        = 0;
     timer_api_t        *api         = NULL;
     int                int_status   = 0;
+    timer_t            calib_timer;
+    time_spec_t        req_res      = {.nanosec = 1000000, .seconds = 0};
+    uint8_t            timer_done   = 0;
+
 
     apic_dev    = devmgr_dev_parent_get(dev);
     apic_drv    = devmgr_dev_drv_get(apic_dev);
@@ -95,8 +115,9 @@ static int apic_timer_init(device_t *dev)
     /* Enable the interrupts */
 
     if(!int_status)
+    {
         cpu_int_unlock();
-
+    }
     spinlock_rw_init(&apic_timer->lock);
 
     devmgr_dev_data_set(dev, apic_timer);
@@ -117,7 +138,16 @@ static int apic_timer_init(device_t *dev)
                             &data, 
                             1);
 
-    timer_dev_delay_poll(pit, APIC_TIMER_INTERVAL);
+    timer_enqeue_static(NULL, 
+                        &req_res, 
+                        apic_timer_loop, 
+                        &timer_done, 
+                        &calib_timer);
+
+    while(!timer_done)
+    {
+        cpu_pause();
+    }
 
     /* restore the status of the interrupt flag */
     if(!int_status) 
@@ -131,14 +161,18 @@ static int apic_timer_init(device_t *dev)
     apic_timer->calib_value = UINT32_MAX - data;
  
      /* disable the timer */
-    data = 0;
+    data = apic_timer->calib_value;
 
     apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
                             INITIAL_COUNT_REGISTER, 
                             &data, 
                             1);
 
-    kprintf("APIC_TIMER_CALIB %d\n",apic_timer->calib_value);
+    apic_timer->tm_res = req_res;
+    kprintf("APIC_TIMER_CALIB %d SEC %d NSEC %d\n",
+            apic_timer->calib_value,
+            req_res.seconds,
+            req_res.nanosec);
 
     data = APIC_LVT_VECTOR_MASK(PLATFORM_LOCAL_TIMER_VECTOR) | 
            0b01 << 17;
@@ -161,80 +195,61 @@ static int apic_timer_drv_init(driver_t *drv)
     return(0);
 }
 
-
-static int apic_timer_install_cb
+static int apic_timer_set_handler
 (
-    device_t          *dev,
-    timer_dev_cb_t    func, 
-    void              *data
+    device_t             *dev,
+    timer_tick_handler_t  th, 
+    void                 *arg
 )
 {
     apic_timer_t *timer = NULL;
-    int           int_status = 0;
-    int           ret = -1;
     uint8_t       int_flag = 0;
 
     timer = devmgr_dev_data_get(dev);
 
     spinlock_write_lock_int(&timer->lock, &int_flag);
 
-    timer->func = func;
-    timer->func_data = data;
-    ret = 0;
+    timer->handler = th;
+    timer->handler_data = arg;
     
     spinlock_write_unlock_int(&timer->lock, int_flag);
 
-    return(ret);
+    return(0);
 }
 
-static int apic_timer_uninstall_cb
+static int apic_timer_get_handler
 (
-    device_t          *dev,
-    timer_dev_cb_t    func,
-    void *data
+    device_t             *dev,
+    timer_tick_handler_t *th,
+    void                **arg
 )
 {
     apic_timer_t *timer = NULL;
-    int           int_status = 0;
-    int           ret = -1;
     uint8_t       int_flag = 0;
 
-    timer = devmgr_dev_data_get(dev);
 
-    spinlock_write_lock_int(&timer->lock, &int_flag);
-
-    timer->func = NULL;
-    timer->func_data = NULL;
-    ret = 0;
-
-    spinlock_write_unlock_int(&timer->lock, int_flag);
-
-    return(ret);
-}
-
-static int apic_timer_get_cb
-(
-    device_t          *dev,
-    timer_dev_cb_t    *func,
-    void              **data
-)
-{
-    apic_timer_t *timer = NULL;
-    int           int_status = 0;
-    int           ret = -1;
-    uint8_t      int_flag = 0;
+    if(th == NULL || arg == NULL)
+    {
+        return(-1);
+    }
 
     timer = devmgr_dev_data_get(dev);
 
     spinlock_read_lock_int(&timer->lock, &int_flag);
 
-    *func = timer->func;
-    *data = timer->func_data;
-    ret = 0;
+    if(th != NULL)
+    {
+        *th = timer->handler;
+    }
+
+    if(arg != NULL)
+    {
+        *arg = timer->handler_data;
+    }
 
     spinlock_read_unlock_int(&timer->lock, int_flag);
 
-    return(ret);
+    return(0);
 }
 
 static int apic_timer_toggle(device_t *dev, int en)
@@ -281,7 +296,7 @@ static int apic_timer_reset(device_t *dev)
 static int apic_timer_resolution_get
 (
     device_t    *dev, 
-    timer_interval_t *tm_res
+    time_spec_t *tm_res
 )
 {
     apic_timer_t *timer = NULL;
@@ -291,20 +306,18 @@ static int apic_timer_resolution_get
     if(timer == NULL || tm_res == NULL)
         return(-1);
 
-    memcpy(tm_res, &timer->tm_res, sizeof(timer_interval_t));
+    memcpy(tm_res, &timer->tm_res, sizeof(time_spec_t));
 
     return(0);
 }
 
 static timer_api_t apic_timer_api = 
 {
-    .install_cb   = apic_timer_install_cb,
-    .uninstall_cb = apic_timer_uninstall_cb,
-    .get_cb       = apic_timer_get_cb,
     .enable       = apic_timer_enable,
     .disable      = apic_timer_disable,
     .reset        = apic_timer_reset,
-    .tm_res_get   = apic_timer_resolution_get
+    .set_handler  = apic_timer_set_handler,
+    .get_handler  = apic_timer_get_handler
 };
 
 static driver_t apic_timer_drv = 

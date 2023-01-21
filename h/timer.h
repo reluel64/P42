@@ -6,79 +6,90 @@
 #include <linked_list.h>
 #include <devmgr.h>
 #include <isr.h>
+#include <stdint.h>
 
 
 #define TIMER_DEVICE_TYPE "timer"
 #define TIMER_NOT_INIT    (1 << 0)
+#define TIMER_PERIODIC    (1 << 0)
+#define TIMER_ONESHOT     (1 << 1)
+
+#define TIMER_RESOLUTION_NS  (1000000000ull) // nanosecond
+#define NODE_TO_TIMER (node)    ((uint8_t*)(node) - offsetof((node), timer_t))
 
 
-typedef uint32_t (*timer_dev_cb_t)(void *arg, void *isr_frame);
-
-typedef struct timer_int_t
+typedef struct time_spec_t
 {
-    uint64_t nanosec;
+    uint32_t nanosec;
     uint32_t seconds;
-}timer_int_t;
+}time_spec_t;
+
+
+typedef uint32_t (*timer_tick_handler_t) \
+                 (void *arg, const time_spec_t *step, const void *isr_inf);
+
+typedef uint32_t (*timer_handler_t) \
+                 (void *arg, const void *isr_inf);
+
 
 typedef struct timer_dev_t
 {
-    list_head_t timer_queue;
-    spinlock_t queue_lock;
-    device_t *timer_dev;
-    uint32_t tm_step;
-    uint64_t tm_ticks;
+    device_t    *backing_dev;  /* backing timer device      */
+    list_head_t timer_q;      /* timer queue               */
+    list_head_t pend_q;
+    spinlock_t  lock_q;       /* lock to ptorect the queue */
+    spinlock_t  lock_pend_q; 
+    time_spec_t step;
+    time_spec_t next_increment;
+    time_spec_t current_increment;
 }timer_dev_t;
 
 typedef struct timer_t
 {
-    list_node_t node;
-    timer_dev_cb_t cb;
-    void *arg;
-    uint32_t delay;
-    uint32_t cursor;
-    uint8_t flags;
+    list_node_t       node;
+    timer_handler_t   callback;
+    void              *arg;
+    time_spec_t       to_sleep;
+    time_spec_t       cursor;
+    uint8_t           flags;
 }timer_t;
 
 typedef struct timer_api_t
 {
-    int (*install_cb)(device_t *dev, timer_dev_cb_t, void *);    
-    int (*uninstall_cb)(device_t *dev, timer_dev_cb_t, void *);
-    int (*get_cb)(device_t *dev, timer_dev_cb_t *, void **);
-    int (*enable)(device_t *dev);
-    int (*disable)(device_t *dev);
-    int (*reset)  (device_t *dev);
-    int (*tm_res_get) (device_t *dev, timer_int_t *tm);
+    int (*enable)      (device_t *dev);
+    int (*disable)     (device_t *dev);
+    int (*reset)       (device_t *dev);
+    int (*set_handler) (device_t *dev, timer_tick_handler_t th, void *arg);
+    int (*get_handler) (device_t *dev, timer_tick_handler_t *th, void **arg);
+    int (*set_timer)   (device_t *dev, time_spec_t *tm);
+    int (*set_mode)    (device_t *dev, uint8_t mode); 
 }timer_api_t; 
 
-
-int timer_dev_loop_delay
+int timer_set_system_timer
 (
-    device_t *dev, 
-    uint32_t delay_ms
+    device_t *dev
 );
 
-int timer_dev_get_cb
+int timer_system_init
 (
-    device_t *dev,
-    timer_dev_cb_t *cb,
-    void **cb_pv
+    void
 );
 
-int timer_dev_connect_cb
+int timer_enqeue
 (
-    device_t *dev,
-    timer_dev_cb_t cb,
-    void *cb_pv
+    timer_dev_t     *timer_dev,
+    time_spec_t     *ts,
+    timer_handler_t func,
+    void            *arg
 );
 
-int timer_dev_disconnect_cb
+int timer_enqeue_static
 (
-    device_t *dev,
-    timer_dev_cb_t cb,
-    void *cb_pv
+    timer_dev_t     *timer_dev,
+    time_spec_t     *ts,
+    timer_handler_t func,
+    void            *arg,
+    timer_t         *tm
 );
 
-int timer_dev_disable(device_t *dev);
-int timer_dev_enable(device_t *dev);
-int timer_dev_reset(device_t *dev);
 #endif

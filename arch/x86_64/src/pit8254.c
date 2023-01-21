@@ -13,76 +13,67 @@
 #define COMMAND_PORT 0x43
 #define CH0_PORT    0x40
 
-#define INTERRUPT_INTERVAL_MS 1ull
 
-#define PIT8254_FREQ 1193182 /* HZ */
-#define INT_INTERVAL_MS 1
-#define PIT8254_MS_DIV 1000
+#define PIT8254_MODE_2        (1 << 2)
+#define PIT8254_MODE_3       ((1 << 1) | (1 << 2))
+
+#define PIT8254_ACCESS_LO_HI ((1 << 4) | (1 << 5))
+
+#define MODE_MASK             (0b00001110)
+
+#define PIT8254_FREQ             (1193182ull) /* HZ */
+
+#define PIT8254_REQ_RESOLUTION   (1000ull)
+#define PIT8254_DIVIDER          (PIT8254_FREQ / PIT8254_REQ_RESOLUTION)
 
 
 typedef struct pit8254_dev_t
 {
-    spinlock_t  lock; 
-    uint16_t divider;
-    timer_dev_cb_t func;
-    void *func_data;
-    isr_t timer_isr;
+    spinlock_t           lock; 
+    uint16_t             divider;
+    timer_tick_handler_t handler;
+    void                *handler_data;
+    isr_t                timer_isr;
+    uint8_t              mode;
+    time_spec_t          resolution;
 }pit8254_dev_t;
 
-static int pit8254_rearm(device_t *dev)
-{
-    pit8254_dev_t *pit = NULL;
-    
-    pit = devmgr_dev_data_get(dev);
+static int pit8254_irq_handler
+(
+    void *dev, 
+    isr_info_t *inf
+);
 
-    __outb(CH0_PORT, pit->divider & 0xff);
-    __outb(CH0_PORT, (pit->divider >> 8) & 0xff);
-
-    return(0);
-}
-
-static int pit8254_irq_handler(void *dev, isr_info_t *inf)
-{
-    pit8254_dev_t *pit_dev = NULL;
-    uint16_t divider = 0;
-    uint8_t int_flag = 0;
-
-    pit_dev = devmgr_dev_data_get(dev);
-
-    spinlock_read_lock_int(&pit_dev->lock, &int_flag);
-
-    if(pit_dev->func != NULL)
-        pit_dev->func(pit_dev->func_data, inf);
-    
-    spinlock_read_unlock_int(&pit_dev->lock, int_flag);
-
-    return(0);
-}
+static int pit8254_rearm(device_t *dev);
 
 static int pit8254_probe(device_t *dev)
 {
     if(devmgr_dev_name_match(dev, PIT8254_TIMER) &&
       devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
-      return(0);
-
+    {
+        return(0);
+    }
+    
     return(-1);
 }
 
 static int pit8254_init(device_t *dev)
 {
-    uint8_t        command = 0;
     pit8254_dev_t *pit_dev = NULL;
-
-    command = 0b000111000;
-
+  
     pit_dev = (pit8254_dev_t*)kcalloc(sizeof(pit8254_dev_t), 1);
-
+    pit_dev->mode = PIT8254_MODE_2 | PIT8254_ACCESS_LO_HI;
+    
     spinlock_rw_init(&pit_dev->lock);
+
     devmgr_dev_data_set(dev, pit_dev);
     
-    pit_dev->divider = PIT8254_FREQ / PIT8254_MS_DIV;
+    pit_dev->divider = 1193;
+    pit_dev->resolution.nanosec = (1000000000 / PIT8254_FREQ) * pit_dev->divider ;
+    
+    kprintf("RESOLUTION %d DIVIDER %d\n",pit_dev->resolution.nanosec, pit_dev->divider);
+    __outb(COMMAND_PORT, pit_dev->mode);
 
-    __outb(COMMAND_PORT, command);
 
     pit8254_rearm(dev);
 
@@ -115,13 +106,45 @@ static int pit8254_drv_init(driver_t *drv)
     return(0);
 }
 
+static int pit8254_rearm(device_t *dev)
+{
+    pit8254_dev_t *pit = NULL;
+    
+    pit = devmgr_dev_data_get(dev);
 
+    __outb(CH0_PORT, pit->divider & 0xff);
+    __outb(CH0_PORT, (pit->divider >> 8) & 0xff);
+    
+    return(0);
+}
 
-static int pit8254_install_cb
+static int pit8254_irq_handler
 (
-    device_t          *dev,
-    timer_dev_cb_t    func, 
-    void              *data
+    void *dev, 
+    isr_info_t *inf
+)
+{
+    pit8254_dev_t *pit_dev = NULL;
+    
+    pit_dev = devmgr_dev_data_get(dev);
+
+    spinlock_read_lock(&pit_dev->lock);
+    
+    if(pit_dev->handler != NULL)
+    {
+        pit_dev->handler(pit_dev->handler_data, &pit_dev->resolution, inf);
+    }
+
+    spinlock_read_unlock(&pit_dev->lock);
+
+    return(0);
+}
+
+static int pit8254_set_handler
+(
+    device_t             *dev,
+    timer_tick_handler_t th,
+    void                 *arg
 )
 {
     pit8254_dev_t *timer = NULL;
@@ -132,71 +155,75 @@ static int pit8254_install_cb
 
     spinlock_write_lock_int(&timer->lock, &int_flag);
 
-    timer->func      = func;
-    timer->func_data = data;
-    ret = 0;
+    timer->handler      = th;
+    timer->handler_data = arg;
 
     spinlock_write_unlock_int(&timer->lock, int_flag);
 
-    return(ret);
+    return(0);
 }
 
-static int pit8254_uninstall_cb
+static int pit8254_get_handler
 (
-    device_t       *dev,
-    timer_dev_cb_t func,
-    void *data
+    device_t             *dev,
+    timer_tick_handler_t *th,
+    void                 **arg
 )
 {
     pit8254_dev_t *timer = NULL;
     uint8_t       int_status = 0;
-    int           ret = -1;
     
-    timer = devmgr_dev_data_get(dev);
+    if(th == NULL || arg == NULL)
+    {
+        return(-1);
+    }
 
-    spinlock_write_lock_int(&timer->lock, &int_status);
-
-    timer->func      = NULL;
-    timer->func_data = NULL;
-    ret              = 0;
-
-    spinlock_write_unlock_int(&timer->lock, int_status);
-
-    return(ret);
-}
-
-static int pit8254_get_cb
-(
-    device_t          *dev,
-    timer_dev_cb_t      *func,
-    void              **data
-)
-{
-    pit8254_dev_t *timer = NULL;
-    uint8_t       int_status = 0;
-    int           ret = -1;
-    
     timer = devmgr_dev_data_get(dev);
 
     spinlock_read_lock_int(&timer->lock, &int_status);
 
-    *func = timer->func;
-    *data = timer->func_data;
-    ret = 0;
+    if(th != NULL)
+    {
+       *th  = timer->handler;
+    }
+
+    if(arg != NULL)
+    {
+        *arg = timer->handler_data;
+    }
 
     spinlock_read_unlock_int(&timer->lock, int_status);
 
-    return(ret);
+    return(0);
+}
+
+static int pit8254_set_timer
+(
+    device_t    *dev,
+    time_spec_t *tm
+)
+{
+    return(0);
+}
+
+static int pit8254_set_mode
+(
+    device_t *dev,
+    uint8_t  mode
+)
+{
+    return(0);
 }
 
 static timer_api_t pit8254_api = 
 {
-    .install_cb    = pit8254_install_cb,
-    .uninstall_cb  = pit8254_uninstall_cb,
-    .get_cb        = pit8254_get_cb,
-    .enable        = NULL,
-    .disable       = NULL,
-    .reset         = pit8254_rearm
+    .enable      = NULL,
+    .disable     = NULL,
+    .reset       = pit8254_rearm,
+    .set_handler = pit8254_set_handler,
+    .get_handler = pit8254_get_handler,
+    .set_timer   = pit8254_set_timer,
+    .set_mode    = pit8254_set_mode
 };
 
 static driver_t pit8254 = 
