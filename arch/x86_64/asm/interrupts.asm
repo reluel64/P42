@@ -1,7 +1,7 @@
 ; Interrupt handling
 ; We are using the assembler capability to define macros 
 ; so that we can save a lot of duplicate code being written
-
+[BITS 64]
 global __cli
 global __sti
 global __lidt
@@ -23,7 +23,7 @@ global __flush_gdt
 extern isr_dispatcher
 ; ASM stub for ISRs that do not have 
 ; error codes
-[BITS 64]
+section .text
 %macro isr_no_ec_def 1
 isr_%1:
     push rbp

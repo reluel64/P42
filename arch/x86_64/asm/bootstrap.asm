@@ -1,5 +1,7 @@
 ;P42 x86_64 Kernel bootstrap
 ;---------------------------------------------------------
+[BITS 32]
+
 %define KERNEL_VMA               0xFFFFFFFF80000000
 %define MAGIC_VAL                0x1BADB002
 %define PAGE_PRESENT             (1 << 0)
@@ -20,9 +22,6 @@ global kstack_top
 extern kmain
 extern BOOT_PAGING
 extern BOOT_PAGING_LENGTH
-
-
-[BITS 32]
 
 section .multiboot
 multiboot:
