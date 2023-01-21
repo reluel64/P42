@@ -4,6 +4,7 @@
 #include <vm.h>
 #include <apic.h>
 #include <pic8259.h>
+#include <i8254.h>
 #include <devmgr.h>
 #include <ioapic.h>
 #include <platform.h>
@@ -12,7 +13,7 @@
 #include <serial.h>
 #include <utils.h>
 #include <vga.h>
-
+#include <timer.h>
 
 extern int pcpu_init(void);
 extern int apic_register(void);
@@ -208,6 +209,8 @@ int platform_pre_init(void)
 
 int platform_early_init(void)
 {
+    device_t *sys_timer = NULL;
+
     /* Tell ACPI code that now the memory manager is up and running */
     acpi_mem_mgr_on();
     InitializeAcpiTables();
@@ -229,6 +232,14 @@ int platform_early_init(void)
     
     pit8254_register();
 
+    /* set the system timer to PIT8254 */
+    sys_timer = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
+
+    if(timer_set_system_timer(sys_timer) != 0)
+    {
+        kprintf("FAILED TO SET SYSTEM TIMER\n");
+    }
+
     /* Register and initialize APIC */
     apic_register();
    
@@ -242,11 +253,12 @@ int platform_early_init(void)
 
 int platform_init(void)
 {
-    device_t *ioapic = NULL;
-    device_t *apic_timer = NULL;
+    device_t   *ioapic = NULL;
+    device_t   *apic_timer = NULL;
+    intc_api_t *funcs = NULL;
 
     cpu_ap_start(PLATFORM_AP_ALL_CPUS, PLATFORM_AP_START_TIMEOUT);
-
+#if 0
     /* Mask the PIT8254 */
     apic_timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, 0);
 
@@ -254,9 +266,14 @@ int platform_init(void)
     if(apic_timer != NULL)
     {
         ioapic = devmgr_dev_get_by_name(IOAPIC_DRV_NAME, 0);
-        intc_mask_irq(ioapic, 0);
-    }
+        funcs = devmgr_dev_api_get(ioapic);
 
+        if(funcs != NULL && funcs->disable)
+        {
+            funcs->unmask(ioapic, 0);
+        }
+    }
+#endif
     return(0);
 }
 
