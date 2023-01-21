@@ -132,7 +132,7 @@ static int basic_enq_thread
             break;
 
         default:
-            kprintf("%s %d\n",__FUNCTION__, __LINE__);
+            kprintf("%s %d STATE %d THREAD %x\n",__FUNCTION__, __LINE__, state,th);
             while(1);
             break;
     }
@@ -153,38 +153,8 @@ static int basic_tick
     list_node_t    *node        = NULL;
     sched_thread_t *th          = NULL;
     basic_policy_t *policy      = NULL;
-    
-    (*next_sleep)  = UINT32_MAX;
-
-    policy = unit->policy.pv;
-
-    /* Update sleeping threads */
-    node = linked_list_first(&policy->sleep_q);
-    
-    while(node)
-    {
-        
-        th = SCHED_NODE_TO_THREAD(node);
-
-        /* If timeout has been reached, wake the thread */
-
-        if(__atomic_load_n(&th->flags, __ATOMIC_SEQ_CST) & 
-          THREAD_SLEEPING)
-        {
-            th->slept++;
-
-            if(th->slept >= th->to_sleep)
-            {            
-                /* Wake up the thread */
-                sched_wake_thread(th);
-            }
-            else
-            {
-                (*next_sleep) = min(*next_sleep, th->to_sleep - th->slept);
-            }
-        }
-        node = linked_list_next(node);
-    }    
+   
+   return(0);
 }
 
 static int basic_init

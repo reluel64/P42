@@ -17,7 +17,9 @@
 #include <owner.h>
 
 #define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
-#define SCHEDULER_TICK_MS 1
+#define SCHED_IDLE_TASK    (PAGE_SIZE)
+
+
 
 static list_head_t units;
 static spinlock_t  units_lock;
@@ -34,8 +36,9 @@ static void sched_main
 
 static uint32_t sched_tick
 (
-    void *unit,
-    void *isr_info
+    void              *pv_unit,
+    const time_spec_t *step,
+    const void        *isr_inf
 );
 
 static void sched_context_switch
@@ -73,7 +76,7 @@ void sched_thread_entry_point
     {
         ret_val = entry_point(th->arg);
     }
-
+    kprintf("Thread ended\n");
     /* The thread is now dead */
     spinlock_lock_int(&th->lock, &int_flag);
 
@@ -84,6 +87,11 @@ void sched_thread_entry_point
      }
     
     spinlock_unlock_int(&th->lock, int_flag);
+
+    while(1)
+    {
+        cpu_pause();
+    }
 }
 
 int sched_start_thread
@@ -91,6 +99,7 @@ int sched_start_thread
     sched_thread_t *th
 )
 {
+   
     cpu_t *cpu = NULL;
     sched_exec_unit_t *unit = NULL;
     uint8_t int_flag = 0;
@@ -224,24 +233,45 @@ int sched_init(void)
 
 int sched_unit_init
 (
-    device_t *timer, 
-    cpu_t *cpu,
+    device_t       *timer, 
+    cpu_t          *cpu,
     sched_thread_t *post_unit_init
 )
 {
-    sched_exec_unit_t *unit       = NULL;
-    list_node_t      *node = NULL;
-    list_node_t      *next_node   = NULL;
-    sched_thread_t   *pend_th     = NULL;
-    uint8_t          int_flag     = 0;
+    sched_exec_unit_t *unit        = NULL;
+    list_node_t       *node        = NULL;
+    list_node_t       *next_node   = NULL;
+    sched_thread_t    *pend_th     = NULL;
+    uint8_t           int_flag     = 0;
+    uint8_t           use_tick_ipi = 0;
+    timer_api_t       *funcs       = NULL;
+
+
+    kprintf("================================================\n");
+    kprintf("Initializing Scheduler for CPU %d\n",cpu->cpu_id);
 
     if(cpu == NULL)
     {
         kprintf("ERROR: CPU %x\n", cpu);
         return(-1);
     }
-    kprintf("================================================\n");
-    kprintf("Initializing Scheduler for CPU %d\n",cpu->cpu_id);
+    
+    if(timer == NULL)
+    {
+        use_tick_ipi = 1;
+        kprintf("NO TIMER - unit cannot tick by itself\n");
+    }
+
+
+    funcs = devmgr_dev_api_get(timer);
+
+    if(funcs == NULL || funcs->set_handler == NULL)
+    {
+        use_tick_ipi = 1;
+        kprintf("no way to set the tick handler - no ticking by ourselves\n");
+    }
+
+
 
     /* Allocate cleared memory for the unit */
     unit = kcalloc(sizeof(sched_exec_unit_t), 1);
@@ -273,7 +303,7 @@ int sched_unit_init
     kthread_create_static(&unit->idle, 
                          sched_idle_thread, 
                          unit, 
-                         0x1000, 
+                         SCHED_IDLE_TASK, 
                          255,
                          NULL);
     
@@ -296,11 +326,14 @@ int sched_unit_init
     /* Link the execution unit to the timer provided by
      * platform's CPU driver
      */
-    if(timer != NULL)
+    
+
+    if(use_tick_ipi == 0)
     {
+            
         unit->timer_dev = timer;
-        timer_dev_connect_cb(timer, sched_tick, unit);
-        timer_dev_enable(timer); 
+        funcs->set_handler(timer, sched_tick, unit);
+        funcs->enable(timer);
     }
     else
     {
@@ -431,28 +464,58 @@ void sched_wake_thread
     }
 }
 
+
+static uint32_t sched_timer_wake_thread
+(
+    void *thread,
+    const void *isr
+)
+{
+    //kprintf("Woke thread\n");
+    sched_wake_thread(thread);
+    return(0);
+}
+
 void sched_sleep
 (
     uint32_t delay
 )
 {
+    uint32_t int_status = 0;
+    timer_t tm;
+    time_spec_t timeout ={.seconds = delay / 1000ull,
+                          .nanosec = delay % 1000000ull
+                         };
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
+
     sched_thread_t *self = NULL;
     self = sched_thread_self();
     sched_sleep_thread(self, delay);
+    timer_enqeue_static(NULL, &timeout, sched_timer_wake_thread, self, &tm);
     schedule();
+
+    if(int_status)
+    {
+        cpu_int_unlock();
+    }
 }
 
 
 /* time tracking - called from the interrupt context */
 static uint32_t sched_tick
 (
-    void *pv_unit,
-    void *isr_inf
+    void              *pv_unit,
+    const time_spec_t *step,
+    const void        *isr_inf
 )
 {
     sched_exec_unit_t *unit         = NULL;
     sched_policy_t    *policy       = NULL;
-    uint8_t           int_flag      = 0;
     list_node_t       *node         = NULL;
     sched_thread_t    *th           = NULL;
     uint32_t          next_tick     = UINT32_MAX;
@@ -460,7 +523,7 @@ static uint32_t sched_tick
     unit = pv_unit;
 
     /* lock the unit */
-    spinlock_lock_int(&unit->lock, &int_flag);
+    spinlock_lock(&unit->lock);
     
     th = unit->current;
 
@@ -487,7 +550,7 @@ static uint32_t sched_tick
     }
 
     /* all good, unlock the unit */
-    spinlock_unlock_int(&unit->lock, int_flag);
+    spinlock_unlock(&unit->lock);
 
     return(0);
     
@@ -504,9 +567,9 @@ static void *sched_idle_thread
     int                int_status = 0;
     list_node_t        *c         = NULL;
     list_node_t        *n         = NULL;
-
+    timer_api_t        *func      = NULL;
     unit = (sched_exec_unit_t*)pv;
-   
+
     kprintf("Entered idle loop on %d UNIT ID 0x%x\n", unit->cpu->cpu_id, unit);
 
     /* Signal that the execution unit is up and running 
@@ -522,7 +585,12 @@ static void *sched_idle_thread
 
     if(unit->cpu->cpu_id > 0)
     {
-        timer_dev_disable(unit->timer_dev);
+        func = devmgr_dev_api_get(unit->timer_dev);
+
+        if((func != NULL) && (func->disable != NULL))
+        {
+            func->disable(unit->timer_dev);
+        }
     }
 #endif
 
@@ -658,13 +726,13 @@ static void sched_enq
     {
         prev_thread = unit->current;
 
-        state = __atomic_load_n(&unit->current->flags, __ATOMIC_SEQ_CST) & 
-                THREAD_STATE_MASK;
+        state = __atomic_load_n(&unit->current->flags, __ATOMIC_SEQ_CST);
     
         /* check if the thread is dead */
         if(state & THREAD_DEAD)
         {
             linked_list_add_tail(&unit->dead_q, &unit->current->sched_node);
+            prev_thread = NULL;
         }
         else if(unit->policy.enqueue != NULL)
         {
@@ -715,8 +783,6 @@ static void sched_deq
 static void sched_main(void)
 {
     cpu_t             *cpu     = NULL;
-    list_node_t       *new_th  = NULL;
-    list_node_t       *next    = NULL;
     sched_exec_unit_t *unit    = NULL;
     sched_thread_t    *next_th = NULL;
     sched_thread_t    *prev_th = NULL;
