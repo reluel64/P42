@@ -33,6 +33,20 @@ int linked_list_add_tail
     list_node_t *ln
 );
 
+int linked_list_add_before
+(
+    list_head_t *lh, 
+    list_node_t *bn, 
+    list_node_t *nn
+);
+
+int linked_list_add_after
+(
+    list_head_t *lh, 
+    list_node_t *an, 
+    list_node_t *nn
+);
+
 int linked_list_remove
 (
     list_head_t *lh, 
