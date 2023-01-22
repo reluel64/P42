@@ -92,4 +92,10 @@ int timer_enqeue_static
     timer_t         *tm
 );
 
+int timer_dequeue
+(
+    timer_dev_t *timer_dev,
+    timer_t *tm
+);
+
 #endif
