@@ -12,6 +12,7 @@
 #define THREAD_DEAD             (1 << 4)
 #define THREAD_ALLOCATED        (1 << 5)
 #define THREAD_NEED_RESCHEDULE  (1 << 6)
+#define THREAD_WOKE_BY_TIMER    (1 << 7)
 #define CPU_AFFINITY_VECTOR     (0x8)
 
 #define UNIT_THREADS_WAKE        (1 << 0)
@@ -89,8 +90,6 @@ typedef struct sched_thread_t
     void              *arg;          /* parameter for the entry point of the thread   */
     sched_exec_unit_t *unit;         /* execution unit on which the thread is running */
     spinlock_t        lock;          /* lock to protect the structure members         */
-    uint32_t          slept;         /* sleeping cursor                               */
-    uint32_t          to_sleep;      /* amount in ms to sleep                         */
     uint32_t          remain;        /* reamining time before task switch             */
     void              *rval;         /* return value                                  */
     cpu_aff_t         affinity;
@@ -162,17 +161,6 @@ void sched_unblock_thread
 void sched_block_thread
 (
     sched_thread_t *th
-);
-
-void sched_unblock_thread
-(
-    sched_thread_t *th
-);
-
-void sched_sleep_thread
-(
-    sched_thread_t *th,
-    uint32_t timeout
 );
 
 void sched_wake_thread

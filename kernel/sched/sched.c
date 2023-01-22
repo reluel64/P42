@@ -47,6 +47,12 @@ static void sched_context_switch
     sched_thread_t *next
 );
 
+static uint32_t sched_timer_wake_thread
+(
+    void *thread,
+    const void *isr
+);
+
 int basic_register
 (
     sched_policy_t *policy
@@ -330,7 +336,6 @@ int sched_unit_init
 
     if(use_tick_ipi == 0)
     {
-            
         unit->timer_dev = timer;
         funcs->set_handler(timer, sched_tick, unit);
         funcs->enable(timer);
@@ -405,36 +410,6 @@ void sched_block_thread
     }
 }
 
-void sched_sleep_thread
-(
-    sched_thread_t *th,
-    uint32_t timeout
-)
-{
-    uint8_t int_flag = 0;
-
-    if(th != NULL)
-    {
-        if(timeout > 0)
-        {
-            spinlock_lock_int(&th->lock, &int_flag);
-
-            th->to_sleep = timeout;
-            th->slept = 0;
-            
-            /* mark thread as sleeping */
-            __atomic_or_fetch(&th->flags, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
-
-            /* thread not running and not ready */
-            __atomic_and_fetch(&th->flags, 
-                                ~(THREAD_RUNNING | THREAD_READY), 
-                                __ATOMIC_SEQ_CST);
-
-            spinlock_unlock_int(&th->lock, int_flag);
-        }
-    }
-}
-
 void sched_wake_thread
 (
     sched_thread_t *th
@@ -445,9 +420,6 @@ void sched_wake_thread
     if(th != NULL)
     {
         spinlock_lock_int(&th->lock, &int_flag);
-
-        th->slept = 0;
-        th->to_sleep = 0;
 
         /* clear the sleeping flag */
         __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_SEQ_CST);
@@ -471,7 +443,11 @@ static uint32_t sched_timer_wake_thread
     const void *isr
 )
 {
-    //kprintf("Woke thread\n");
+
+    sched_thread_t *th = thread;
+    
+    __atomic_or_fetch(&th->flags, THREAD_WOKE_BY_TIMER, __ATOMIC_SEQ_CST);
+    
     sched_wake_thread(thread);
     return(0);
 }
@@ -482,26 +458,73 @@ void sched_sleep
 )
 {
     uint32_t int_status = 0;
+
+    uint32_t th_flags = 0;
     timer_t tm;
     time_spec_t timeout ={.seconds = delay / 1000ull,
                           .nanosec = delay % 1000000ull
                          };
-    int_status = cpu_int_check();
+                         
+    sched_thread_t *self = NULL;
+    
+    if(delay == 0)
+    {
+        kprintf("NO DELAY\n");
+        return(0);
+    }
 
+
+    int_status = cpu_int_check();
+   
     if(int_status)
     {
         cpu_int_lock();
     }
 
-    sched_thread_t *self = NULL;
     self = sched_thread_self();
-    sched_sleep_thread(self, delay);
-    timer_enqeue_static(NULL, &timeout, sched_timer_wake_thread, self, &tm);
-    schedule();
 
-    if(int_status)
+    spinlock_lock_int(&self->lock, &int_status);
+
+    /* mark thread as sleeping */
+    __atomic_or_fetch(&self->flags, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+
+    /* thread not running and not ready */
+    __atomic_and_fetch(&self->flags, 
+                        ~(THREAD_RUNNING | THREAD_READY), 
+                        __ATOMIC_SEQ_CST);
+
+
+    spinlock_unlock_int(&self->lock, int_status);
+
+    /* don't bother to add the thread to the timer if delay is WAIT_FOREVER */
+    if(delay != WAIT_FOREVER)
     {
-        cpu_int_unlock();
+        timer_enqeue_static(NULL, 
+                            &timeout, 
+                            sched_timer_wake_thread, 
+                            self, 
+                            &tm);
+    }
+
+    schedule();
+    
+    /* If the delay is wait forever, then we did not push anything so
+     * don't look for a timer because there isn't one
+     */
+    if(delay != WAIT_FOREVER)
+    {
+        th_flags =  __atomic_fetch_and(&self->flags,  
+                                     ~THREAD_WOKE_BY_TIMER,
+                                     __ATOMIC_SEQ_CST);
+
+        /* if we were woken up earlier, delete the timer from the timer queue*/
+        if(~th_flags & THREAD_WOKE_BY_TIMER)
+        {
+            if(timer_dequeue(NULL, &tm))
+            {
+                kprintf("NOTHING TO DEQUEUE\n");
+            }
+        }    
     }
 }
 
