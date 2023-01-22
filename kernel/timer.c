@@ -134,7 +134,6 @@ static uint32_t timer_queue_callback
 
         if(status)
         {            
-              kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
             linked_list_remove(&tm_dev->timer_q, &c->node);
             c->callback(c->arg, isr_inf);
         }
@@ -282,4 +281,64 @@ int timer_enqeue_static
     spinlock_unlock_int(&tmd->lock_pend_q, int_sts);
     
     return(0);
+}
+
+
+int timer_dequeue
+(
+    timer_dev_t *timer_dev,
+    timer_t *tm
+)
+{
+    uint8_t     int_sts = 0;
+    timer_dev_t *tmd = NULL;
+    int found = 0;
+
+    if(timer_dev == NULL)
+    {
+        tmd = &system_timer;
+    }
+    else
+    {
+        tmd = timer_dev;
+    }
+
+    if((tmd == NULL) || (tm == NULL))
+    {
+        return(-1);
+    }
+
+    /* Look into the active queue */
+    spinlock_lock_int(&tmd->lock_q, &int_sts);
+
+    if(linked_list_find_node(&tmd->timer_q, &tm->node) == 0)
+    {
+        linked_list_remove(&tmd->timer_q, &tm->node);
+        found = 1;
+    }
+
+    spinlock_unlock_int(&tmd->lock_q, int_sts);
+
+    if(found == 1)
+    {
+        return(0);
+    }
+
+    /* Look into the pend queue */
+    spinlock_lock_int(&tmd->lock_pend_q, &int_sts);
+
+    if(linked_list_find_node(&tmd->pend_q, &tm->node) == 0)
+    {
+        linked_list_remove(&tmd->pend_q, &tm->node);
+        found = 1;
+    }
+
+    spinlock_unlock_int(&tmd->lock_pend_q, int_sts);
+
+    if(found == 1)
+    {
+        return(0);
+    }
+
+    return(-1);
 }
