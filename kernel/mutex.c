@@ -133,20 +133,6 @@ int mtx_acquire
             return(-1);
         }
 
-        /* we are going to sleep */
-        if(wait_ms != WAIT_FOREVER)
-        {
-            /* Timeout specified - sleep the thread */
-            block_flags = THREAD_SLEEPING;
-            sched_sleep_thread(thread, wait_ms);
-        }
-        else
-        {
-            /* Mark the thread as blocked */
-            block_flags = THREAD_BLOCKED;
-            sched_block_thread(thread);
-        }
-
         /* Add it to the mutex pend queue */
     #ifdef MTX_DEBUG
         kprintf("BLOCKING %x\n",thread);
@@ -183,11 +169,10 @@ int mtx_acquire
                 linked_list_add_tail(&mtx->pendq, &thread->pend_node);
             }
         }
-
         spinlock_unlock_int(&mtx->lock, int_state);
-
-        /* Catch the attention of the scheduler */
-        sched_yield();
+        
+        /* sleep */
+        sched_sleep(wait_ms);
 
         spinlock_lock_int(&mtx->lock, &int_state);
         linked_list_remove(&mtx->pendq, &thread->pend_node);
@@ -253,15 +238,7 @@ int mtx_release
     /* Set the new owner */
     __atomic_store_n(&mtx->owner, thread, __ATOMIC_SEQ_CST);
 
-    /* Wake up the thread */
-    if(thread->flags & THREAD_BLOCKED)
-    {
-        sched_unblock_thread(thread);
-    }
-    else
-    {
-        sched_wake_thread(thread);
-    }
+    sched_wake_thread(thread);
 
     spinlock_unlock_int(&mtx->lock, int_state);
 
