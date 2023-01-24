@@ -206,6 +206,7 @@ virt_addr_t vm_space_alloc
         /* Hehe... no slots?...try to allocate */
         if(status == VM_NOMEM)
         {
+            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
             /* No memory ? try to merge the adjacent slots */
             status = vm_extent_merge(&ctx->free_mem,
                                      ctx->free_per_slot);
@@ -251,14 +252,16 @@ virt_addr_t vm_space_alloc
      /* Hehe... no slots?....again?...try to allocate */
     if(status == VM_NOMEM)
     {
+       // kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
 
-        status = vm_extent_merge(&ctx->alloc_mem,
-                                ctx->alloc_per_slot);
+        status = vm_extent_alloc_slot(&ctx->alloc_mem, 
+                                     ctx->alloc_per_slot);
 
         if(status != VM_OK)
         {
-            status = vm_extent_alloc_slot(&ctx->alloc_mem, 
-                                   ctx->alloc_per_slot);
+            
+            status = vm_extent_merge(&ctx->alloc_mem,
+                                ctx->alloc_per_slot);
 
             /* status != 0? ...well..FUCK */
             if(status != VM_OK)
@@ -412,13 +415,14 @@ int vm_space_free
 
         if(status == VM_NOMEM)
         {
-            status = vm_extent_merge(&ctx->alloc_mem,
-                                     ctx->alloc_per_slot);
-
+            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+            status = vm_extent_alloc_slot(&ctx->alloc_mem,
+                                      ctx->alloc_per_slot);
+            
             if(status  != VM_OK)
             {
-                status = vm_extent_alloc_slot(&ctx->alloc_mem,
-                                      ctx->alloc_per_slot);
+                status = vm_extent_merge(&ctx->alloc_mem,
+                                        ctx->alloc_per_slot);
 
                 if(status != VM_OK)
                 {
@@ -454,7 +458,7 @@ int vm_space_free
 
     if(status == VM_NOMEM)
     {
-
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         status = vm_extent_merge(&ctx->free_mem,
                                  ctx->free_per_slot);
 
@@ -496,11 +500,12 @@ int vm_space_free
         *old_eflags   = req_ext.eflags;
     }
 
+#if 0
     if(status == VM_OK)
     {
         vm_extent_merge(&ctx->free_mem, ctx->free_per_slot);
     }
-
+#endif
     return(status);
 }
 
