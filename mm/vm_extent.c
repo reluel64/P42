@@ -37,7 +37,8 @@ int vm_extent_alloc_slot
     int          status = 0;
 
     memset(&fext, 0, sizeof(vm_extent_t));
-
+    memset(&alloc_ext, 0, sizeof(vm_extent_t));
+    
     /* we want tracking memory to come from the high memory area */
     fext.base   = VM_BASE_AUTO;
     fext.length = VM_SLOT_SIZE;
@@ -50,6 +51,7 @@ int vm_extent_alloc_slot
                 
     if(status < 0)
     {
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(VM_FAIL);
     }
 
@@ -62,6 +64,12 @@ int vm_extent_alloc_slot
     if(status != 0)
     {
         kprintf("Failed to allocate extent\n");
+
+        /* put back the extent */
+        vm_extent_insert(&vm_kernel_ctx.free_mem,
+                         vm_kernel_ctx.free_per_slot,
+                         &fext);
+                         kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(VM_FAIL);
     }
 
@@ -79,11 +87,17 @@ int vm_extent_alloc_slot
     
     if(status != 0)
     {
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         /* If we failed to allocate the page, then release the backend */
         status = pgmgr_release_backend(&vm_kernel_ctx.pgmgr, 
                                        fext.base, 
                                        VM_SLOT_SIZE, 
                                        NULL);
+        
+        /* put back the extent */
+        vm_extent_insert(&vm_kernel_ctx.free_mem,
+                         vm_kernel_ctx.free_per_slot,
+                         &fext);
 
         if(status != 0)
         {
@@ -99,10 +113,6 @@ int vm_extent_alloc_slot
                      fext.base,
                      VM_SLOT_SIZE);
 
-    if(status != 0)
-    {
-        return(VM_FAIL);
-    }
 
     new_slot = (vm_slot_hdr_t*)fext.base;
 
@@ -123,17 +133,60 @@ int vm_extent_alloc_slot
     status = vm_extent_insert(&vm_kernel_ctx.free_mem, 
                               vm_kernel_ctx.free_per_slot, 
                               &fext);
-    
+
+    /* Just in case there is something wrong with the insertion
+     * of the remainder, try to roll back
+     */
     if(status != VM_OK)
     {
-        kprintf("Cannot insert free memory back\n");
-        while(1);
+        /* we don't have memory backend so remove the node */
+        linked_list_remove(lh, &new_slot->node);
+        
+        fext.base   -= VM_SLOT_SIZE;
+        fext.length += VM_SLOT_SIZE;
+
+        /* put the extent back - again, this should work */
+        status = vm_extent_insert(&vm_kernel_ctx.free_mem,
+                         vm_kernel_ctx.free_per_slot,
+                         &fext);
+
+        if(status != VM_OK)
+        {
+            kprintf("Could not re-insert the slot\n");
+            while(1);
+        }
+
+        /* relase the pages for the new_slot */
+        status =  pgmgr_release_pages(&vm_kernel_ctx.pgmgr,
+                                      (virt_addr_t)new_slot,
+                                      VM_SLOT_SIZE,
+                                      NULL);
+
+        if(status != VM_OK)
+        {
+            kprintf("Could not release pages\n");
+            while(1);
+        }
+        /* release the backend of the new slot */
+        status = pgmgr_release_backend(&vm_kernel_ctx.pgmgr,
+                                       (virt_addr_t)new_slot,
+                                       VM_SLOT_SIZE,
+                                       NULL);
+
+       if(status != VM_OK)
+        {
+            kprintf("Could not release backend\n");
+            while(1);
+        }
+
+        pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                     fext.base,
+                     VM_SLOT_SIZE);
+
+        return(VM_NOMEM);
     }
     
-    
     /* prepare to add the new slot to the allocated memory */
-    memset(&alloc_ext, 0, sizeof(vm_extent_t));
-    
     alloc_ext.base = (virt_addr_t)new_slot;
     alloc_ext.length = VM_SLOT_SIZE;
 
@@ -143,7 +196,7 @@ int vm_extent_alloc_slot
                       VM_HIGH_MEM  |
                       VM_LOCKED;
     
-    /* insert the allocated memory into the list */
+    /* insert the allocated memory into the tracking list */
 
     status = vm_extent_insert(&vm_kernel_ctx.alloc_mem, 
                       vm_kernel_ctx.alloc_per_slot, 
@@ -154,14 +207,57 @@ int vm_extent_alloc_slot
      */ 
     if(status == VM_NOMEM)
     {
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         /* let's call the routine again. Yes, we're recursing */
         status = vm_extent_alloc_slot(&vm_kernel_ctx.alloc_mem, 
                                       vm_kernel_ctx.alloc_per_slot);
 
         if(status != 0)
         {
-            kprintf("CANNOT ALLOCATE A NEW SLOT\n");
-            while(1);
+            /* we don't have memory backend so remove the node */
+            linked_list_remove(lh, &new_slot->node);
+        
+            fext.base   -= VM_SLOT_SIZE;
+            fext.length += VM_SLOT_SIZE;
+
+            /* put the extent back - again, this should work */
+            status = vm_extent_insert(&vm_kernel_ctx.free_mem,
+                             vm_kernel_ctx.free_per_slot,
+                             &fext);
+
+            if(status != VM_OK)
+            {
+                kprintf("Could not re-insert the slot\n");
+                while(1);
+            }
+
+            status =  pgmgr_release_pages(&vm_kernel_ctx.pgmgr,
+                                              (virt_addr_t)new_slot,
+                                              VM_SLOT_SIZE,
+                                              NULL);
+
+            if(status != VM_OK)
+            {
+                kprintf("Could not release pages\n");
+                while(1);
+            }
+
+            status = pgmgr_release_backend(&vm_kernel_ctx.pgmgr,
+                                           (virt_addr_t)new_slot,
+                                           VM_SLOT_SIZE,
+                                           NULL);
+
+                
+            if(status != 0)
+            {
+                kprintf("Could not release pages\n");
+                while(1);
+            }
+            pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                     (virt_addr_t)new_slot,
+                     VM_SLOT_SIZE);
+
+            return(VM_NOMEM);
         }
 
         /* Let's try again */
@@ -178,6 +274,7 @@ int vm_extent_alloc_slot
 
     return(VM_OK);
 }
+
 
 /* release a tracking slot */
 
@@ -542,8 +639,10 @@ int vm_extent_extract
                 {
 
                     if(best == NULL)
+                    {
                         best = cext;
-
+                    }
+                    
                     if((best->length < ext->length   && 
                         cext->length >= ext->length) ||
                         (best->length > cext->length  && 
@@ -713,7 +812,8 @@ int vm_extent_merge
     {
         return(VM_FAIL);
     }    
-
+  
+    kprintf("EXTENT MERGE\n");
     do
     {
         merged = 0;
