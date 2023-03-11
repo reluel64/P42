@@ -40,17 +40,23 @@ static inline int pfmgr_in_range
     phys_size_t end       = 0;
 
     if(len >= 1)
+    {
         limit = len - 1;
-    
+    }
+
     if(req_len >= 1)
+    {
         req_limit = req_len - 1;
+    }
 
     req_end = req_base + req_limit;
     end     = base     + limit;
     
     if(req_base >= base && req_end <= end)
+    {
         return(1);
-    
+    }
+
     return(0);
 }
 
@@ -70,10 +76,14 @@ static inline int pfmgr_touches_range
     phys_size_t end       = 0;
     
     if(len >= 1)
+    {
         limit = len - 1;
-    
+    }
+
     if(req_len >= 1)
+    {
         req_limit = req_len - 1;
+    }
 
     req_end = req_base + req_limit;
     end     = base     + limit;
@@ -81,15 +91,21 @@ static inline int pfmgr_touches_range
     if(base >= req_base)
     {
         if((req_end <= end && req_end >= base) || (req_end >= end))
+        {
             return(1);
+        }
     }
     else if(req_end >= end)
     {
         if((base <= req_base && req_base <= end) || (base >= req_base))
+        {
             return(1);
+        }
     }
     else if(req_base >= base && req_end <= end)
+    {
         return(1);
+    }
 
     return(0);
 }
@@ -165,7 +181,9 @@ static void pfmgr_early_mark_bitmap
         bmp_off = (pf_pos / PF_PER_ITEM) * sizeof(virt_addr_t);
 
         if(pf_ix == 0 || bmp == NULL)
+        {
             bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + bmp_off);
+        }
 
         bmp[0] |= ((virt_addr_t)1 << pf_ix);
         pos += PAGE_SIZE;
@@ -191,7 +209,9 @@ static void pfmgr_init_free_callback
 
     if(e->type != MEMORY_USABLE || 
       !(e->flags & MEMORY_ENABLED))
+    {
         return;
+    }
 
     memset(&local_freer, 0, sizeof(pfmgr_free_range_t));
 
@@ -207,8 +227,10 @@ static void pfmgr_init_free_callback
     }
     
     if(base.physf_start == 0)
+    {
         base.physf_start = track_addr;
-    
+    }
+
     local_freer.hdr.base      = e->base;
     local_freer.hdr.len       = e->length;
    // local_freer.hdr.domain_id = e->domain; 
@@ -287,8 +309,10 @@ static void pfmgr_init_busy_callback
     phys_addr_t  addr = 0;
 
     if(e->type == MEMORY_USABLE)
+    {
         return;
-    
+    }
+
     addr = base.physb_start + 
            base.busyr.count * 
            sizeof(pfmgr_busy_range_t);
@@ -303,7 +327,9 @@ static void pfmgr_init_busy_callback
     }
 
     if(base.physb_start == 0)
+    {
         base.physb_start = ALIGN_UP(_KERNEL_LMA_END, PAGE_SIZE);
+    }
 
     busy = (pfmgr_busy_range_t*)pfmgr_early_map(base.physb_start + 
                                  base.busyr.count * 
@@ -416,7 +442,9 @@ int pfmgr_early_alloc_pf
 
                 /* If we got an error, do not mark the bitmap */
                 if(cb_sts < 0)
+                {
                     break;
+                }
 
                 bmp[0] |= ((virt_addr_t)1 << pf_ix);
 
@@ -425,7 +453,9 @@ int pfmgr_early_alloc_pf
 
                 /* We're done, bail out */
                 if(cb_sts == 0)
+                {
                     break;
+                }
             }
 
             pf_pos++;
@@ -549,8 +579,10 @@ static int pfmgr_lkup_bmp_for_free_pf
             {
                 /* check if we might go over the total pf */
                 if((pf_pos >= freer->total_pf))
+                {
                     break;
-                    
+                }
+
                 mask = ((virt_addr_t)1 << (pf_ix + i)); 
 
                 if((freer->bmp[bmp_pos] & mask) == 0)
@@ -646,6 +678,7 @@ static int pfmgr_lkup_bmp_for_free_pf
     {
         status = 1;
     }
+
     *start = start_addr;
     *pf    = pf_ret;
  
@@ -1356,7 +1389,6 @@ int pfmgr_show_free_memory
         total_mem += freer->total_pf;
         freer = (pfmgr_free_range_t*)linked_list_next(&freer->hdr.node);
         region++;
-
     }
 
     free_mem *= PAGE_SIZE;
