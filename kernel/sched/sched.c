@@ -457,7 +457,7 @@ void sched_sleep
     uint32_t delay
 )
 {
-    uint32_t int_status = 0;
+    uint8_t int_status = 0;
 
     uint32_t th_flags = 0;
     timer_t tm;
@@ -470,7 +470,7 @@ void sched_sleep
     if(delay == 0)
     {
         kprintf("NO DELAY\n");
-        return(0);
+        return;
     }
 
 
