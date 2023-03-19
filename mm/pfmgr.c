@@ -1305,7 +1305,6 @@ int pfmgr_init(void)
 
             if(hdr == NULL)
             {
-              
                 return(-1);
             }
         }
