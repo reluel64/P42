@@ -165,9 +165,11 @@ static int vm_setup_protected_regions
                           re[i].eflags) == VM_INVALID_ADDRESS)
         {
             kprintf("FAILED to reserve memory\n");
-            while(1);
+            return(VM_FAIL);
         }
     }
+
+    return(VM_OK);
 }
 
 static int vm_ctx_init
@@ -238,11 +240,11 @@ static int vm_ctx_init
 
     /* How many free entries can we store per slot */
     ctx->free_per_slot = (free_track_size - sizeof(vm_slot_hdr_t)) /
-                                                  sizeof(vm_extent_t);
+                                            sizeof(vm_extent_t);
 
     /* How many allocated entries can we store per slot */
     ctx->alloc_per_slot = (alloc_track_size - sizeof(vm_slot_hdr_t)) /
-                                                   sizeof(vm_extent_t);
+                                              sizeof(vm_extent_t);
 
     hdr->avail = ctx->free_per_slot;
 
@@ -301,8 +303,9 @@ int vm_init(void)
     memset(&vm_kernel_ctx, 0, sizeof(vm_ctx_t));
 
     if(pgmgr_kernel_ctx_init(&vm_kernel_ctx.pgmgr) == -1)
+    {
         return(VM_FAIL);
-
+    }
 
     kprintf("Initializing Virtual Memory Manager\n");
     /* Allocate backend for the free memory tracking */
@@ -314,7 +317,7 @@ int vm_init(void)
     if(status != 0)
     {
         kprintf("Failed to allocate backend for Virtual Memory Manager\n");
-        while(1);
+        return(VM_FAIL);
     }
     /* Allocate page for the free memory tracking */
     status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
@@ -327,7 +330,7 @@ int vm_init(void)
     if(status != 0)
     {
         kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
-        while(1);
+        return(VM_FAIL);
     }
 
     /* Allocate backend for allocated memory tracking */
@@ -339,7 +342,7 @@ int vm_init(void)
     if(status != 0)
     {
         kprintf("Failed to allocate tracking backend for Virtual Memory Manager\n");
-        while(1);
+        return(VM_FAIL);
     }
 
     /* Allocate page for allocated memory tracking */
@@ -353,7 +356,7 @@ int vm_init(void)
     if(status != 0)
     {
         kprintf("Failed to allocate tracking\n");
-        while(1);
+        return(VM_FAIL);
     }
 
     /* Initialize the context */
@@ -364,11 +367,16 @@ int vm_init(void)
                          VM_SLOT_SIZE,
                          VM_CTX_PREFER_HIGH_MEMORY);
 
-    kprintf("INIT DONE\n");
+    if(status != VM_OK)
+    {
+        return(status);
+    }
 
 
-    vm_setup_protected_regions(&vm_kernel_ctx);
+    status =  vm_setup_protected_regions(&vm_kernel_ctx);
+    
     vm_ctx_show(&vm_kernel_ctx);
+
     return(status);
 }
 
