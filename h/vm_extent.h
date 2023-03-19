@@ -11,7 +11,7 @@ int vm_extent_split
 
 int vm_extent_join
 (
-    vm_extent_t *src,
+    const vm_extent_t *src,
     vm_extent_t *dest
 );
 
@@ -26,7 +26,7 @@ int vm_extent_insert
 (
     list_head_t *lh,
     uint32_t ext_per_slot,
-    vm_extent_t *ext
+    const vm_extent_t *ext
 );
 
 int vm_extent_alloc_slot
