@@ -50,10 +50,12 @@
 #define VM_MEM_TYPE_MASK (VM_ALLOCATED | VM_MAPPED)
 
 /* Errors */
-#define VM_OK (0x0)
-#define VM_FAIL (-1)
-#define VM_NOMEM (-2)
-#define VM_NOENT (-3)
+#define VM_OK             (0x0)
+#define VM_FAIL            (-1)
+#define VM_NOMEM           (-2)
+#define VM_NOENT           (-3)
+#define VM_EXTENT_EXAUSTED (-4)
+#define VM_EXTENT_NOT_EMPTY (-5)
 
 #define VM_INVALID_ADDRESS ((virt_size_t) -1)
 
@@ -108,7 +110,8 @@ typedef struct vm_slot_hdr_t
 {
     list_node_t node;
     uint32_t avail;
-    uint8_t  type;
+    uint32_t next_free;
+  //  uint8_t  type;
     vm_extent_t extents[];
 }vm_slot_hdr_t;
 
