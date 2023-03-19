@@ -186,11 +186,11 @@ int devmgr_dev_remove
         return(-1);
     }
 
-    spinlock_lock_int(&dev_list_lock, &int_flag);
+    spinlock_write_lock_int(&dev_list_lock, &int_flag);
 
     if((linked_list_count(&dev->children) > 0) && (remove_children == 0))
     {
-        spinlock_read_unlock_int(&dev_list_lock, int_flag);
+        spinlock_write_unlock_int(&dev_list_lock, int_flag);
         return(-1);
     }
 
@@ -218,7 +218,6 @@ int devmgr_dev_remove
             }
             else
             {
-                kprintf("REMOVING child dev %s\n", child->dev_name);
                 linked_list_remove(&child->parent->children, &child->dev_node);
                 devmgr_dev_uninit(child);
                 devmgr_dev_delete(child);
@@ -232,7 +231,6 @@ int devmgr_dev_remove
         {
             stack_index--;
             node = dev_stack[stack_index];
-             kprintf("POPPING %s\n",((device_t*)node)->dev_name);
         }
 
         if(node == NULL && stack_index == 0)
@@ -244,13 +242,12 @@ int devmgr_dev_remove
     /* check again if we do not have any children */
     if(linked_list_count(&dev->children) == 0)
     {
-        kprintf("REMOVING DEV %s\n",dev->dev_name);
         linked_list_remove(&dev->parent->children, &dev->dev_node);
         devmgr_dev_uninit(dev);
         devmgr_dev_delete(dev);
     }
 
-    spinlock_read_unlock_int(&dev_list_lock, int_flag);
+    spinlock_write_unlock_int(&dev_list_lock, int_flag);
 
     return(0);
 }
@@ -275,12 +272,10 @@ int devmgr_dev_add
     
     devmgr_dev_add_to_parent(dev, parent);
  
-    kprintf("PROBE_STATUS %d\n",status);
     /* If we found the driver, then initialize the device */
     if(!status)
     {
         status = devmgr_dev_init(dev);
-        kprintf("INIT_STATUS %d\n",status);
     }
 
     return(status);
