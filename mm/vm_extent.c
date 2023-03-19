@@ -119,6 +119,10 @@ static int vm_extent_alloc_tracking
                                     alloc_ext.length,
                                     NULL);
 
+    pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                     alloc_ext.base,
+                     alloc_ext.length);
+
     /* if we managed to allocate the backend, try to allocate the storage */
     if(status == 0)
     {
@@ -128,6 +132,10 @@ static int vm_extent_alloc_tracking
                                       NULL,
                                       alloc_ext.eflags,
                                       0);
+
+        pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                         alloc_ext.base,
+                         alloc_ext.length);
                                       
         /* if we failed to allocate the storage, release the backend */
         if(status != 0)
@@ -136,6 +144,11 @@ static int vm_extent_alloc_tracking
                                           alloc_ext.base,
                                           alloc_ext.length,
                                           NULL);
+
+            pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                     alloc_ext.base,
+                     alloc_ext.length);
+                     
             if(status != 0)
             {
                 kprintf("CRITICAL ERROR: could not release the backend\n");
@@ -326,6 +339,10 @@ static int vm_extent_release_tracking
                                  free_extent.base,
                                  free_extent.length,
                                  NULL);
+    
+    pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                     free_extent.base,
+                     free_extent.length);
 
 
     if(status != VM_OK)
@@ -350,6 +367,10 @@ static int vm_extent_release_tracking
                                    free_extent.length,
                                    NULL);
 
+    pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                     free_extent.base,
+                     free_extent.length);
+
     if(status != VM_OK)
     {
         status = pgmgr_allocate_pages(&vm_kernel_ctx.pgmgr,
@@ -358,6 +379,11 @@ static int vm_extent_release_tracking
                                       NULL,
                                       VM_ATTR_WRITABLE,
                                       0);
+
+
+        pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
+                     free_extent.base,
+                     free_extent.length);
 
         if(status == 0)
         {
