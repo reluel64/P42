@@ -173,4 +173,3 @@ __hlt:
 __resched_interrupt:
     int 240
     ret
-
