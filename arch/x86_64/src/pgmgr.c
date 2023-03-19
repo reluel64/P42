@@ -1092,7 +1092,7 @@ int pgmgr_allocate_pages
 
     if(status < 0 || ld.error != PGMGR_ERR_OK)
     {
-        kprintf("Allocation failed: Status %x Error %x\n",status, ld.error);
+       // kprintf("Allocation failed: Status %x Error %x\n",status, ld.error);
         return(-1);
     }
 
