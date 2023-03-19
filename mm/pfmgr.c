@@ -1265,11 +1265,11 @@ int pfmgr_init(void)
                 hdr->struct_len;
                 
         hdr = (pfmgr_range_header_t*)vm_map(NULL,  
-                                               VM_BASE_AUTO, 
-                                               size,
-                                               phys,
-                                               0,
-                                               VM_ATTR_WRITABLE);
+                                            VM_BASE_AUTO, 
+                                            size,
+                                            phys,
+                                            0,
+                                            VM_ATTR_WRITABLE);
         if(hdr == NULL)
         {
             return(-1);
@@ -1297,11 +1297,11 @@ int pfmgr_init(void)
                    hdr->struct_len;
 
             hdr = (pfmgr_range_header_t*)vm_map(NULL, 
-                                                   VM_BASE_AUTO, 
-                                                   size, 
-                                                   phys,
-                                                   0,
-                                                   VM_ATTR_WRITABLE);
+                                                VM_BASE_AUTO, 
+                                                size, 
+                                                phys,
+                                                0,
+                                                VM_ATTR_WRITABLE);
 
             if(hdr == NULL)
             {
