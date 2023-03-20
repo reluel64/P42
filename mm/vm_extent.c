@@ -37,8 +37,6 @@ static uint8_t vm_extent_joinable
 #define VM_SLOT_ALLOC_FLAGS  (VM_ALLOCATED | VM_PERMANENT | \
                               VM_HIGH_MEM  | VM_LOCKED)
 
-
-
 static int vm_extent_alloc_tracking
 (
     list_head_t *lh,
@@ -88,7 +86,6 @@ static int vm_extent_alloc_tracking
    
     if(lh != &vm_kernel_ctx.alloc_mem)
     { 
-        
         /* first check for available slots as it's less expensive */
         alloc_track_avail = vm_extent_avail(&vm_kernel_ctx.alloc_mem);
 
@@ -620,24 +617,29 @@ int vm_extent_insert
     {
         next_en = linked_list_next(en);
         hdr = (vm_slot_hdr_t*)en;
-        
+
         if(least_avail > hdr->avail && hdr->avail > 0)
         {
             least_avail = hdr->avail;
             f_hdr = hdr;
         }
 
-        for(uint32_t i = 0; i < ext_per_slot; i++)
+        /* if hdr->avail == ext_per_slot, then do not enter
+         * as we don't have anything to join
+         */
+        if(hdr->avail < ext_per_slot)
         {
-            c_ext = &hdr->extents[i];    
-
-            /* Try to join the extents */
-            if(vm_extent_join(ext, c_ext) == VM_OK)
+            for(uint32_t i = 0; i < ext_per_slot; i++)
             {
-                return(VM_OK);
+                c_ext = &hdr->extents[i];    
+
+                /* Try to join the extents */
+                if(vm_extent_join(ext, c_ext) == VM_OK)
+                {
+                    return(VM_OK);
+                }
             }
         }
-
         en = next_en;
     }
 
@@ -684,6 +686,7 @@ int vm_extent_extract
         kprintf("NO LENGTH, NO ENTRY\n");
         return(VM_FAIL);
     }
+    
     hn = linked_list_first(lh);
 
     while(hn)
@@ -1122,92 +1125,6 @@ int vm_extent_compact_hdr
     }
 
     return(status);
-}
-
-/* Defragment the extents by moving them to headers which
- * have space left
- */
-int vm_extent_defragment
-(
-    list_head_t *lh,
-    uint32_t    ext_per_slot
-)
-{
-    vm_slot_hdr_t *src_hdr   = NULL;
-    vm_slot_hdr_t *dst_hdr   = NULL;
-    vm_extent_t   *src_ext   = NULL;
-    vm_extent_t   *dst_ext   = NULL;
-    list_node_t   *src_ln    = NULL;
-    list_node_t   *dst_ln    = NULL;
-    uint8_t       compacted  = 0;
-    uint8_t       defrag_sts = VM_FAIL;
-
-    src_ln = linked_list_first(lh);
-
-    while(src_ln)
-    {
-        compacted = 0;
-        src_hdr = (vm_slot_hdr_t*)src_ln;
-
-        for(uint32_t si = 0; si < ext_per_slot; si++)
-        {
-            src_ext = &dst_hdr->extents[si];
-
-            /* skip empty extents */
-            if(src_ext->length == 0)
-            {
-                src_ln = linked_list_next(src_ln);
-            }
-
-            dst_ln = linked_list_first(lh);
-
-            while(dst_ln)
-            {
-                dst_hdr = (vm_slot_hdr_t*)dst_ln;
-
-                /* skip headers that are empty or full */
-                if((dst_hdr->avail == 0)  || (dst_hdr->avail == ext_per_slot))
-                {
-                    dst_ln = linked_list_next(dst_ln);
-                    continue;
-                }
-                
-                for(uint32_t di = 0 ; di < ext_per_slot; di++)
-                {
-                    dst_ext = &dst_hdr->extents[di];
-
-                    /* if we found an empty extent, we can insert it here */
-                    if(dst_ext->length == 0)
-                    {
-                        /* copy the extent */
-                        memcpy(dst_ext, src_ext, sizeof(vm_extent_t));
-
-                        /* clear the slot from the source */
-                        memset(src_ext, 0, sizeof(vm_extent_t));
-
-                        /* One more available in the source */
-                        src_hdr->avail++;
-
-                        /* One less available in the destination */
-                        dst_hdr->avail--;
-                        compacted  = 1;
-                        defrag_sts = VM_OK;
-                        break;
-                    }
-                }
-
-                if(compacted)
-                {
-                    break;
-                }
-
-                dst_ln = linked_list_next(dst_ln);
-            }
-        }
-        src_ln = linked_list_next(src_ln);
-    }
-
-    return(defrag_sts);
 }
 
 static uint32_t vm_extent_avail
