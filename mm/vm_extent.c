@@ -51,9 +51,8 @@ static int vm_extent_alloc_tracking
     uint8_t       joinable          = 0;
     vm_slot_hdr_t *slot             = NULL;
     vm_extent_t   rem_ext           = VM_EXTENT_INIT;
-    vm_extent_t   orig_ext          = VM_EXTENT_INIT;
     vm_extent_t   alloc_ext         = VM_EXTENT_INIT;
-    vm_extent_t   src_ext           = 
+    vm_extent_t   orig_ext           = 
     {
         .base   = VM_BASE_AUTO, 
         .length = VM_SLOT_SIZE,
@@ -86,9 +85,10 @@ static int vm_extent_alloc_tracking
      * In that case if we manage to allocate the slot, we will also have
      * a place where we will manage to store the extent
      */
-
+   
     if(lh != &vm_kernel_ctx.alloc_mem)
     { 
+        
         /* first check for available slots as it's less expensive */
         alloc_track_avail = vm_extent_avail(&vm_kernel_ctx.alloc_mem);
 
@@ -200,6 +200,7 @@ static int vm_extent_alloc_tracking
                                   vm_kernel_ctx.alloc_per_slot,
                                   &rem_ext);
     }
+
     return(VM_OK);
 }
 
@@ -458,8 +459,22 @@ int vm_extent_alloc_slot
     uint32_t    ext_per_slot
 )
 {
-   
-    return(VM_FAIL);
+    int status = VM_FAIL;
+
+    status = vm_extent_alloc_tracking(lh, ext_per_slot);
+
+    if(status == VM_NOENT)
+    {
+        status = vm_extent_alloc_tracking(&vm_kernel_ctx.alloc_mem,
+                                          vm_kernel_ctx.alloc_per_slot);
+        
+        if(status == VM_OK)
+        {
+            status = vm_extent_alloc_tracking(lh, ext_per_slot);
+        }
+    }
+
+    return(status);
 }
 
 /* release a tracking slot */
@@ -471,7 +486,22 @@ int vm_extent_release_slot
     vm_slot_hdr_t *slot
 )
 {
-    return(VM_FAIL);
+    int status = 0;
+
+    status = vm_extent_release_tracking(lh, ext_per_slot, slot);
+
+    if(status == VM_EXTENT_EXAUSTED)
+    {
+        status = vm_extent_alloc_tracking(&vm_kernel_ctx.free_mem,
+                                          vm_kernel_ctx.free_track_size);
+
+        if(status == VM_OK)
+        {
+            status = vm_extent_release_tracking(lh, ext_per_slot, slot);
+        }
+    }
+
+    return(status);
 }
 
 /*
@@ -562,13 +592,13 @@ int vm_extent_insert
     const vm_extent_t *ext
 )
 {
-    list_node_t     *en        = NULL;
-    list_node_t     *next_en   = NULL;
-    vm_slot_hdr_t   *hdr       = NULL;
-    vm_slot_hdr_t   *f_hdr     = NULL;
-    vm_extent_t     *c_ext     = NULL;
-    vm_extent_t     *f_ext     = NULL;
-    uint32_t        small_ext_per_slot = 0;
+    list_node_t     *en         = NULL;
+    list_node_t     *next_en    = NULL;
+    vm_slot_hdr_t   *hdr        = NULL;
+    vm_slot_hdr_t   *f_hdr      = NULL;
+    vm_extent_t     *c_ext      = NULL;
+    //vm_extent_t     *f_ext      = NULL;
+    uint32_t        least_avail = -1;
 
     if((ext->flags & VM_REGION_MASK) == VM_REGION_MASK ||
        (ext->flags & VM_REGION_MASK) == 0)
@@ -577,7 +607,7 @@ int vm_extent_insert
         return(VM_FAIL);
     }
 
-   // kprintf("INSERTING %x %x\n",ext->base, ext->length);
+  //  kprintf("INSERTING %x %x\n",ext->base, ext->length);
     if(ext->length == 0)
     {
         return(VM_NOENT);
@@ -590,7 +620,12 @@ int vm_extent_insert
     {
         next_en = linked_list_next(en);
         hdr = (vm_slot_hdr_t*)en;
-
+        
+        if(least_avail > hdr->avail && hdr->avail > 0)
+        {
+            least_avail = hdr->avail;
+            f_hdr = hdr;
+        }
 
         for(uint32_t i = 0; i < ext_per_slot; i++)
         {
@@ -601,15 +636,6 @@ int vm_extent_insert
             {
                 return(VM_OK);
             }
-
-            /* Check if we can place the extent here */
-            else if((c_ext->length == 0) && 
-                    (f_ext == NULL)      && 
-                    (hdr->avail > 0))
-            {
-                /* Save the free slot */
-                f_ext = c_ext;
-            }
         }
 
         en = next_en;
@@ -618,12 +644,19 @@ int vm_extent_insert
     /* If we were unable to merge, just add the information 
      * where we found a free slot 
      */
-    if(f_ext != NULL)
+    if(f_hdr != NULL)
     {
-        memcpy(f_ext, ext, sizeof(vm_extent_t));
-        hdr = VM_EXTENT_TO_HEADER(f_ext);
-        hdr->avail--;
-        return(VM_OK);
+        for(uint32_t i = 0; i < ext_per_slot; i++)
+        {
+            c_ext = &f_hdr->extents[i];
+
+            if(c_ext->length == 0)
+            {
+                memcpy(c_ext, ext, sizeof(vm_extent_t));
+                f_hdr->avail--;
+                return(VM_OK);
+            }
+        }
     }
 
     return(VM_NOMEM);
