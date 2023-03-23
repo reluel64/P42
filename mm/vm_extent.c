@@ -648,6 +648,32 @@ int vm_extent_insert
      */
     if(f_hdr != NULL)
     {
+        /* try to go a faster way in a first instance*/
+        if(hdr->next_free < ext_per_slot)
+        {
+            c_ext = f_hdr->extents + hdr->next_free;
+
+            if(c_ext->length == 0)
+            {
+                memcpy(c_ext, ext, sizeof(vm_extent_t));
+                f_hdr->avail--;
+                f_hdr->next_free++;
+
+                while(f_hdr->next_free < ext_per_slot)
+                {
+                    c_ext = f_hdr->extents + hdr->next_free;
+
+                    if(c_ext->length == 0)
+                    {
+                        break;
+                    }
+
+                    f_hdr->next_free++;
+                }
+                return(VM_OK);
+            }
+        }
+
         for(uint32_t i = 0; i < ext_per_slot; i++)
         {
             c_ext = &f_hdr->extents[i];
@@ -679,6 +705,7 @@ int vm_extent_extract
     vm_extent_t   *best    = NULL;
     vm_extent_t   *cext    = NULL;
     int           found    = 0;
+    uint32_t      ext_pos  = 0;
 
     /* no length? no entry */
     if(!ext || !ext->length)
@@ -731,16 +758,15 @@ int vm_extent_extract
                 if((cext->flags & VM_REGION_MASK) == 
                    (ext->flags  & VM_REGION_MASK))
                 {
-
                     if(best == NULL)
                     {
                         best = cext;
                     }
                     
-                    if((best->length < ext->length   && 
-                        cext->length >= ext->length) ||
-                        (best->length > cext->length  && 
-                        cext->length >= ext->length))
+                    if(((best->length < ext->length)   && 
+                        (cext->length >= ext->length)) ||
+                       ((best->length > cext->length)  && 
+                        (cext->length >= ext->length)))
                     {
                         best = cext;
                     }
@@ -767,6 +793,13 @@ int vm_extent_extract
     if(hdr->avail < ext_per_slot)
     {
         hdr->avail++;
+    }
+
+    ext_pos = best - &hdr->extents[0];
+
+    if(hdr->next_free > ext_pos)
+    {
+        hdr->next_free = ext_pos;
     }
 
     /* export the slot */ 
