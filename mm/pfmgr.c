@@ -561,13 +561,11 @@ static int pfmgr_lkup_bmp_for_free_pf
         if((mask_frames == PF_PER_ITEM) && 
            (freer->bmp[bmp_pos] & mask) == 0)
         {
-            pf_ret += PF_PER_ITEM;
-
             if(pf_ret == 0)
             {
                 start_addr = hdr->base + PF_TO_BYTES(pf_pos);
             }
-
+            pf_ret += PF_PER_ITEM;
             pf_pos += PF_PER_ITEM;
         }
         else
