@@ -34,6 +34,13 @@ static uint8_t vm_extent_joinable
     vm_extent_t *ext
 );
 
+static void vm_extent_merge_in_hdr
+(
+    vm_slot_hdr_t *slot,
+    uint32_t      extent_per_slot,
+    uint32_t      max_loops
+);
+
 #define VM_SLOT_ALLOC_FLAGS  (VM_ALLOCATED | VM_PERMANENT | \
                               VM_HIGH_MEM  | VM_LOCKED)
 
@@ -636,6 +643,10 @@ int vm_extent_insert
                 /* Try to join the extents */
                 if(vm_extent_join(ext, c_ext) == VM_OK)
                 {
+                    /* if the extent was joined, 
+                     * try one more time on all extents from the header
+                     */
+                    vm_extent_merge_in_hdr(hdr, ext_per_slot, ext_per_slot / 4);
                     return(VM_OK);
                 }
             }
@@ -1222,4 +1233,64 @@ static uint8_t vm_extent_joinable
     }
 
     return(joinable);
+}
+
+
+static void vm_extent_merge_in_hdr
+(
+    vm_slot_hdr_t *slot,
+    uint32_t      extent_per_slot,
+    uint32_t      max_loops
+)
+{
+    vm_extent_t *src_ext = NULL;
+    vm_extent_t *dst_ext = NULL;
+    uint8_t joined = 0;
+    uint32_t loops = 0;
+    do
+    {
+        joined = 0;
+       
+        for(uint32_t i = 0; i < extent_per_slot; i++)
+        {
+            src_ext = &slot->extents[i];
+            /* skip empty extents */
+            if(src_ext->length == 0)
+            {
+                continue;
+            }
+
+            for(uint32_t j = i + 1; j < extent_per_slot; j++)
+            {
+                dst_ext = &slot->extents[j];
+                /* skip */
+                if((j == i) || (dst_ext->length == 0))
+                {
+                    continue;
+                }
+               
+                if(vm_extent_join(src_ext, dst_ext) == VM_OK)
+                {
+                    memset(src_ext, 0, sizeof(vm_extent_t));
+                    
+                    if(slot->avail < extent_per_slot)
+                    {
+                        slot->avail++;
+                    }
+                    else
+                    {
+                        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+                    }
+
+                    if(slot->next_free > i)
+                    {
+                        slot->next_free = i;
+                    }
+
+                    joined = 1;
+                }
+            }
+        }
+        loops ++; 
+    } while(joined && (loops < max_loops));
 }
