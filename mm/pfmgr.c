@@ -502,13 +502,14 @@ static int pfmgr_lkup_bmp_for_free_pf
     phys_size_t pf_ix         = 0;
     phys_size_t pf_pos        = 0;
     phys_size_t bmp_pos       = 0;
-    phys_size_t mask_frames   = 0;
+    
     phys_size_t mask          = 0;
     phys_size_t pf_ret        = 0;
     phys_size_t req_pf        = 0;
+    phys_size_t mask_frames   = 0;
     int         status        = -1;
     uint8_t     stop          = 0;
-    
+
     /* Check if there's anything interesting here */
     if(freer->avail_pf == 0)
     {
@@ -541,6 +542,7 @@ static int pfmgr_lkup_bmp_for_free_pf
           (req_pf > pf_ret) && 
           (pf_ret < freer->avail_pf) && !stop)
     {
+
         pf_ix       = POS_TO_IX(pf_pos);
         bmp_pos     = BMP_POS(pf_pos);
         mask        = ~(virt_addr_t)0;
@@ -558,15 +560,20 @@ static int pfmgr_lkup_bmp_for_free_pf
          * Check if we have PF_PER_ITEM from one shot 
          * Otherwise we must check every bit
          */ 
-        if((mask_frames == PF_PER_ITEM) && 
-           (freer->bmp[bmp_pos] & mask) == 0)
+
+        if(mask_frames < PF_PER_ITEM)
+        {
+            mask = (1ull << mask_frames) - 1;
+        }
+
+        if(freer->bmp[bmp_pos] & mask == 0)
         {
             if(pf_ret == 0)
             {
                 start_addr = hdr->base + PF_TO_BYTES(pf_pos);
             }
-            pf_ret += PF_PER_ITEM;
-            pf_pos += PF_PER_ITEM;
+            pf_ret += mask_frames;
+            pf_pos += mask_frames;
         }
         else
         {
@@ -611,54 +618,6 @@ static int pfmgr_lkup_bmp_for_free_pf
                 pf_pos++;
             }
         }
-#if 0
-        else /* ALLOC_HIGHEST */
-        {
-            /* Allocate the highest amount of memory */
-
-            /* Slower path - check each page frame */
-            for(phys_size_t i = mask_frames - 1; i > 0; i--)
-            {
-                /* check if we might go over the total pf */
-                if((pf_pos == 0))
-                    break;
-                    
-                mask = ((virt_addr_t)1 << (pf_ix + i)); 
-
-                if((freer->bmp[bmp_pos] & mask) == 0)
-                {
-                    if(pf_ret == 0)
-                    {
-                        start_addr = hdr->base + PF_TO_BYTES(pf_pos);
-                    }
-                    else if (start_addr > hdr->base + PF_TO_BYTES(pf_pos))
-                    {
-                        start_addr = hdr->base + PF_TO_BYTES(pf_pos);
-                    }
-
-                    pf_ret ++;
-                }
-
-                /* Stop looking if pf_ret > 0 */
-                else if(pf_ret > 0)
-                {
-                    /* if we want contigous memory, we must reset the
-                     * the returned frames to keep looking
-                     */
-                    if(flags & ALLOC_CONTIG)
-                    {
-                        pf_ret = 0;
-                    }
-                    else
-                    {
-                       stop = 1;
-                       break;
-                    }
-                }
-                pf_pos--;
-            }
-        }
-#endif
     }
 
     /* No page frame available */
@@ -721,13 +680,17 @@ static int pfmgr_mark_bmp
         /* Do not mark more than available frames */
         mask_frames = min(mask_frames, freer->avail_pf);
 
-        if((mask_frames == PF_PER_ITEM) && 
-          (freer->bmp[bmp_pos] & mask) == 0)
+        if(mask_frames < PF_PER_ITEM)
+        {
+            mask = (1ull << mask_frames) - 1;
+        }
+
+        if((freer->bmp[bmp_pos] & mask) == 0)
         {
             freer->bmp[bmp_pos] |= mask;
-            pf_pos += PF_PER_ITEM ;
-            pf     -= PF_PER_ITEM;
-            freer->avail_pf -= PF_PER_ITEM;
+            pf_pos          += mask_frames ;
+            pf              -= mask_frames;
+            freer->avail_pf -= mask_frames;
         }
         else
 
@@ -772,8 +735,8 @@ static int pfmgr_mark_bmp
 static int pfmgr_clear_bmp
 (
     pfmgr_free_range_t *freer, 
-    phys_addr_t addr,
-    phys_size_t pf
+    phys_addr_t         addr,
+    phys_size_t         pf
 )
 {
     phys_size_t length      = 0;
@@ -804,14 +767,17 @@ static int pfmgr_clear_bmp
         /* Do not clear more than remining frames up to total */
         mask_frames = min(mask_frames, freer->total_pf - freer->avail_pf);
 
-        if((mask_frames == PF_PER_ITEM) && 
-           (freer->bmp[bmp_pos] & mask))
+        if(mask_frames < PF_PER_ITEM)
         {
-            
+            mask  = (1ull << mask_frames) - 1;
+        }
+
+        if((freer->bmp[bmp_pos] & mask)  == freer->bmp[bmp_pos])
+        {   
             freer->bmp[bmp_pos] &= ~mask;
-            pf_pos          += PF_PER_ITEM ;
-            pf              -= PF_PER_ITEM;
-            freer->avail_pf += PF_PER_ITEM;
+            pf_pos          += mask_frames ;
+            pf              -= mask_frames;
+            freer->avail_pf += mask_frames;
         }
         else
         {
@@ -845,9 +811,9 @@ static int _pfmgr_alloc
 (
     phys_addr_t start,
     phys_size_t pf, 
-    uint8_t flags, 
-    alloc_cb cb, 
-    void *pv
+    uint8_t     flags, 
+    alloc_cb    cb, 
+    void       *pv
 )
 {
     pfmgr_free_range_t *free_range = NULL;
