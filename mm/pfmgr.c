@@ -566,7 +566,7 @@ static int pfmgr_lkup_bmp_for_free_pf
             mask = (1ull << mask_frames) - 1;
         }
 
-        if(freer->bmp[bmp_pos] & mask == 0)
+        if((freer->bmp[bmp_pos] & mask) == 0)
         {
             if(pf_ret == 0)
             {
@@ -748,7 +748,7 @@ static int pfmgr_clear_bmp
     uint8_t     stop        = 0;
     
     pf_pos = BYTES_TO_PF(addr - freer->hdr.base);
-
+ 
     while(!stop                               && 
           (pf_pos < freer->total_pf)          && 
           (freer->avail_pf < freer->total_pf) &&
@@ -800,7 +800,7 @@ static int pfmgr_clear_bmp
             }
         }
     }
-
+  
     return(pf > 0 ? -1 : 0);
 }
 
