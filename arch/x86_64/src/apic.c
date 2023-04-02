@@ -383,7 +383,9 @@ static int apic_dev_init(device_t *dev)
     int_status = cpu_int_check();
 
     if(int_status)
+    {
         cpu_int_lock();
+    }
     
     drv = devmgr_dev_drv_get(dev);
     apic_drv = devmgr_drv_data_get(drv);
@@ -646,25 +648,17 @@ static int xapic_read
         case IN_SERVICE_REGISTER:
         case TRIGGER_MODE_REGISTER:
         case INTERRUPT_REQUEST_REGISTER:
-        
-        if(cnt > 7)
-            data[7] = offset[28];
-            
-        if(cnt > 6)
-            data[6] = offset[24];
+        {
+            if(cnt > 7)
+            {
+                cnt = 7;
+            }
 
-        if(cnt > 5)
-            data[5] = offset[20];
-
-        if(cnt > 4)
-            data[4] = offset[16];
-
-        if(cnt > 3)
-            data[3] = offset[12];
-
-        if(cnt > 2)
-            data[2] = offset[8];
-
+            for(int i = cnt; i > 1; i++)
+            {
+                data[i] = offset[i * 4];
+            }
+        }
         /* Fall through */
         case INTERRUPT_COMMAND_REGISTER:
             if(cnt > 1)
@@ -765,8 +759,11 @@ static int x2apic_read
 {
     uint64_t reg_val = 0;
     uint8_t  int_flag = 0;
+    
     if(cnt == 0)
+    {
         return(0);
+    }
 
     int_flag = cpu_int_check();
 
@@ -780,40 +777,38 @@ static int x2apic_read
         case IN_SERVICE_REGISTER:
         case TRIGGER_MODE_REGISTER:
         case INTERRUPT_REQUEST_REGISTER:
-        
-        if(cnt > 7)
-            data[7] = __rdmsr(reg + 0x70);
-            
-        if(cnt > 6)
-            data[6] = __rdmsr(reg + 0x60);
+        {
+            if(cnt > 7)
+            {
+                cnt = 7;
+            }
 
-        if(cnt > 5)
-            data[5] = __rdmsr(reg + 0x50);
-
-        if(cnt > 4)
-            data[4] = __rdmsr(reg + 0x40);
-
-        if(cnt > 3)
-            data[3] = __rdmsr(reg + 0x30);
-
-        if(cnt > 2)
-            data[2] = __rdmsr(reg + 0x20);
-
+            for(int i = cnt; i > 1; i--)
+            {
+                data[i] = __rdmsr(reg + (i * 0x10));
+            }
+        }
         /* Fall through */
         case INTERRUPT_COMMAND_REGISTER:
+        {
             if(cnt > 1)
             {
                 reg_val  = __rdmsr(reg);
                 data[1] =  reg_val >> 32;
             }
-
+        }
         default:
+        {
             if(cnt > 1)
+            {
                 data[0] = (uint32_t)reg_val;
+            }
             else
+            {
                 data[0] = (uint32_t)__rdmsr(reg);
-
+            }
             break;
+        }
 
         case EOI_REGISTER:
         case SELF_IPI_REGISTER:
