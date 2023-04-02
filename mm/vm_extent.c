@@ -34,7 +34,7 @@ static uint8_t vm_extent_joinable
     vm_extent_t *ext
 );
 
-static void vm_extent_merge_in_hdr
+static uint8_t vm_extent_merge_in_hdr
 (
     vm_slot_hdr_t *slot,
     uint32_t      extent_per_slot,
@@ -1159,7 +1159,7 @@ int vm_extent_compact_hdr
                 empty_ext = cursor;
             }
         }
-        else
+        else if(cursor->length > 0)
         {
             memcpy(empty_ext, cursor, sizeof(vm_extent_t));
             memset(cursor, 0, sizeof(vm_extent_t));
@@ -1236,17 +1236,27 @@ static uint8_t vm_extent_joinable
 }
 
 
-static void vm_extent_merge_in_hdr
+static uint8_t vm_extent_merge_in_hdr
 (
     vm_slot_hdr_t *slot,
     uint32_t      extent_per_slot,
     uint32_t      max_loops
 )
 {
-    vm_extent_t *src_ext = NULL;
-    vm_extent_t *dst_ext = NULL;
-    uint8_t joined = 0;
-    uint32_t loops = 0;
+    vm_extent_t *src_ext      = NULL;
+    vm_extent_t *dst_ext      = NULL;
+    uint8_t     joined        = 0;
+    uint32_t    loops         = 0;
+    uint32_t    element_count = 0;
+    uint8_t     result        = -1;
+    
+
+    /* if the slot is empty, we don't have what to join in the header */
+    if(slot->avail == extent_per_slot)
+    {
+        return(result);
+    }
+
     do
     {
         joined = 0;
@@ -1286,11 +1296,13 @@ static void vm_extent_merge_in_hdr
                     {
                         slot->next_free = i;
                     }
-
+                    result = 0;
                     joined = 1;
                 }
             }
         }
         loops ++; 
     } while(joined && (loops < max_loops));
+
+    return(result);
 }
