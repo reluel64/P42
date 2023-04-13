@@ -994,11 +994,24 @@ int vm_extent_merge
         {   
             dst_hdr = (vm_slot_hdr_t*)dst_ln;
             
+            /* if there are no extents, skip the header entirely */
+            if(dst_hdr->avail == ext_per_slot)
+            {
+                dst_ln = linked_list_next(dst_ln);
+                continue;
+            }
+
             /* cycle through the potential destination extents */
             
             for(uint32_t d_ix = 0; d_ix < ext_per_slot; d_ix++)
             {
                 dst_ext = &dst_hdr->extents[d_ix];
+
+                /* if the extent slot is empty, skip it */
+                if(dst_ext->length == 0)
+                {
+                    continue;
+                }
 
                 src_ln = linked_list_first(lh);
                 /* cycle throught extents that might be merged */
@@ -1092,7 +1105,7 @@ int vm_extent_compact_all_hdr
         empty_ext = NULL;
 
         /* Do not do compaction on empty/full headers */
-        if(hdr->avail == 0 || hdr->avail == ext_per_slot)
+        if((hdr->avail == 0) || (hdr->avail == ext_per_slot))
         {
             node = linked_list_next(node);
             continue;
