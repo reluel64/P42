@@ -11,11 +11,24 @@ extern void __context_switch
     virt_addr_t ctx_next
 );
 
-extern void __context_unit_start
+static void context_user_setup
 (
-    virt_addr_t ctx
-);
+    sched_thread_t *th
+)
+{
+    void *user_entry_pt = NULL;
+    virt_addr_t *rsp0 = NULL;
 
+    user_entry_pt = th->entry_point;
+    rsp0 = ((virt_addr_t*)th->context)[RSP0_INDEX];
+
+    /* assemble stack to jump to user space */
+
+    rsp0[0] = user_entry_pt;
+    rsp0[1] = ((virt_addr_t*)th->context)[CS_INDEX];
+    rsp0[3] = ((virt_addr_t*)th->context)[RSP_INDEX];
+    rsp0[4] = ((virt_addr_t*)th->context)[DS_INDEX];
+}
 
 int context_init
 (
@@ -25,7 +38,8 @@ int context_init
     sched_owner_t *owner     = NULL;
     virt_addr_t   *context   = NULL;
     vm_ctx_t      *vm_ctx    = NULL;
-    virt_size_t   rsp0       = 0;
+    virt_addr_t   rsp0       = 0;
+    virt_addr_t   *user_start = NULL;
 
     owner = th->owner;
 
@@ -64,24 +78,27 @@ int context_init
     /* Fill the context */
     context = (virt_addr_t*)th->context;
 
+    /* every thread starts its execution from sched_thread_entry_point*/
+    context[RIP_INDEX ]  = (virt_addr_t)sched_thread_entry_point;
+    context[RSP_INDEX ]  = th->stack_origin + th->stack_sz;
+    context[RBP_INDEX ]  = th->stack_origin + th->stack_sz;
+    context[CR3_INDEX ]  = vm_ctx->pgmgr.pg_phys;
+    context[TH_INDEX  ]  = (virt_addr_t)th;
+    context[RSP0_INDEX]  = rsp0;
+
 
     if(owner->user)
     {
-        context[CS_INDEX] = USER_CODE_SEGMENT;
-        context[DS_INDEX] = USER_DATA_SEGMENT;
+        context[CS_INDEX] = KERNEL_CODE_SEGMENT;
+        context[DS_INDEX] = KERNEL_DATA_SEGMENT;
+
+        context_user_setup(th);
     }
     else
     {
         context[CS_INDEX] = KERNEL_CODE_SEGMENT;
         context[DS_INDEX] = KERNEL_DATA_SEGMENT;
     }
-
-    context[RIP_INDEX]  = (virt_addr_t)sched_thread_entry_point;
-    context[RSP_INDEX]  = th->stack_origin + th->stack_sz;
-    context[RBP_INDEX]  = th->stack_origin + th->stack_sz;
-    context[CR3_INDEX]  = vm_ctx->pgmgr.pg_phys;
-    context[TH_INDEX ]  = (virt_addr_t)th;
-    context[RSP0_INDEX] = rsp0;
 
     return(0);
 }
@@ -108,7 +125,6 @@ int context_destroy
         return(-1);
     }
     
-    
     rsp0 = context[RSP0_INDEX];
     owner = th->owner;
     vm_ctx = owner->vm_ctx;
@@ -133,10 +149,10 @@ void context_switch
     sched_thread_t *next
 )
 {
-
-
     if(prev != NULL)
     {
+        gdt_update_tss(next->unit->cpu->cpu_pv, 
+                      ((virt_addr_t*)next->context)[RSP0_INDEX]);
         __context_switch(prev->context, next->context);
     }
     else if(next != NULL)
