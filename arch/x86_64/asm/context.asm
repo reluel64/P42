@@ -27,6 +27,10 @@
 %define TH_INDEX     (0x0014)
 
 
+%define USER_CODE_SEGMENT 0x18
+%define USER_DATA_SEGMENT 0x20
+
+
 %define OFFSET(x) ((x) << 3)
 
 ;-------------------------------------------------------------------------------
@@ -107,5 +111,30 @@ __context_load_only:
     popfq
     jmp __context_load
 
-__context_nop:
-    ret
+;---------USER SPACE---------
+jump_userspace:
+    mov ax, USER_DATA_SEGMENT
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    push ax ; push ss
+    mov rax, qword[rdi + OFFSET(RSP_INDEX)]
+    push rax                                    ; push user rsp
+    pushfq                                      ; push RFLAGS
+    pop rax                                     ; pop RFLAGS in RAX
+    and rax, ~(1 << 14)                         ; disable nested task flag
+    push rax                                    ; push once for the iret stack
+    push rax                                    ; push twice to pop into rflags
+    popfq                                       ; pop in rflags
+
+    push USER_CODE_SEGMENT ; push code segment
+
+    ; push exec address
+    mov rax, qword[rdi + OFFSET(RIP_INDEX)]
+    push rax
+
+    iretq
+
+
