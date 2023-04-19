@@ -772,6 +772,7 @@ int vm_extent_extract
                     if(best == NULL)
                     {
                         best = cext;
+                        continue;
                     }
                     
                     if(((best->length < ext->length)   && 
