@@ -89,7 +89,7 @@ static int ioapic_iterate
 
                     if(iosapic->Id == ioapic->Id)
                     {
-                        vga_print("IOSAPIC_CHECK\n",0x7,-1);
+                        
                         has_iosapic = 1;
                         cb_data.ioapic_id = iosapic->Id;
                         cb_data.irq_base  = iosapic->GlobalIrqBase;
@@ -108,7 +108,7 @@ static int ioapic_iterate
                 cb_data.addr      = ioapic->Address;
 
                 stop = cb(&cb_data, pv);
-                vga_print("NO_IOSAPIC\n",0x7,-1);
+                
             }
 
             if(stop)
@@ -139,7 +139,7 @@ static int ioapic_iterate
                 cb_data.addr      = iosapic->Address;
 
                 stop = cb(&cb_data, pv);
-                vga_print("IOSAPIC_CHECK2\n",0x7,-1);
+                
             }
 
             if(stop)
