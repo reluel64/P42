@@ -9,6 +9,11 @@
 #include <pgmgr.h>
 #include <vm.h>
 
+#define PFMGR_FOUND (0)
+#define PFMGR_FOUND_MORE (1)
+#define PFMGR_FOUND_NONE (-1)
+
+
 typedef struct pfmgr_init_t
 {
     phys_addr_t busy_start;
@@ -507,7 +512,7 @@ static int pfmgr_lkup_bmp_for_free_pf
     phys_size_t pf_ret        = 0;
     phys_size_t req_pf        = 0;
     phys_size_t mask_frames   = 0;
-    int         status        = -1;
+    int         status        = PFMGR_FOUND_NONE;
     uint8_t     stop          = 0;
 
     /* Check if there's anything interesting here */
@@ -623,17 +628,181 @@ static int pfmgr_lkup_bmp_for_free_pf
     /* No page frame available */
     if(pf_ret == 0)
     {
-        status = -1;
+        status = PFMGR_FOUND_NONE;
     }
     /* page frames available but not as required */
     else if(pf_ret < req_pf)
     {
-        status = 0;
+        status = PFMGR_FOUND;
     }
     /* page frames available at least as required */
     else
     {
-        status = 1;
+        status = PFMGR_FOUND_MORE;
+    }
+
+    *start = start_addr;
+    *pf    = pf_ret;
+ 
+    return(status);
+
+}
+
+
+
+/* pfmgr_lkup_bmp_for_free_pf - helper routine that looks for free pages 
+ *
+ * This routine will look in the bitmap represented by the pfmgr_free_range_t
+ * and will return the requested amount of page frames specified in pf that starts
+ * at start address
+ * 
+ */
+
+static int pfmgr_lkup_bmp_for_free_himem_pf
+(
+    pfmgr_free_range_t *freer,
+    phys_addr_t        *start,
+    phys_size_t        *pf,
+    uint32_t           flags
+)
+{
+    pfmgr_range_header_t *hdr = NULL;
+    phys_addr_t start_addr    = 0;
+    phys_size_t pf_ix         = 0;
+    phys_size_t pf_pos        = 0;
+    phys_size_t bmp_pos       = 0;
+    
+    phys_size_t mask          = 0;
+    phys_size_t pf_ret        = 0;
+    phys_size_t req_pf        = 0;
+    phys_size_t mask_frames   = 0;
+    int         status        = PFMGR_FOUND_NONE;
+    uint8_t     stop          = 0;
+
+    /* Check if there's anything interesting here */
+    if(freer->avail_pf == 0)
+    {
+        return(status);
+    }
+    
+    hdr        = &freer->hdr;
+    start_addr = *start;
+    req_pf     = *pf;
+    
+    if(!pfmgr_in_range(hdr->base, hdr->len, start_addr,0))
+    {
+        return(-1);
+    }
+
+    /* Skip ISA DMA */
+    if(pfmgr_touches_range(0, 
+                           ISA_DMA_MEMORY_LENGTH, 
+                           start_addr,
+                           req_pf * PAGE_SIZE))
+    {
+        /* Start after ISA DMA */
+        start_addr = ISA_DMA_MEMORY_LENGTH;
+    }
+ 
+    pf_pos = BYTES_TO_PF(hdr->base + hdr->len);
+
+
+    while(pf_pos < freer->total_pf &&
+          (req_pf > pf_ret) && 
+          (pf_ret < freer->avail_pf) && !stop)
+    {
+
+        pf_ix       = POS_TO_IX(pf_pos);
+        bmp_pos     = BMP_POS(pf_pos);
+        mask        = ~(virt_addr_t)0;
+
+        /* No more that PF_PER_ITEM */
+        mask_frames = min(PF_PER_ITEM - pf_ix, PF_PER_ITEM);
+        
+        /* No more than required frames */
+        mask_frames = min(mask_frames, req_pf - pf_ret);
+        
+        /* No more than available frames */
+        mask_frames = min(mask_frames, freer->avail_pf - pf_ret);
+        
+        /* 
+         * Check if we have PF_PER_ITEM from one shot 
+         * Otherwise we must check every bit
+         */ 
+
+        if(mask_frames < PF_PER_ITEM)
+        {
+            mask = (1ull << mask_frames) - 1;
+        }
+
+        if((freer->bmp[bmp_pos] & mask) == 0)
+        {
+            if(pf_ret == 0)
+            {
+                start_addr = hdr->base + PF_TO_BYTES(pf_pos);
+            }
+            pf_ret += mask_frames;
+            pf_pos += mask_frames;
+        }
+        else
+        {
+            /* Allocate from low to high */
+
+            /* Slower path - check each page frame */
+            for(phys_size_t i = 0; i < mask_frames; i++)
+            {
+                /* check if we might go over the total pf */
+                if((pf_pos >= freer->total_pf))
+                {
+                    break;
+                }
+
+                mask = ((virt_addr_t)1 << (pf_ix + i)); 
+
+                if((freer->bmp[bmp_pos] & mask) == 0)
+                {
+                    if(pf_ret == 0)
+                    {
+                        start_addr = hdr->base + PF_TO_BYTES(pf_pos);
+                    }   
+                    pf_ret ++;
+                }
+
+                /* Stop looking if pf_ret > 0 */
+                else if(pf_ret > 0)
+                {
+                    /* if we want contigous memory, we must reset the
+                     * the returned frames to keep looking
+                     */
+                    if(flags & PHYS_ALLOC_CONTIG)
+                    {
+                        pf_ret = 0;
+                    }
+                    else
+                    {
+                       stop = 1;
+                       break;
+                    }
+                }
+                pf_pos++;
+            }
+        }
+    }
+
+    /* No page frame available */
+    if(pf_ret == 0)
+    {
+        status = PFMGR_FOUND_NONE;
+    }
+    /* page frames available but not as required */
+    else if(pf_ret < req_pf)
+    {
+        status = PFMGR_FOUND;
+    }
+    /* page frames available at least as required */
+    else
+    {
+        status = PFMGR_FOUND_MORE;
     }
 
     *start = start_addr;
@@ -938,7 +1107,7 @@ static int _pfmgr_alloc
        kprintf("PRE_POST: 0x%x -> 0x%x\n",addr, avail_pf);                                      
 #endif
         /* Check if we've got anything from the lookup */
-        if(lkup_sts < 0)
+        if(lkup_sts == PFMGR_FOUND_NONE)
         {
             /* Check if next_lkup > 0 and if it is, 
              * try again with it set to 0 
@@ -955,7 +1124,7 @@ static int _pfmgr_alloc
                                                                   flags);
             }
             
-            if(lkup_sts < 0)
+            if(lkup_sts == PFMGR_FOUND_NONE)
             {
                 fnode = next_fnode;
                 continue;   
@@ -967,7 +1136,7 @@ static int _pfmgr_alloc
                                 avail_pf;
      
         /* Contiguous pages should be satisfied from one lookup */
-        if((flags & PHYS_ALLOC_CONTIG) && lkup_sts < 1)
+        if((flags & PHYS_ALLOC_CONTIG) && lkup_sts < PFMGR_FOUND_MORE)
         {
             fnode = next_fnode;
             continue;
@@ -1029,7 +1198,7 @@ static int _pfmgr_alloc
         }
         
         /* If we got frames, try again on the same range */
-        if(lkup_sts >= 0)
+        if(lkup_sts > PFMGR_FOUND_NONE)
         {
             continue;
         }
