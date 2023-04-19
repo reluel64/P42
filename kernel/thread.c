@@ -21,15 +21,22 @@ static int thread_setup
     sched_owner_t  *ow  = NULL;
     virt_addr_t    stack_origin = 0;
     virt_size_t    stack_size = 0;
-
-    int             ret = 0;
+    uint32_t       mem_flags = 0;
+    int            ret = 0;
     
     th = out_th;
     ow = owner;
+    mem_flags = VM_ATTR_WRITABLE;
 
     if(entry_pt == NULL)
     {
         return(-1);
+    }
+    
+
+    if(ow->user)
+    {
+        mem_flags |= VM_ATTR_USER;
     }
 
     /* align the stack size to page size */
@@ -42,7 +49,7 @@ static int thread_setup
                             VM_BASE_AUTO,
                             stack_size,
                             0,
-                            VM_ATTR_WRITABLE);
+                            mem_flags);
 
     if(stack_origin == VM_INVALID_ADDRESS)
     {
