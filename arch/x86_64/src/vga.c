@@ -16,8 +16,8 @@
 typedef struct vga_t
 {
     uint16_t *base;
-    uint8_t row;
-    uint8_t col;
+    uint32_t row;
+    uint32_t col;
     spinlock_t lock;
 }vga_t;
 
@@ -42,12 +42,13 @@ static int vga_io_register(void);
 
 void vga_init()
 {
-    vga.base = (uint16_t*)vm_map(NULL, VM_BASE_AUTO, 
-                                FB_ALLOC_SIZE, 
-                                FB_PHYS_MEM,
-                                0,
-                                VM_ATTR_WRITABLE|
-                                VM_ATTR_STRONG_UNCACHED);
+    vga.base = (uint16_t*)vm_map(NULL, 
+                                 VM_BASE_AUTO, 
+                                 FB_ALLOC_SIZE, 
+                                 FB_PHYS_MEM,
+                                 0,
+                                 VM_ATTR_WRITABLE|
+                                 VM_ATTR_STRONG_UNCACHED);
 
     vga.col = 0;
     vga.row = 0;
