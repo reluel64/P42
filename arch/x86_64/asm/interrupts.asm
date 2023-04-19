@@ -225,7 +225,6 @@ __flush_gdt:
     push rbp ;save stack frame
     mov rbp, rsp
     mov ax, 0x10
-    mov ss, ax
     mov ds, ax
     mov es, ax
     mov gs, ax
