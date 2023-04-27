@@ -645,7 +645,6 @@ static int pfmgr_lkup_bmp_for_free_pf
     *pf    = pf_ret;
  
     return(status);
-
 }
 
 
@@ -1234,16 +1233,16 @@ static int pfmgr_addr_to_free_range
 )
 {
     phys_size_t         length     = 0;
+    list_node_t         *node      = NULL;
     pfmgr_free_range_t *freer      = NULL;
-    pfmgr_free_range_t *next_freer = NULL;
 
     length = PF_TO_BYTES(pf);
 
-    freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
+    node = linked_list_first(&base.freer);
 
-    while(freer)
+    while(node)
     {
-        next_freer = (pfmgr_free_range_t*)linked_list_next((list_node_t*)freer);
+        freer = (pfmgr_free_range_t*)node;
 
         if(pfmgr_in_range(freer->hdr.base, 
                           freer->hdr.len,
@@ -1254,7 +1253,7 @@ static int pfmgr_addr_to_free_range
             return(0);
         }
 
-        freer = next_freer;
+        node = linked_list_next(node);
     }
 
     return(-1);
