@@ -107,7 +107,9 @@ static int apic_timer_init(device_t *dev)
     apic_timer  = kcalloc(sizeof(apic_timer_t), 1);
     
     if(apic_timer == NULL)
+    {
         return(-1);
+    }
 
     /* Save the interrupt flag */
     int_status = cpu_int_check();
@@ -151,7 +153,9 @@ static int apic_timer_init(device_t *dev)
 
     /* restore the status of the interrupt flag */
     if(!int_status) 
+    {
         cpu_int_lock();
+    }
 
     apic_drv_pv->apic_read(apic_drv_pv->vaddr, 
                            CURRENT_COUNT_REGISTER, 
@@ -228,7 +232,7 @@ static int apic_timer_get_handler
     uint8_t       int_flag = 0;
 
 
-    if(th == NULL || arg == NULL)
+    if((th == NULL) || (arg == NULL))
     {
         return(-1);
     }

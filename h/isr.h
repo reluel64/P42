@@ -5,7 +5,12 @@
 #include <defs.h>
 #include <isr.h>
 
-
+#define ZERO_ISR_INIT {.node.prev = NULL, \
+                       .node.next = NULL, \
+                       .ih        = NULL, \
+                       .pv        = NULL, \
+                       .allocated = 0     \
+                      }
 
 typedef struct isr_info_t
 {

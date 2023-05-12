@@ -16,10 +16,10 @@
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
-static isr_t lint_isr;
-static isr_t error_isr;
-static isr_t spur_isr;
-static isr_t eoi_isr;
+static isr_t lint_isr  = ZERO_ISR_INIT;
+static isr_t error_isr = ZERO_ISR_INIT;
+static isr_t spur_isr  = ZERO_ISR_INIT;
+static isr_t eoi_isr   = ZERO_ISR_INIT;
 
 static int xapic_write
 (
