@@ -25,13 +25,6 @@
 #define _TRAMPOLINE_BEGIN ((virt_addr_t)&__start_ap_begin)
 #define _TRAMPOLINE_END   ((virt_addr_t)&__start_ap_end)
 
-extern void __cpu_switch_stack
-(
-    virt_addr_t *new_top,
-    virt_addr_t *new_pos,
-    virt_addr_t *old_base
-);
-
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -54,25 +47,11 @@ extern virt_addr_t isr_no_ec_sz_end;
 extern virt_addr_t isr_ec_sz_start;
 extern virt_addr_t isr_ec_sz_end;
 
-
 extern void *kmain_sys_init(void *arg);
-
-
-
 
 static spinlock_t lock;
 static volatile int cpu_on = 0;
 static void cpu_ap_entry_point(void);
-
-
-static int pcpu_is_bsp(void)
-{
-    phys_addr_t apic_base = 0;
-
-    apic_base = __rdmsr(APIC_BASE_MSR);
-
-    return (!!(apic_base & (1 << 8)));
-}
 
 uint32_t cpu_id_get(void)
 {
@@ -168,7 +147,6 @@ virt_addr_t cpu_virt_max(void)
     return(virt_addr - 1);
 }
 
-
 static int cpu_idt_entry_encode
 (
     virt_addr_t ih,
@@ -194,7 +172,10 @@ static int cpu_idt_entry_encode
     return(0);
 }
 
-static int cpu_idt_setup(cpu_platform_driver_t *cpu_drv)
+static int cpu_idt_setup
+(
+    cpu_platform_driver_t *cpu_drv
+)
 {
     idt64_entry_t      *idt = NULL;
     uint32_t            isr_size = 0;
@@ -436,18 +417,19 @@ int cpu_ap_start
     uint32_t timeout
 )
 {
-    int                    status       = 0;
-    virt_addr_t            trampoline   = 0;
-    virt_size_t            tramp_size   = 0;
-    device_t               *dev         = NULL;
-    uint32_t               cpu_id       = 0;
-    ACPI_TABLE_MADT        *madt        = NULL;
-    ACPI_MADT_LOCAL_APIC   *lapic       = NULL;
-    ACPI_MADT_LOCAL_X2APIC *x2lapic     = NULL;
-    ACPI_SUBTABLE_HEADER   *subhdr      = NULL;
-    int                    use_x2_apic  = 0;
-    uint32_t               started_cpu  = 1;
-    uint32_t               start_cpu_id = 0;
+    int                    status          = 0;
+    virt_addr_t            trampoline      = 0;
+    virt_size_t            tramp_size      = 0;
+    device_t               *dev            = NULL;
+    uint32_t               cpu_id          = 0;
+    ACPI_TABLE_MADT        *madt           = NULL;
+    ACPI_MADT_LOCAL_APIC   *lapic          = NULL;
+    ACPI_MADT_LOCAL_X2APIC *x2lapic        = NULL;
+    ACPI_SUBTABLE_HEADER   *subhdr         = NULL;
+    int                    use_x2_apic     = 0;
+    uint32_t               started_cpu     = 1;
+    uint32_t               start_cpu_id    = 0;
+    device_t               *target_cpu_dev = NULL;
 
     cpu_id = cpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
@@ -484,22 +466,6 @@ int cpu_ap_start
 
     /* prepare trampoline code */
     cpu_prepare_trampoline(trampoline);
-
-#if 0
-    /* check if are going to use x2APIC */
-    for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
-        i < madt->Header.Length;
-        i += subhdr->Length)
-    {
-        subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)madt + i);
-
-        if(subhdr->Type == ACPI_MADT_TYPE_LOCAL_X2APIC)
-        {
-            use_x2_apic = 1;
-            break;
-        }
-    }
-#endif
 
     for(phys_size_t i = sizeof(ACPI_TABLE_MADT);
         (i < madt->Header.Length) && (started_cpu < num);
@@ -547,9 +513,16 @@ int cpu_ap_start
 
         if(start_cpu_id != -1)
         {  
-            if(cpu_bring_ap_up(dev, start_cpu_id, timeout) == 0)
+            /* check if the CPU is not already started */
+            target_cpu_dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, 
+                                                    start_cpu_id);
+
+            if(target_cpu_dev == NULL)
             {
-                started_cpu++;
+                if(cpu_bring_ap_up(dev, start_cpu_id, timeout) == 0)
+                {
+                    started_cpu++;
+                }
             }
         }
     }
@@ -576,6 +549,7 @@ static void cpu_ap_entry_point(void)
     device_t *timer = NULL;
     device_t *cpu_dev = NULL;
     cpu_t *cpu = NULL;
+
     cpu_id = cpu_id_get();
 
     /* Add cpu to the deivce manager */
@@ -644,7 +618,9 @@ static uint32_t cpu_get_domain
         subhdr = (ACPI_SUBTABLE_HEADER*)((uint8_t*)srat + i);
 
         if(subhdr->Type != ACPI_SRAT_TYPE_CPU_AFFINITY)
+        {
             continue;
+        }
 
         cpu_aff = (ACPI_SRAT_CPU_AFFINITY*)subhdr;
 
@@ -674,9 +650,11 @@ static int pcpu_dev_init(device_t *dev)
     cpu_platform_driver_t *pdrv           = NULL;
     uint32_t               cpu_id         = 0;
     int                    no_apic        = 0;
+    int                    status         = 0;
+
+    cpu_int_lock();
 
     kprintf("INITIALIZING CPU DEVICE\n");
-    cpu_int_lock();
     
     pgmgr_per_cpu_init();
   
@@ -687,13 +665,17 @@ static int pcpu_dev_init(device_t *dev)
     cpu = kcalloc(sizeof(cpu_t), 1);
 
     if(cpu == NULL)
+    {
+        cpu_int_unlock();
         return(-1);
+    }
 
     pcpu = kcalloc(sizeof(cpu_platform_t), 1);
     
     if(pcpu == NULL)
     {
         kfree(cpu);
+        cpu_int_unlock();
         return(-1);
     }
 
@@ -704,7 +686,8 @@ static int pcpu_dev_init(device_t *dev)
     /* Store cpu id and proximity domain */
     cpu->cpu_id = cpu_id;
 
-   // cpu->proximity_domain = cpu_get_domain(cpu_id);
+    /* store proximity domain of the CPU */
+    cpu->proximity_domain = cpu_get_domain(cpu_id);
 
     /* store per cpu private data */
     cpu->cpu_pv = pcpu;
@@ -728,6 +711,7 @@ static int pcpu_dev_init(device_t *dev)
             no_apic = 1;
         }
     }
+    
     kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
 
     if(!no_apic)
@@ -742,19 +726,23 @@ static int pcpu_dev_init(device_t *dev)
             if(devmgr_dev_add(apic_timer_dev, apic_dev))
             {
                 devmgr_dev_delete(&apic_timer_dev);
-                return(-1);
+                status = -1;
             }
         }
     }
 
-    return(0);
+    cpu_int_unlock();
+    
+    return(status);
 }
 
 static int pcpu_dev_probe(device_t *dev)
 {
     if(devmgr_dev_name_match(dev, PLATFORM_CPU_NAME) &&
        devmgr_dev_type_match(dev, CPU_DEVICE_TYPE))
+    {
         return(0);
+    }
 
     return(-1);
 }
