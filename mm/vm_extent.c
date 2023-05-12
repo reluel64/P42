@@ -229,8 +229,6 @@ static int vm_extent_release_tracking
     src_extent.base = (virt_addr_t)hdr;
     src_extent.length = VM_SLOT_SIZE;
 
-
-
     /* extract the extent from the list */
     status = vm_extent_extract(lh, ext_per_slot, &src_extent);
 
@@ -249,8 +247,9 @@ static int vm_extent_release_tracking
     /* remove the node from the list.*/
     linked_list_remove(lh, &hdr->node);
     
-    orig_extent       = src_extent;
-
+    memcpy(&orig_extent, &src_extent, sizeof(vm_extent_t));
+    memcpy(&free_extent, &src_extent, sizeof(vm_extent_t));
+    
     free_extent       = src_extent;
     free_extent.flags = VM_HIGH_MEM;
     free_extent.data  = NULL;
