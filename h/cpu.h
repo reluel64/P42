@@ -11,8 +11,6 @@ typedef struct cpu_t
     device_t *dev;
     uint32_t cpu_id;
     uint32_t proximity_domain;
-    virt_addr_t stack_top;
-    virt_addr_t stack_bottom;
     void *cpu_pv;
     void *sched;
 }cpu_t;
