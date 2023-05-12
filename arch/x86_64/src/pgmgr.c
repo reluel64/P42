@@ -4,6 +4,7 @@
  * structures
  */
 
+/* TODO: Make pgmgr work with pages > 4KB*/
 
 #include <stdint.h>
 #include <paging.h>
@@ -380,11 +381,12 @@ static void pgmgr_iter_free_level
             * there is a special case which happens if the last iteration
             * does not meet the condition to go up (and trigger a free for the
             * upper level) . In this special case we check if we are at the end
-            * and if we are, we are forcing a level up
+            * and if we are, we are asking to go to the upper level
+            * so we are called again with the upper level
             */ 
            if(ld->offset + iter_dat->increment >= ld->length)
            {
-               ld->cb_status |= PGMGR_CB_FORCE_GO_UP;
+               ld->cb_status |= PGMGR_CB_STEP_UP;
            }
            break;
        }
@@ -531,8 +533,8 @@ static void pgmgr_iter_free_page
                     ld->level[iter_dat->entry] = 0;
                 }
                 else if(addr == 
-                        (pfmgr_dat->phys_base +
-                         pfmgr_dat->used_bytes))
+                       (pfmgr_dat->phys_base +
+                        pfmgr_dat->used_bytes))
                 {
                     pfmgr_dat->used_bytes+=PAGE_SIZE;
                     ld->level[iter_dat->entry] = 0;
@@ -599,7 +601,9 @@ static void pgmgr_iter_alloc_page
         case PGMGR_CB_RES_CHECK:
         {
             if(pfmgr_dat->avail_bytes <= pfmgr_dat->used_bytes)
+            {
                 ld->cb_status |= PGMGR_CB_BREAK;
+            }
             break;
         }
     }
@@ -803,10 +807,16 @@ static int pgmgr_iterate_levels
             return(0);
         }
 
-        /* Check if we need to switch the level */
+        /* Check if we need to switch the level 
+         * Usually the level switch takes place when the address range for that
+         * level reached its end. There are cases where the upper level is
+         * required and, for those, the callback can ask the routine to 
+         * just step one level up by setting PGMGR_CB_STEP_UP in the cb_status
+         */
+
         if((((it_dat.next_vaddr >> it_dat.shift) & PGMGR_MAX_TABLE_INDEX) < 
              (it_dat.entry)) || 
-            (ld->cb_status & PGMGR_CB_FORCE_GO_UP))
+            (ld->cb_status & PGMGR_CB_STEP_UP))
         {
             /* Calculate how much we need to go up */
             while(ld->curr_level < ctx->max_level)
@@ -880,7 +890,9 @@ static int pgmgr_iterate_levels
         }
         
         if(ld->cb_status & PGMGR_CB_BREAK)
+        {
             break;
+        }
 
        /* calculate the next offset */
        ld->offset += it_dat.increment;
@@ -958,7 +970,7 @@ static int pgmgr_setup_remap_table
 
     pgmgr.remap_tbl = REMAP_TABLE_VADDR;
 
- #ifdef PGMGR_DEBUG
+#ifdef PGMGR_DEBUG
     kprintf("----Done setting up remapping table----\n");
 #endif
     return(0);

@@ -83,7 +83,7 @@
 #define PGMGR_CB_STOP               (1 << 0)
 #define PGMGR_CB_ERROR              (1 << 1)
 #define PGMGR_CB_BREAK              (1 << 2)
-#define PGMGR_CB_FORCE_GO_UP        (1 << 3)
+#define PGMGR_CB_STEP_UP            (1 << 3)
 
 #define PGMGR_MAX_TABLE_INDEX       (0x1FF)
 
