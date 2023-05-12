@@ -567,8 +567,8 @@ virt_addr_t vm_alloc
                  * changes
                  */
                 pgmgr_invalidate(&ctx->pgmgr,
-                                     ret_address,
-                                     len);
+                                 ret_address,
+                                 len);
             }
         }
     }
@@ -735,7 +735,6 @@ int vm_change_attr
     if((vaddr % PAGE_SIZE) || (len % PAGE_SIZE))
     {
         kprintf("%s %d - Not aligned\n",__FUNCTION__,__LINE__);
-        while(1);
         return(VM_FAIL);
     }
     
