@@ -28,8 +28,10 @@ static int gdt_entry_encode
 {
     /* No way */
     if (gdt_entry == NULL)
+    {
         return (-1);
-
+    }
+    
     memset(gdt_entry, 0, sizeof(gdt_entry_t));
 
     /* set the base linear address */

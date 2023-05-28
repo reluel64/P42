@@ -42,7 +42,9 @@ static int ioapic_iterate
     int                    stop            = 0;
 
     if(cb == NULL)
+    {
         return(-1);
+    }
 
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
@@ -173,7 +175,9 @@ static int ioapic_write
     ioapic = devmgr_dev_data_get(dev);
 
     if(ioapic == NULL)
+    {
         return(-1);
+    }
 
     reg = reg & 0xff;
     iowin_data = data;
@@ -205,8 +209,10 @@ static int ioapic_read
     ioapic = devmgr_dev_data_get(dev);
 
     if(ioapic == NULL)
+    {
         return(-1);
-    
+    }
+
     reg = reg & 0xff;
     iowin_data = data;
     ioapic->ioregsel->reg_address = reg;
@@ -503,8 +509,10 @@ static int ioapic_probe(device_t *dev)
     ioapic_iterate(ioapic_count, &count);
 
     if(count == 0)
+    {
         return(-1);
-
+    }
+    
     return(0);
 }
 
