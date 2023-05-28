@@ -127,9 +127,13 @@ static virt_addr_t pfmgr_early_map
   
     /* map 8K */
     vaddr = pgmgr_temp_map(addr - pad, 510);
-    pgmgr_temp_map(addr - pad + PAGE_SIZE, 511);
+    if(vaddr != VM_INVALID_ADDRESS)
+    {
+        pgmgr_temp_map(addr - pad + PAGE_SIZE, 511);
+        return(vaddr + pad);
+    }
 
-    return(vaddr + pad);
+    return(VM_INVALID_ADDRESS);
 }
 
 /* pfmgr_early_clear_bitmap - clear bitmap area using early page tables */
@@ -152,10 +156,17 @@ static void pfmgr_early_clear_bitmap
         zlen = min(bmp_len - pos, PAGE_SIZE);
 
         bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + pos);
-        
-        memset(bmp, 0, zlen);
 
-        pos += zlen;
+        if(bmp != (virt_addr_t*)VM_INVALID_ADDRESS)
+        {
+            memset(bmp, 0, zlen);
+
+            pos += zlen;
+        }
+        else
+        {
+            kprintf("INVALID ADDRESS\n");
+        }
     }
 }
 
@@ -190,9 +201,12 @@ static void pfmgr_early_mark_bitmap
             bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + bmp_off);
         }
 
-        bmp[0] |= ((virt_addr_t)1 << pf_ix);
-        pos += PAGE_SIZE;
-        fmem->avail_pf--;
+        if((virt_addr_t)bmp != VM_INVALID_ADDRESS)
+        {
+            bmp[0] |= ((virt_addr_t)1 << pf_ix);
+            pos += PAGE_SIZE;
+            fmem->avail_pf--;
+        }
     }
 }
 
@@ -227,7 +241,14 @@ static void pfmgr_init_free_callback
     if(init->prev)
     {
         freer = (pfmgr_free_range_t*)pfmgr_early_map(init->prev);
-        freer->hdr.next_range = track_addr;
+        if((virt_addr_t)freer != VM_INVALID_ADDRESS)
+        {
+            freer->hdr.next_range = track_addr;
+        }
+        else
+        {
+            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+        }
         init->prev = 0;
     }
     
@@ -294,8 +315,16 @@ static void pfmgr_init_free_callback
 #endif
     /* Commit to memory */
     freer = (pfmgr_free_range_t*)pfmgr_early_map(track_addr);
-    memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
     
+    if((virt_addr_t)freer != VM_INVALID_ADDRESS)
+    {
+        memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
+    }
+    else
+    {
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    }
+
     base.freer.count++;
     init->prev = track_addr;
         
@@ -327,7 +356,12 @@ static void pfmgr_init_busy_callback
     if(init->prev)
     {
         busy = (pfmgr_busy_range_t*)pfmgr_early_map(init->prev);
-        busy->hdr.next_range = addr;
+
+        if((virt_addr_t)busy != VM_INVALID_ADDRESS)
+        {
+           busy->hdr.next_range = addr;
+        }
+ 
         init->prev = 0;
     }
 
@@ -339,15 +373,21 @@ static void pfmgr_init_busy_callback
     busy = (pfmgr_busy_range_t*)pfmgr_early_map(base.physb_start + 
                                  base.busyr.count * 
                                  sizeof(pfmgr_busy_range_t));
-    
-    memset(busy, 0, sizeof(pfmgr_busy_range_t));
 
-    busy->hdr.base       = e->base;
-    //busy->hdr.domain_id  = e->domain;
-    busy->hdr.len        = e->length;
-    busy->hdr.type       = e->type;
-    busy->hdr.struct_len = sizeof(pfmgr_busy_range_t);
+    if((virt_addr_t)busy != VM_INVALID_ADDRESS)
+    {
+        memset(busy, 0, sizeof(pfmgr_busy_range_t));
 
+        busy->hdr.base       = e->base;
+        //busy->hdr.domain_id  = e->domain;
+        busy->hdr.len        = e->length;
+        busy->hdr.type       = e->type;
+        busy->hdr.struct_len = sizeof(pfmgr_busy_range_t);
+    }
+    else
+    {
+        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    }
     init->prev = base.physb_start + 
                  base.busyr.count * 
                  sizeof(pfmgr_busy_range_t);
@@ -402,6 +442,12 @@ int pfmgr_early_alloc_pf
         bmp    = NULL;
         freer  = (pfmgr_free_range_t*)pfmgr_early_map(freer_phys);
         
+        if((virt_addr_t)freer == VM_INVALID_ADDRESS)
+        {
+            spinlock_unlock_int(&pfmgr_lock, int_flag);
+            return(-1);
+        }
+
         /* Get the physical address of the bitmap */
         bmp_phys = freer_phys + sizeof(pfmgr_free_range_t);
        
@@ -436,6 +482,14 @@ int pfmgr_early_alloc_pf
             if(pf_ix == 0 || bmp == NULL)
             {
                 bmp = (virt_addr_t*)pfmgr_early_map(bmp_phys + bmp_off);
+
+                if((virt_addr_t)freer == VM_INVALID_ADDRESS)
+                {
+                    kprintf("Failed to aquire bitmap\n");
+                    spinlock_unlock_int(&pfmgr_lock, int_flag);
+                    return(-1);
+                }
+
             }
 
             if((bmp[0] & ((virt_addr_t)1 << pf_ix)) == 0)
@@ -468,7 +522,16 @@ int pfmgr_early_alloc_pf
 
         /* Commit to memory */
         freer = (pfmgr_free_range_t*)pfmgr_early_map(freer_phys);
-        memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
+        if((virt_addr_t)freer != VM_INVALID_ADDRESS)
+        {
+            memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
+        }
+        else
+        {
+            kprintf("Failed to commit memory\n");
+            spinlock_unlock_int(&pfmgr_lock, int_flag);
+            return(-1);
+        }
 
         /* advance */
         freer_phys = (phys_addr_t)local_freer.hdr.next_range;
@@ -1379,11 +1442,14 @@ int pfmgr_init(void)
     phys_addr_t     phys = 0;
     phys_size_t     struct_size = 0;
     virt_size_t     size = 0;
-    pfmgr_range_header_t *hdr = NULL;
+    phys_addr_t     next_phys = 0;
+    pfmgr_range_header_t *hdr = VM_INVALID_ADDRESS;
     pfmgr_range_header_t temp_hdr;
 
 
     linked_list_init(&base.freer);
+    linked_list_init(&base.busyr);
+
     kprintf("Initializing Page Frame Manager\n");
 
     phys = base.physf_start;
@@ -1392,6 +1458,12 @@ int pfmgr_init(void)
     {
         hdr = (pfmgr_range_header_t*)pfmgr_early_map(phys);
         
+        if((virt_addr_t)hdr == VM_INVALID_ADDRESS)
+        {
+            kprintf("Failed to get the free range\n");
+            return(-1);
+        }
+
         size = (hdr->struct_len % PAGE_SIZE) ? 
                 ALIGN_UP(hdr->struct_len, PAGE_SIZE) : 
                 hdr->struct_len;
@@ -1402,27 +1474,31 @@ int pfmgr_init(void)
                                             phys,
                                             0,
                                             VM_ATTR_WRITABLE);
-        if(hdr == NULL)
+        if((virt_addr_t)hdr == VM_INVALID_ADDRESS)
         {
             return(-1);
         }
         
-        phys = (phys_addr_t)hdr->next_range;
+        phys = hdr->next_range;
 
         linked_list_add_tail(&base.freer, &hdr->node);
 
     }while(phys != 0);
 
     phys = base.physb_start;
-    hdr = NULL;
-    linked_list_init(&base.busyr);
+    next_phys = phys;
+    hdr = VM_INVALID_ADDRESS;
 
     do
     {
-        if((phys == base.physb_start)                    || 
-          ((((phys_addr_t)hdr->next_range - base.physb_start) % PAGE_SIZE) == 0))
+        if((next_phys % PAGE_SIZE) == 0)
         {
             hdr = (pfmgr_range_header_t*)pfmgr_early_map(phys);
+            
+            if((virt_size_t)hdr == VM_INVALID_ADDRESS)
+            {
+                return(-1);
+            }
 
             size = (hdr->struct_len % PAGE_SIZE) ? 
                    ALIGN_UP(hdr->struct_len, PAGE_SIZE) : 
@@ -1435,28 +1511,32 @@ int pfmgr_init(void)
                                                 0,
                                                 VM_ATTR_WRITABLE);
 
-            if(hdr == NULL)
+            if((virt_size_t)hdr == VM_INVALID_ADDRESS)
             {
                 return(-1);
             }
         }
-        else
+        else if(hdr != VM_INVALID_ADDRESS)
         {
             /* advance manually */
             hdr = (pfmgr_range_header_t*)((uint8_t*)hdr + 
                   sizeof(pfmgr_busy_range_t));
         }
 
-      phys = (phys_addr_t)hdr->next_range;
-      linked_list_add_tail(&base.busyr, &hdr->node);
+        if((virt_size_t)hdr != VM_INVALID_ADDRESS)
+        {
+            phys = hdr->next_range;
+            next_phys = phys - base.physb_start;
+            linked_list_add_tail(&base.busyr, &hdr->node);
+        }
 
-
-    }while(phys != 0);
+    }while(phys > 0);
 
     pfmgr_interface.alloc   = _pfmgr_alloc;
     pfmgr_interface.dealloc = _pfmgr_free;
   
     kprintf("Page frame manager is initialized\n");
+ 
     return(0);
 }
 
