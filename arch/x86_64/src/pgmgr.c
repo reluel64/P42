@@ -1280,8 +1280,10 @@ int pgmgr_change_attrib
 
 
     if(status < 0 || ld.error)
+    {
         return(-1);
-
+    }
+    
     return(0);
 }
 
@@ -1450,7 +1452,7 @@ static inline virt_addr_t _pgmgr_temp_map
     if(ix > 511 || ix == 0)
     {
         kprintf("DIED @ %s %d\n",__FUNCTION__,__LINE__);
-        return(-1);
+        return(VM_INVALID_ADDRESS);
     }
 
     phys = PAGE_MASK_ADDRESS(phys);
@@ -1458,7 +1460,7 @@ static inline virt_addr_t _pgmgr_temp_map
     if(phys % PAGE_SIZE)
     {
         kprintf("DIED @ %s %d\n",__FUNCTION__,__LINE__);
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
 
     remap_tbl[ix] = phys | PAGE_PRESENT | PAGE_WRITABLE;
@@ -1481,7 +1483,9 @@ static int _pgmgr_temp_unmap
     virt_addr_t *remap_tbl = (virt_addr_t*)pgmgr.remap_tbl;
 
     if(vaddr % PAGE_SIZE || vaddr <= pgmgr.remap_tbl)
+    {
         return(-1);
+    }
 
     ix = (vaddr - pgmgr.remap_tbl) / PAGE_SIZE;
 
@@ -1503,7 +1507,7 @@ virt_addr_t pgmgr_temp_map
 {
     if(ix < 510)
     {
-        return(0);
+        return(VM_INVALID_ADDRESS);
     }
 
     return(_pgmgr_temp_map(phys, ix));
