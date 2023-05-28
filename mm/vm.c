@@ -145,8 +145,8 @@ static int vm_setup_protected_regions
         },
         /* reserve tracking for allocated addresses */
         {
-            .base   =  (virt_addr_t)linked_list_first(&ctx->alloc_mem),
-            .length =  VM_SLOT_SIZE,
+            .base   = (virt_addr_t)linked_list_first(&ctx->alloc_mem),
+            .length = VM_SLOT_SIZE,
             .flags  = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
             .eflags = VM_ATTR_WRITABLE
         },
@@ -460,8 +460,6 @@ int vm_ctx_destroy
 
 }
 
-
-
 virt_addr_t vm_alloc
 (
     vm_ctx_t   *ctx, 
@@ -647,6 +645,11 @@ virt_addr_t vm_map
                                       space_addr,
                                       out_len,
                                       NULL);
+        
+        if(status != 0)
+        {
+            kprintf("Failed to release backend during map\n");
+        }
     }
     else
     {
@@ -781,7 +784,7 @@ int vm_change_attr
                                  current_alloc_flags,
                                  current_mem_flags);
 
-        if(status != VM_INVALID_ADDRESS)
+        if(new_mem != VM_INVALID_ADDRESS)
         {
             kprintf("FAILED to restore memory to original status\n");
             while(1);
