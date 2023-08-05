@@ -600,7 +600,6 @@ int vm_extent_insert
     vm_slot_hdr_t   *hdr        = NULL;
     vm_slot_hdr_t   *f_hdr      = NULL;
     vm_extent_t     *c_ext      = NULL;
-    //vm_extent_t     *f_ext      = NULL;
     uint32_t        least_avail = -1;
 
     if((ext->flags & VM_REGION_MASK) == VM_REGION_MASK ||

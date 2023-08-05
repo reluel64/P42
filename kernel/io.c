@@ -37,7 +37,7 @@ int io_entry_register
     return(status);
 }
 
-io_entry_t *io_find_entry
+static io_entry_t *io_find_entry
 (
     char *entry_name
 )
