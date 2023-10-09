@@ -23,7 +23,7 @@ virt_addr_t vm_space_alloc
     virt_addr_t addr,
     virt_size_t len,
     uint32_t    flags,
-    uint32_t    eflags
+    uint32_t    prot
 )
 {
     vm_extent_t req_ext       = VM_EXTENT_INIT;
@@ -194,7 +194,7 @@ virt_addr_t vm_space_alloc
     alloc_ext.flags = (flags         & ~VM_REGION_MASK) | 
                       (req_ext.flags & VM_REGION_MASK);
 
-    alloc_ext.eflags = eflags;
+    alloc_ext.prot = prot;
 
     /* If we have a right side, insert it */
     if(split_status > 0)
@@ -315,7 +315,7 @@ int vm_space_free
     virt_addr_t addr,
     virt_size_t len,
     uint32_t    *old_flags,
-    uint32_t    *old_eflags
+    uint32_t    *old_prot
 )
 {
     vm_extent_t req_ext  = VM_EXTENT_INIT;
@@ -495,9 +495,9 @@ int vm_space_free
     }
 
     /* Save the old memory flags */
-    if(old_eflags != NULL)
+    if(old_prot != NULL)
     {
-        *old_eflags   = req_ext.eflags;
+        *old_prot   = req_ext.prot;
     }
 
 #if 0

@@ -82,7 +82,7 @@ static int vm_extent_alloc_tracking
     alloc_ext.base   = (orig_ext.base + orig_ext.length) - VM_SLOT_SIZE;
     alloc_ext.length = VM_SLOT_SIZE;
     alloc_ext.flags  = VM_SLOT_ALLOC_FLAGS;
-    alloc_ext.eflags = VM_ATTR_WRITABLE;
+    alloc_ext.prot   = VM_ATTR_WRITABLE;
 
     /* If the extent is either joinable or we will have place for it,
      * we will continue the execution. Otherwise we will exit.
@@ -134,7 +134,7 @@ static int vm_extent_alloc_tracking
                                       alloc_ext.base,
                                       alloc_ext.length,
                                       NULL,
-                                      alloc_ext.eflags,
+                                      alloc_ext.prot,
                                       0);
 
         pgmgr_invalidate(&vm_kernel_ctx.pgmgr,
@@ -249,10 +249,9 @@ static int vm_extent_release_tracking
     
     memcpy(&orig_extent, &src_extent, sizeof(vm_extent_t));
     memcpy(&free_extent, &src_extent, sizeof(vm_extent_t));
-    
-    free_extent       = src_extent;
+ 
     free_extent.flags = VM_HIGH_MEM;
-    free_extent.data  = NULL;
+    free_extent.prot  = 0;
 
     /* check if we have where to place the extent */
     free_track_avail = vm_extent_avail(lh);
@@ -867,7 +866,7 @@ int vm_extent_split
      * of what happens next 
      */
     dst->flags = src->flags;
-    dst->data = src->data;
+    dst->prot = src->prot;
 
     if(dst->length == 0)
     {
@@ -901,7 +900,7 @@ static int vm_extent_can_join
     const vm_extent_t *dest
 )
 {
-    if(src->eflags != dest->eflags)
+    if(src->prot != dest->prot)
     {
         return(0);
     }

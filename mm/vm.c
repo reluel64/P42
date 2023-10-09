@@ -48,11 +48,11 @@ void vm_ctx_show
 
             if(e->length != 0)
             {
-                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, 
+                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",i, 
                         e->base,
                         e->length, 
                         e->flags, 
-                        e->eflags);
+                        e->prot);
                         
                 free_len += e->length; 
             }
@@ -77,11 +77,11 @@ void vm_ctx_show
             e  = &hdr->extents[i];
             if(e->length != 0)
             {
-                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x EFLAGS %x\n",i, 
+                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",i, 
                         e->base,
                         e->length, 
                         e->flags, 
-                        e->eflags);
+                        e->prot);
 
                 alloc_len += e->length;
             }
@@ -109,46 +109,46 @@ static int vm_setup_protected_regions
             .base   =  (virt_addr_t)&_code,
             .length =  (virt_addr_t)&_code_end - (virt_addr_t)&_code,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
-            .eflags = VM_ATTR_EXECUTABLE
+            .prot   = VM_ATTR_EXECUTABLE
         },
         {
             .base   = (virt_addr_t)&_data,
             .length = (virt_addr_t)&_data_end -  (virt_addr_t)&_data,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
-            .eflags = VM_ATTR_WRITABLE
+            .prot   = VM_ATTR_WRITABLE
         },
         {
             .base   = (virt_addr_t)&_rodata,
             .length = (virt_addr_t)&_rodata_end - (virt_addr_t)&_rodata,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
-            .eflags = 0
+            .prot   = 0
         },
         {
             .base   = (virt_addr_t)&_bss,
             .length = (virt_addr_t)&_bss_end - (virt_addr_t)&_bss,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
-            .eflags = VM_ATTR_WRITABLE
+            .prot   = VM_ATTR_WRITABLE
         },
         /* Reserve remapping table */
         {
             .base   = REMAP_TABLE_VADDR,
             .length = REMAP_TABLE_SIZE,
             .flags  = VM_PERMANENT | VM_MAPPED | VM_LOCKED,
-            .eflags = VM_ATTR_WRITABLE,
+            .prot   = VM_ATTR_WRITABLE,
         },
         /* reserve head of tracking for free addresses */
         {
             .base   = (virt_addr_t)linked_list_first(&ctx->free_mem),
             .length = VM_SLOT_SIZE,
             .flags  = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
-            .eflags = VM_ATTR_WRITABLE,
+            .prot   = VM_ATTR_WRITABLE,
         },
         /* reserve tracking for allocated addresses */
         {
             .base   = (virt_addr_t)linked_list_first(&ctx->alloc_mem),
             .length = VM_SLOT_SIZE,
             .flags  = VM_PERMANENT | VM_ALLOCATED | VM_LOCKED,
-            .eflags = VM_ATTR_WRITABLE
+            .prot   = VM_ATTR_WRITABLE
         },
     };
 
@@ -162,7 +162,7 @@ static int vm_setup_protected_regions
                           re[i].base, 
                           re[i].length, 
                           re[i].flags, 
-                          re[i].eflags) == VM_INVALID_ADDRESS)
+                          re[i].prot) == VM_INVALID_ADDRESS)
         {
             kprintf("FAILED to reserve memory\n");
             return(VM_FAIL);
