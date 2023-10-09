@@ -62,7 +62,7 @@
 #define VM_EXTENT_INIT {.base   = 0, \
                         .length = 0, \
                         .flags  = 0, \
-                        .data   = 0  \
+                        .prot   = 0  \
                        }
 
 /* Virtual memory context */
@@ -91,17 +91,8 @@ typedef struct vm_extent_t
 {
     virt_addr_t base;
     virt_size_t length;
-    uint32_t    flags;
-
-    union 
-    {
-        /* In case the extent is representing allocated
-         * memory, then eflags would contain memory flags like
-         * protection type (R/W/X), caching type, etc.
-         */ 
-        void    *data;     /* extent specific data */
-        uint32_t eflags;   
-    };
+    uint32_t    flags; /* memory flags     */
+    uint32_t    prot;  /* protection flags */
 
 }vm_extent_t;
 

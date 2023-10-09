@@ -1443,7 +1443,7 @@ int pfmgr_init(void)
     phys_size_t     struct_size = 0;
     virt_size_t     size = 0;
     phys_addr_t     next_phys = 0;
-    pfmgr_range_header_t *hdr = VM_INVALID_ADDRESS;
+    pfmgr_range_header_t *hdr = (pfmgr_range_header_t*)VM_INVALID_ADDRESS;
     pfmgr_range_header_t temp_hdr;
 
 
@@ -1487,7 +1487,7 @@ int pfmgr_init(void)
 
     phys = base.physb_start;
     next_phys = phys;
-    hdr = VM_INVALID_ADDRESS;
+    hdr = (pfmgr_range_header_t*)VM_INVALID_ADDRESS;
 
     do
     {
@@ -1516,7 +1516,7 @@ int pfmgr_init(void)
                 return(-1);
             }
         }
-        else if(hdr != VM_INVALID_ADDRESS)
+        else if((virt_addr_t)hdr != VM_INVALID_ADDRESS)
         {
             /* advance manually */
             hdr = (pfmgr_range_header_t*)((uint8_t*)hdr + 
