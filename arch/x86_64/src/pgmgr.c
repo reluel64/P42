@@ -661,6 +661,8 @@ static int pgmgr_iterate_levels
 {
     pgmgr_level_data_t *ld        = NULL;
     pgmgr_ctx_t       *ctx        = NULL;
+    uint8_t            step_up    = 0;
+    
     pgmgr_iter_callback_data_t it_dat = {
                                             .entry = 0,
                                             .increment = 0,
@@ -814,9 +816,15 @@ static int pgmgr_iterate_levels
          * just step one level up by setting PGMGR_CB_STEP_UP in the cb_status
          */
 
-        if((((it_dat.next_vaddr >> it_dat.shift) & PGMGR_MAX_TABLE_INDEX) < 
-             (it_dat.entry)) || 
-            (ld->cb_status & PGMGR_CB_STEP_UP))
+        step_up = ((it_dat.next_vaddr >> it_dat.shift) & 
+                    PGMGR_MAX_TABLE_INDEX) < it_dat.entry;
+
+        if(step_up == 0)
+        {
+            step_up = (ld->cb_status & PGMGR_CB_STEP_UP);
+        }
+
+        if(step_up)
         {
             /* Calculate how much we need to go up */
             while(ld->curr_level < ctx->max_level)
