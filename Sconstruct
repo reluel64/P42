@@ -10,7 +10,7 @@ env=Environment(
                 LINKFLAGS = '-T ' + linker_script + ' -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
                 CC        = 'x86_64-elf-gcc',
                 CPPPATH   = [Dir("h"), Dir('acpica-unix2-20200326/include'),Dir('arch/x86_64/h')] ,
-                ASFLAGS   = '-felf64',
+                ASFLAGS   = '-felf64', 
                 tools     =['default', 'nasm'],
                )
 
@@ -21,7 +21,8 @@ build_scripts = [
                 'mm/Sconscript',
                 'utils/Sconscript',
                 'arch/x86_64/Sconscript',
-                'acpica-unix2-20200326/Sconscript'
+                'acpica-unix2-20200326/Sconscript',
+                'kernel/sched/Sconscript'
                 ]
 
 objects = SConscript(build_scripts, exports = 'env')
