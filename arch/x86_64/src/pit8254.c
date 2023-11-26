@@ -9,6 +9,7 @@
 #include <i8254.h>
 #include <liballoc.h>
 #include <platform.h>
+#include <utils.h>
 
 #define COMMAND_PORT 0x43
 #define CH0_PORT    0x40
