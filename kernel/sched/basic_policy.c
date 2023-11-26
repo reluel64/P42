@@ -89,11 +89,6 @@ static int basic_deq_thread
 
     thread = SCHED_NODE_TO_THREAD(th);
 
-    /* Mark the next thread as running */
-    __atomic_or_fetch(&thread->flags, 
-                      THREAD_RUNNING, 
-                      __ATOMIC_SEQ_CST);
-
     *next = thread;
 
     return(0);
@@ -112,8 +107,6 @@ static int basic_enq_thread
     basic_policy_t *policy = NULL;
 
     policy = unit->policy.pv;
-    
-    __atomic_and_fetch(&th->flags, ~THREAD_NEED_RESCHEDULE, __ATOMIC_SEQ_CST);
 
    state = __atomic_load_n(&th->flags, __ATOMIC_SEQ_CST) & THREAD_STATE_MASK;
 

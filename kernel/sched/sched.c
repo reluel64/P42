@@ -473,7 +473,6 @@ void sched_sleep
         return;
     }
 
-
     int_status = cpu_int_check();
    
     if(int_status)
@@ -506,6 +505,7 @@ void sched_sleep
                             &tm);
     }
 
+    /* ask the scheduler to put the thread to sleep */
     schedule();
     
     /* If the delay is wait forever, then we did not push anything so
@@ -743,6 +743,10 @@ static void sched_enq
         __atomic_and_fetch(&prev_thread->flags, 
                           ~THREAD_RUNNING, 
                           __ATOMIC_SEQ_CST);
+
+       __atomic_and_fetch(&prev_thread->flags, 
+                           ~THREAD_NEED_RESCHEDULE, 
+                           __ATOMIC_SEQ_CST);
     }
 
     if(unit->current)
