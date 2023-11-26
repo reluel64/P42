@@ -277,8 +277,6 @@ int sched_unit_init
         kprintf("no way to set the tick handler - no ticking by ourselves\n");
     }
 
-
-
     /* Allocate cleared memory for the unit */
     unit = kcalloc(sizeof(sched_exec_unit_t), 1);
 
@@ -286,6 +284,9 @@ int sched_unit_init
     {
         return(-1);
     }
+
+    /* Lock the unit list */
+    spinlock_write_lock_int(&units_lock, &int_flag);
 
     /* assign scheduler unit to the cpu */
     cpu->sched = unit;
@@ -315,13 +316,8 @@ int sched_unit_init
     
     unit->idle.unit = unit;
 
-    /* Add the unit to the list */
-    spinlock_write_lock_int(&units_lock, &int_flag);
-
+    /* Add the unit to the list*/
     linked_list_add_tail(&units, &unit->node);
-    
-    spinlock_write_unlock_int(&units_lock, int_flag);
-
 
     /* check if we have a thread to start at the end of the initalization */
     if(post_unit_init != NULL)
@@ -346,7 +342,9 @@ int sched_unit_init
     }
 
     unit->flags |= UNIT_START;
-
+    
+    spinlock_write_unlock_int(&units_lock, int_flag);
+    
     /* Enter the scheduler's code */
     schedule();
     
