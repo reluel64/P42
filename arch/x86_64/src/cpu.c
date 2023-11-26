@@ -549,7 +549,15 @@ static void cpu_ap_entry_point(void)
     device_t *timer = NULL;
     device_t *cpu_dev = NULL;
     cpu_t *cpu = NULL;
+    uint8_t int_status = 0;
 
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
+    
     cpu_id = cpu_id_get();
 
     /* Add cpu to the deivce manager */
@@ -651,8 +659,14 @@ static int pcpu_dev_init(device_t *dev)
     uint32_t               cpu_id         = 0;
     int                    no_apic        = 0;
     int                    status         = 0;
+    uint8_t                int_status     = 0;
 
-    cpu_int_lock();
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
 
     kprintf("INITIALIZING CPU DEVICE\n");
     
@@ -666,7 +680,11 @@ static int pcpu_dev_init(device_t *dev)
 
     if(cpu == NULL)
     {
-        cpu_int_unlock();
+        if(int_status)
+        {
+            cpu_int_unlock();
+        }
+
         return(-1);
     }
 
@@ -675,7 +693,11 @@ static int pcpu_dev_init(device_t *dev)
     if(pcpu == NULL)
     {
         kfree(cpu);
-        cpu_int_unlock();
+
+        if(int_status)
+        {
+            cpu_int_unlock();
+        }
         return(-1);
     }
 
@@ -725,13 +747,16 @@ static int pcpu_dev_init(device_t *dev)
     
             if(devmgr_dev_add(apic_timer_dev, apic_dev))
             {
-                devmgr_dev_delete(&apic_timer_dev);
+                devmgr_dev_delete(apic_timer_dev);
                 status = -1;
             }
         }
     }
 
-    cpu_int_unlock();
+    if(int_status)
+    {
+        cpu_int_unlock();
+    }
     
     return(status);
 }
@@ -760,7 +785,15 @@ static int pcpu_drv_init(driver_t *drv)
     cpu_platform_driver_t *cpu_drv   = NULL;
     device_t              *timer     = NULL;
     cpu_t                 *cpu       = NULL;
-    static sched_thread_t init_th;
+    static sched_thread_t init_th    = {0};
+    uint8_t               int_status = 0;
+
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
 
     spinlock_init(&lock);
 
@@ -773,7 +806,13 @@ static int pcpu_drv_init(driver_t *drv)
 
     if(cpu_drv->idt == (idt64_entry_t*)VM_INVALID_ADDRESS)
     {
+        if(int_status)
+        {
+            cpu_int_unlock();
+        }
+
         kprintf("Failed to allocate IDT\n");
+
         kfree(cpu_drv);
         return(-1);
     }
@@ -802,6 +841,7 @@ static int pcpu_drv_init(driver_t *drv)
 
         if(devmgr_dev_add(cpu_bsp, NULL))
         {
+            cpu_int_unlock();
             return(-1);
         }
 
@@ -832,8 +872,17 @@ static int pcpu_drv_init(driver_t *drv)
         
         if(sched_unit_init(timer, cpu, &init_th))
         {
+            if(int_status)
+            {
+                cpu_int_unlock();
+            }
+
             return(-1);
         }
+    }
+    if(int_status)
+    {
+        cpu_int_unlock();
     }
 
     return(0);

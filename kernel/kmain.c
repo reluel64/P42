@@ -76,8 +76,6 @@ extern int devmgr_dev_remove
     uint8_t remove_children
 );
 
-extern int debug_pgmgr = 0;
-
 void *kmain_sys_init
 (
     void *arg
@@ -147,7 +145,12 @@ void *kmain_sys_init
   
     platform_init();
 
-    
+    while(1)
+    {
+        kprintf("HELLO\n");
+        sched_sleep(1000);
+        
+    }
 
 
     mtx_init(&mtx,MUTEX_FIFO);
@@ -186,9 +189,9 @@ void *kmain_sys_init
     #if 1
     while(loop < 10)
     {
-        kprintf("LOOP START %d\n", loop);
+        kprintf("LOOP START %d INT STATUS %d\n", loop, cpu_int_check());
   //   kprintf("ALLOC\n");
-  debug_pgmgr = 1;
+  
         virt_addr_t v = vm_alloc(NULL,VM_BASE_AUTO, alloc, 0, VM_ATTR_WRITABLE);
     //    kprintf("ALLOC DONE\n");
      //   kprintf("ALLOC DONE\n");
