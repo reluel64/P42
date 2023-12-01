@@ -20,11 +20,11 @@ static void context_user_setup
     virt_addr_t *rsp0 = NULL;
 
     user_entry_pt = th->entry_point;
-    rsp0 = ((virt_addr_t*)th->context)[RSP0_INDEX];
+    rsp0 = (virt_addr_t*)((virt_addr_t*)th->context)[RSP0_INDEX];
 
     /* assemble stack to jump to user space */
 
-    rsp0[0] = user_entry_pt;
+    rsp0[0] = (virt_addr_t)user_entry_pt;
     rsp0[1] = ((virt_addr_t*)th->context)[CS_INDEX];
     rsp0[3] = ((virt_addr_t*)th->context)[RSP_INDEX];
     rsp0[4] = ((virt_addr_t*)th->context)[DS_INDEX];
