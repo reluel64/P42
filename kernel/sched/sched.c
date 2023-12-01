@@ -254,7 +254,8 @@ int sched_unit_init
 
 
     kprintf("================================================\n");
-    kprintf("Initializing Scheduler for CPU %d\n",cpu->cpu_id);
+    kprintf("Initializing Scheduler for CPU %d Interrupts %d\n",
+            cpu->cpu_id, cpu_int_check());
 
     if(cpu == NULL)
     {
@@ -285,9 +286,6 @@ int sched_unit_init
         return(-1);
     }
 
-    /* Lock the unit list */
-    spinlock_write_lock_int(&units_lock, &int_flag);
-
     /* assign scheduler unit to the cpu */
     cpu->sched = unit;
 
@@ -316,8 +314,13 @@ int sched_unit_init
     
     unit->idle.unit = unit;
 
-    /* Add the unit to the list*/
+    /* Add the unit to the list */
+    spinlock_write_lock_int(&units_lock, &int_flag);
+
     linked_list_add_tail(&units, &unit->node);
+    
+    spinlock_write_unlock_int(&units_lock, int_flag);
+
 
     /* check if we have a thread to start at the end of the initalization */
     if(post_unit_init != NULL)
@@ -342,9 +345,7 @@ int sched_unit_init
     }
 
     unit->flags |= UNIT_START;
-    
-    spinlock_write_unlock_int(&units_lock, int_flag);
-    
+
     /* Enter the scheduler's code */
     schedule();
     
