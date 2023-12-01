@@ -530,9 +530,12 @@ static int vm_space_undo
         return(-1);
     }
 
-    if(ext_mid->base + ext_mid->length > ext_right->base)
+    if(ext_right->length > 0)
     {
-        return(-1);
+        if(ext_mid->base + ext_mid->length > ext_right->base)
+        {
+            return(-1);
+        }
     }
     
     status = vm_extent_extract(undo_to, 
@@ -544,13 +547,20 @@ static int vm_space_undo
         kprintf("Left extent is not here....\n");
     }
     
-    status = vm_extent_extract(undo_to,
-                               undo_to_ext_cnt,
-                               ext_right);
-
-    if(status < 0)
+    /* don't take into account if the right extent length is 0
+     * This could happen in scenarios where we split an extent
+     * in half and we take the entire right part
+     */
+    if(ext_right->length > 0)
     {
-        kprintf("Right extent is not here\n");
+        status = vm_extent_extract(undo_to,
+                                   undo_to_ext_cnt,
+                                   ext_right);
+
+        if(status < 0)
+        {
+            kprintf("Right extent is not here\n");
+        }
     }
 
     status = vm_extent_extract(undo_from,
