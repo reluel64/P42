@@ -153,16 +153,6 @@ sched_thread_t *sched_thread_self
     void
 );
 
-void sched_unblock_thread
-(
-    sched_thread_t *th
-);
-
-void sched_block_thread
-(
-    sched_thread_t *th
-);
-
 void sched_wake_thread
 (
     sched_thread_t *th

@@ -359,56 +359,6 @@ void sched_yield(void)
    schedule();
 }
 
-/* sched_unblock_thread - unblock thread */
-
-void sched_unblock_thread
-(
-    sched_thread_t *th
-)
-{
-    uint8_t int_flag = 0;
-
-    spinlock_lock_int(&th->lock, &int_flag);
-
-    /* clear the blocked flag */
-    __atomic_and_fetch(&th->flags, ~THREAD_BLOCKED, __ATOMIC_SEQ_CST);
-    
-    /* mark thread as ready */
-    __atomic_or_fetch(&th->flags, (THREAD_READY), __ATOMIC_SEQ_CST);
-
-    /* signal the unit that there are threads that need to be unblocked */
-    __atomic_or_fetch(&th->unit->flags, 
-                      UNIT_THREADS_UNBLOCK, 
-                      __ATOMIC_SEQ_CST);
-
-    spinlock_unlock_int(&th->lock, int_flag);
-}
-
-/* sched_block_thread -  blocks a thread */
-
-void sched_block_thread
-(
-    sched_thread_t *th
-)
-{
-    uint8_t int_flag = 0;
-
-    if(th != NULL)
-    {
-        spinlock_lock_int(&th->lock, &int_flag);
-
-        /* set the blocked thread */
-        __atomic_or_fetch(&th->flags, THREAD_BLOCKED, __ATOMIC_SEQ_CST);
-
-        /* thread not running and not ready */
-        __atomic_and_fetch(&th->flags, 
-                            ~(THREAD_RUNNING | THREAD_READY), 
-                            __ATOMIC_SEQ_CST);
-
-        spinlock_unlock_int(&th->lock, int_flag);
-    }
-}
-
 void sched_wake_thread
 (
     sched_thread_t *th
