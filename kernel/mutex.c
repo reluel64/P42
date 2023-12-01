@@ -64,7 +64,7 @@ int mtx_acquire
     uint8_t         int_state    = 0;
     void           *expected     = NULL;
     sched_thread_t *thread       = NULL;
-    uint32_t        block_flags  = 0;
+    uint8_t         looped       = 0;
     list_node_t     *iter_node   = NULL;
     sched_thread_t  *iter_thread = NULL;
     
@@ -116,15 +116,21 @@ int mtx_acquire
             return(0);
         }
 
-        /* if we the thread has the sleeping flag set,
-         * then we already timed out so we will just exit
+        /* if we looped already, then we timed out in case we had a timer
+         * therefore, just exit
          */
-
-        if(block_flags == THREAD_SLEEPING)
+        if(looped > 0)
         {
-            /* remove the thread from the pendq */
             spinlock_unlock_int(&mtx->lock, int_state);
             return(-1);
+        }
+
+        /* if we are not waiting forever, set the looped flag so
+         * we are  exiting on the next iteration
+         */
+        if(wait_ms != WAIT_FOREVER)
+        {
+            looped = 1;
         }
 
         if(wait_ms == NO_WAIT)
@@ -169,6 +175,7 @@ int mtx_acquire
                 linked_list_add_tail(&mtx->pendq, &thread->pend_node);
             }
         }
+
         spinlock_unlock_int(&mtx->lock, int_state);
         
         /* sleep */

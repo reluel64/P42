@@ -44,7 +44,7 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
 {
     uint8_t         int_state = 0;
     sched_thread_t *thread = NULL;
-    uint32_t        block_flags = 0;
+    uint32_t        looped = 0;
 
 
     spinlock_lock_int(&sem->lock, &int_state);
@@ -65,26 +65,27 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
     /* We will be able to acquire the semaphore here */
     while(__atomic_load_n(&sem->count, __ATOMIC_SEQ_CST) < 1)
     {
-        
-        if(block_flags & THREAD_SLEEPING)
+        /* if we looped already, then we timed out in case we had a timer
+         * therefore, just exit
+         */
+        if(looped > 0)
         {
             spinlock_unlock_int(&sem->lock, int_state);
             return(-1);
+        }
+
+        /* if we are not waiting forever, set the looped flag so
+         * we are  exiting on the next iteration
+         */
+        if(wait_ms != WAIT_FOREVER)
+        {
+            looped = 1;
         }
 
         if(wait_ms == NO_WAIT)
         {
             spinlock_unlock_int(&sem->lock, int_state);
             return(-1);
-        }
-
-        if(wait_ms != WAIT_FOREVER)
-        {
-            block_flags = THREAD_SLEEPING;
-        }
-        else
-        {
-            block_flags = THREAD_BLOCKED;
         }
 
         /* Add it to the semaphore pend queue */
