@@ -3,10 +3,10 @@
 
 int vm_extent_split
 (
-    vm_extent_t *src,
-    const virt_addr_t virt,
-    const virt_size_t len,
-    vm_extent_t *dst
+    vm_extent_t *ext_left,
+    const virt_addr_t virt_mid,
+    const virt_size_t len_mid,
+    vm_extent_t *ext_right
 );
 
 int vm_extent_join

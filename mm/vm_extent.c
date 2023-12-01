@@ -837,50 +837,50 @@ int vm_extent_extract
 
 int vm_extent_split
 (
-    vm_extent_t *src,
-    const virt_addr_t virt,
-    const virt_size_t len,
-    vm_extent_t *dst
+    vm_extent_t *ext_left,
+    const virt_addr_t virt_mid,
+    const virt_size_t len_mid,
+    vm_extent_t *ext_right
 )
 {
 
-    dst->base = 0;
-    dst->length = 0;
+    ext_right->base = 0;
+    ext_right->length = 0;
 
-    if(!vm_is_in_range(src->base, 
-                       src->length, 
-                       virt, 
-                       len))
+    if(!vm_is_in_range(ext_left->base, 
+                       ext_left->length, 
+                       virt_mid, 
+                       len_mid))
     {
         return(-1);
     }
     
-    dst->base = (virt + len) ;
+    ext_right->base = (virt_mid + len_mid) ;
 
-    dst->length  = (src->base + src->length)  - 
-                   (dst->base);
+    ext_right->length  = (ext_left->base + ext_left->length)  - 
+                   (ext_right->base);
 
-    src->length  = virt - (src->base);
+    ext_left->length  = virt_mid - (ext_left->base);
 
     /* make sure the flags are the same regardless
      * of what happens next 
      */
-    dst->flags = src->flags;
-    dst->prot = src->prot;
+    ext_right->flags = ext_left->flags;
+    ext_right->prot = ext_left->prot;
 
-    if(dst->length == 0)
+    if(ext_right->length == 0)
     {
-        dst->base = 0;
+        ext_right->base = 0;
         return(0);
     }
 
-    if(src->length == 0)
+    if(ext_left->length == 0)
     {
-        src->base = dst->base;
-        src->length = dst->length;
+        ext_left->base = ext_right->base;
+        ext_left->length = ext_right->length;
 
-        dst->base = 0;
-        dst->length = 0;
+        ext_right->base = 0;
+        ext_right->length = 0;
 
         return(0);
     }
