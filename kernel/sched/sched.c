@@ -137,9 +137,12 @@ sched_thread_t *sched_thread_self(void)
 
     iflag = cpu_int_check();
 
-    /* lock the interrupts to prevent rescheduling */
-    cpu_int_lock();
-
+    if(iflag)
+    {
+        /* lock the interrupts to prevent rescheduling */
+        cpu_int_lock();
+    }
+    
     cpu = cpu_current_get();
 
     if(cpu == NULL)
@@ -421,14 +424,7 @@ void sched_sleep
         kprintf("NO DELAY\n");
         return;
     }
-
-    int_status = cpu_int_check();
-   
-    if(int_status)
-    {
-        cpu_int_lock();
-    }
-
+    
     self = sched_thread_self();
 
     spinlock_lock_int(&self->lock, &int_status);
@@ -690,12 +686,8 @@ static void sched_enq
     {
         /* Clear thread's running flag */
         __atomic_and_fetch(&prev_thread->flags, 
-                          ~THREAD_RUNNING, 
+                          ~(THREAD_RUNNING | THREAD_NEED_RESCHEDULE), 
                           __ATOMIC_SEQ_CST);
-
-       __atomic_and_fetch(&prev_thread->flags, 
-                           ~THREAD_NEED_RESCHEDULE, 
-                           __ATOMIC_SEQ_CST);
     }
 
     if(unit->current)
