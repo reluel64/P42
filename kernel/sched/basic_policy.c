@@ -7,7 +7,6 @@ typedef struct basic_policy_t
 {
     list_head_t ready_q;
     list_head_t sleep_q;
-    list_head_t block_q;
 }basic_policy_t;
 
 
@@ -23,33 +22,6 @@ static int basic_deq_thread
     basic_policy_t *policy = NULL;
 
     policy = unit->policy.pv;
-
-
-    if(__atomic_fetch_and(&unit->flags, 
-                          ~UNIT_THREADS_UNBLOCK, 
-                         __ATOMIC_SEQ_CST) & 
-                         UNIT_THREADS_UNBLOCK)
-    {
-
-        /* Check blocked threads */
-        th = linked_list_first(&policy->block_q);
-
-        while(th)
-        {
-            next_th = linked_list_next(th);
-
-            thread = SCHED_NODE_TO_THREAD(th);
-
-            if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
-                THREAD_BLOCKED))
-            {
-                linked_list_remove(&policy->block_q, th);
-                linked_list_add_tail(&policy->ready_q, th);
-            }
-
-            th = next_th;
-        }
-    }
     
     /* Check sleeping threads */
 
@@ -112,10 +84,6 @@ static int basic_enq_thread
 
     switch(state)
     {
-        case THREAD_BLOCKED:
-            lh = &policy->block_q;
-            break;
-
         case THREAD_SLEEPING:
             lh = &policy->sleep_q;
             break;
@@ -167,7 +135,6 @@ static int basic_init
     /* initialize queues */
     linked_list_init(&bp->ready_q);
     linked_list_init(&bp->sleep_q);
-    linked_list_init(&bp->block_q);
 
     unit->policy.pv = bp;
 
