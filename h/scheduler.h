@@ -7,12 +7,11 @@
 
 #define THREAD_READY            (1 << 0)
 #define THREAD_RUNNING          (1 << 1)
-#define THREAD_BLOCKED          (1 << 2)
-#define THREAD_SLEEPING         (1 << 3)
-#define THREAD_DEAD             (1 << 4)
-#define THREAD_ALLOCATED        (1 << 5)
-#define THREAD_NEED_RESCHEDULE  (1 << 6)
-#define THREAD_WOKE_BY_TIMER    (1 << 7)
+#define THREAD_SLEEPING         (1 << 2)
+#define THREAD_DEAD             (1 << 3)
+#define THREAD_ALLOCATED        (1 << 4)
+#define THREAD_NEED_RESCHEDULE  (1 << 5)
+#define THREAD_WOKE_BY_TIMER    (1 << 6)
 #define CPU_AFFINITY_VECTOR     (0x8)
 
 #define UNIT_THREADS_WAKE        (1 << 0)
@@ -23,7 +22,6 @@
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
-                          THREAD_BLOCKED  | \
                           THREAD_SLEEPING)
 
 #define SCHED_MAX_PRIORITY 255
@@ -158,7 +156,10 @@ void sched_wake_thread
     sched_thread_t *th
 );
 
-void sched_yield(void);
+void sched_yield
+(
+    void
+);
 
 void sched_sleep
 (
