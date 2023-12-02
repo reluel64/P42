@@ -172,60 +172,59 @@ void isr_dispatcher
     int               int_status = 0;
     isr_info_t        inf = {.cpu_id = 0, .iframe = 0};
   
-    if(index >= MAX_HANDLERS)
+    if(index < MAX_HANDLERS)
     {
-        return;
-    }
-  
-    int_lst = &handlers[index];
+        
+        int_lst = &handlers[index];
 
-    inf.iframe = iframe;
-    inf.cpu_id = cpu_id_get();
-    cpu        = cpu_current_get();
+        inf.iframe = iframe;
+        inf.cpu_id = cpu_id_get();
+        cpu        = cpu_current_get();
 
-    /* gain exclusive access to the list */
-    spinlock_read_lock(&int_lst->lock);
+        /* gain exclusive access to the list */
+        spinlock_read_lock(&int_lst->lock);
 
-    node = linked_list_first(&int_lst->head);
+        node = linked_list_first(&int_lst->head);
 
-    while(node)
-    {
-        intr = (isr_t*)node;
-
-        if(intr->ih)
+        while(node)
         {
-            intr->ih(intr->pv, &inf);
+            intr = (isr_t*)node;
+
+            if(intr->ih)
+            {
+                intr->ih(intr->pv, &inf);
+            }
+
+            node = linked_list_next(node);
         }
 
-        node = linked_list_next(node);
-    }
+        spinlock_read_unlock(&int_lst->lock);
 
-    spinlock_read_unlock(&int_lst->lock);
+        spinlock_read_lock(&eoi.lock);
 
-    spinlock_read_lock(&eoi.lock);
+        /* Send EOIs */
+        node = linked_list_first(&eoi.head);
 
-    /* Send EOIs */
-    node = linked_list_first(&eoi.head);
-
-    while(node)
-    {
-        intr = (isr_t*)node;
-
-        if(intr->ih)
+        while(node)
         {
-            intr->ih(intr->pv, &inf);
+            intr = (isr_t*)node;
+
+            if(intr->ih)
+            {
+                intr->ih(intr->pv, &inf);
+            }
+            node = linked_list_next(node);
         }
-        node = linked_list_next(node);
-    }
 
-    spinlock_read_unlock(&eoi.lock);
+        spinlock_read_unlock(&eoi.lock);
 
-    /* check if we need to reschedule */
-    if(cpu && cpu->sched)
-    {
-        if(sched_need_resched(cpu->sched))
+        /* check if we need to reschedule */
+        if(cpu && cpu->sched)
         {
-            schedule();
+            if(sched_need_resched(cpu->sched))
+            {
+                schedule();
+            }
         }
     }
 }
