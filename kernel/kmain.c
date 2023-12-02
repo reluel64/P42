@@ -25,48 +25,27 @@
 #include <i8254.h>
 #include <io.h>
 
-static sched_thread_t th[4];
-
-static mutex_t mtx;
+sem_t *kb_sem = NULL;
 static void test_thread(void *pv)
 {
  
  
     while(1)
     {
-       
-       mtx_acquire(&mtx, -1);
-
-
-       kprintf("THREAD ID %x - entry point %s\n",sched_thread_self(), __FUNCTION__);
-        sched_sleep(100);
-      
-     
-        mtx_release(&mtx);
-
-        
+       sched_sleep(1000);        
     }
-}
-
-static int pfmgr_alloc_pf_cb
-(
-    pfmgr_cb_data_t *cb_dat,
-    void *pv
-)
-{
-    kprintf("ADDRESS 0x%x\n", cb_dat->phys_base);
-    cb_dat->used_bytes+=0x1000;
-    return(1);
 }
 
 static void *test_waker(void *th)
 {
     while(1)
     {
-        mtx_acquire(&mtx, -1);
-        kprintf("THREAD ID %x - entry point %s\n",sched_thread_self(), __FUNCTION__);
-        sched_sleep(1000);
-        mtx_release(&mtx);
+        if(sem_acquire(kb_sem, 1000) == 0)
+        {
+            kprintf("DATA 0x60 %x DATA 0x64 %x\n",__inb(0x60), __inb(0x64));
+            
+        }
+        kprintf("Sem woken up\n");
     }
 }
 
@@ -81,164 +60,18 @@ void *kmain_sys_init
     void *arg
 )
 {
-
-    device_t *root_parent = NULL;
-    device_t *parent = NULL;
-    device_t *child = NULL;
-
-
-    devmgr_dev_create(&parent);
-
-    devmgr_dev_name_set(parent,"1");
-    devmgr_dev_type_set(parent,"1");
-
-     devmgr_dev_add(parent,NULL);
-
-    root_parent = parent;
-
-    devmgr_dev_create(&child);
-    devmgr_dev_name_set(child,"1-1");
-    devmgr_dev_type_set(child,"1-1");
-    devmgr_dev_add(child,parent);
-
-    child = NULL;
-    devmgr_dev_create(&child);
-    devmgr_dev_name_set(child,"1-2");
-    devmgr_dev_type_set(child,"1-2");
-    devmgr_dev_add(child,parent);
-
-
-    child = NULL;
-    devmgr_dev_create(&child);
-    devmgr_dev_name_set(child,"1-3");
-    devmgr_dev_type_set(child,"1-3");
-    devmgr_dev_add(child,parent);
-
-    parent = devmgr_dev_get_by_name("1-2", 0);
-
-
-
-    child = NULL;
-    devmgr_dev_create(&child);
-    devmgr_dev_name_set(child,"1-2-1");
-    devmgr_dev_type_set(child,"1-2-1");
-    devmgr_dev_add(child,parent);
-
-    parent=child;
-
-    child = NULL;
-    devmgr_dev_create(&child);
-    devmgr_dev_name_set(child,"1-2-1-1");
-    devmgr_dev_type_set(child,"1-2-1-1");
-    devmgr_dev_add(child,parent);
-
-
-    child = NULL;
-    devmgr_dev_create(&child);
-    devmgr_dev_name_set(child,"1-2-1-2");
-    devmgr_dev_type_set(child,"1-2-1-2");
-    devmgr_dev_add(child,parent);
-
-   
-
+    static sched_thread_t waker ={0};
+    static sched_thread_t waker2 = {0};
     kprintf("Platform init\n");
   
     platform_init();
 
-    while(1)
-    {
-        kprintf("HELLO\n");
-        sched_sleep(1000);
-        
-    }
-
-
-    mtx_init(&mtx,MUTEX_FIFO);
-
-    char bbb[] = "A\nl\ni\nn\na\n" ;
-    
-    int fd = -1;
-
-    fd = open("vga", 0, 0);
-
-    write(fd,bbb,strlen(bbb));
-
-    static sched_thread_t waker;
-
+    kb_sem = sem_create(0, 1);
     kthread_create_static(&waker, test_waker, NULL, 0x1000, 100, NULL);
+  //  kthread_create_static(&waker2, test_thread, NULL, 0x1000, 100, NULL);
     thread_start(&waker);
-    kprintf("HELLO\n");
-   // devmgr_show_devices();
-  //       cpu_t *c = cpu_current_get();
-        
-        devmgr_dev_remove(root_parent, 1);
-   //devmgr_show_devices();
-#if 0
-//kprintf("++++++++++++++++++++++++++++++++++++++++++++\n");
-    for(int i = 0; i < sizeof(th) / sizeof(sched_thread_t);i++)
-    {
-        kthread_create_static(&th[i],(th_entry_point_t)test_thread, (void*)(uint64_t)i, 0x1000, 200, NULL);
-
-        thread_start(&th[i]);
-    }
-    #endif  
-   
-
-    virt_size_t alloc = 15360ull * 1024ull * 1024ull;
-    size_t loop = 0;
-    #if 1
-    while(loop < 10)
-    {
-        kprintf("LOOP START %d INT STATUS %d\n", loop, cpu_int_check());
-  //   kprintf("ALLOC\n");
-  
-        virt_addr_t v = vm_alloc(NULL,VM_BASE_AUTO, alloc, 0, VM_ATTR_WRITABLE);
-    //    kprintf("ALLOC DONE\n");
-     //   kprintf("ALLOC DONE\n");
-       // kprintf("ALLOC DONE\n");
-  //  kprintf("V = %x\n",v);
-    /* mark the first guard page as read-only */
-
-    if(v != VM_INVALID_ADDRESS)
-    {
-     //  kprintf("FREEING\n");
-        vm_free(NULL, v, alloc);
-    //    kprintf("FREE DONE\n");
-  #if 0
-    vm_change_attr(NULL, 
-                  v,
-                  PAGE_SIZE, 0, 
-                  VM_ATTR_WRITABLE, 
-                  NULL);
-
-    /* mark the last guard page as read only */
-    vm_change_attr(NULL, 
-                  v + alloc - PAGE_SIZE,
-                  PAGE_SIZE, 0, 
-                  VM_ATTR_WRITABLE, 
-                  NULL);
-                  #endif
-    }
-    else
-    {
-        break;
-    }
-//kprintf("ATTRIB CHANGE DONE\n");
-        // vm_free(NULL, v, alloc);
-      //   kprintf("LOOP END %d\n", loop);
-         loop++;
-         // sched_sleep(1000);
-
-    }
-    vm_ctx_show(NULL);
-    pfmgr_show_free_memory();
-    kprintf("ENDED\n");
-
-
-
-
-
-    #endif
+   // thread_start(&waker2);
+    
 }
 
 /* Kernel entry point */
