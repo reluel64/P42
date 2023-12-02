@@ -207,6 +207,8 @@ int platform_pre_init(void)
     return(status);
 }
 
+extern int i8042_register(void);
+
 int platform_early_init(void)
 {
     device_t *sys_timer = NULL;
@@ -245,6 +247,8 @@ int platform_early_init(void)
    
     /* Register and initialize APIC TIMER */
     apic_timer_register();
+
+    i8042_register();
 
     vga_init();
 
