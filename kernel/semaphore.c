@@ -99,6 +99,8 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
 
         /* once the thread is woken up, it would lock again the semaphore */
         spinlock_lock_int(&sem->lock, &int_state);
+
+        /* remove the thread from the pend queue */
         linked_list_remove(&sem->pendq, &thread->pend_node);
     }
     
