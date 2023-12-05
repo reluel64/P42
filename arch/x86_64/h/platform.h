@@ -31,7 +31,7 @@ extern virt_addr_t kstack_top;
 #define PLATFORM_LOCAL_TIMER_VECTOR    (238)
 #define PLATFORM_PG_FAULT_VECTOR       (14)
 
-#define IRQ0                      (0x20)
+#define IRQ(num)   (num) + 0x20
 
 #define KMAIN_SYS_INIT_STACK_SIZE      (0x1000)
 

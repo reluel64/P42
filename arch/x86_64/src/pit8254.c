@@ -98,7 +98,7 @@ static int pit8254_drv_init(driver_t *drv)
 
             isr_install(pit8254_irq_handler, 
                         dev, 
-                        IRQ0, 
+                        IRQ(0), 
                         0, 
                         &pit_dev->timer_isr);
         }

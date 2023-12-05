@@ -432,7 +432,7 @@ static int ioapic_device_init
 
     for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
     {
-        tbl[i].intvec += IRQ0;
+        tbl[i].intvec += IRQ(0);
         ioapic_write(dev, 0x10 + i * 2, tbl + i, sizeof(ioredtbl_t));
     }
 
@@ -460,7 +460,7 @@ static int ioapic_toggle_mask
         return(-1);
     }
 
-    irq += IRQ0;
+    irq += IRQ(0);
 
 
     for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
