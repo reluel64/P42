@@ -3,6 +3,7 @@
 #include <acpi.h>
 #include <port.h>
 #include <isr.h>
+#include <platform.h>
 
 #define IO_CONTROLLER "ioctrl"
 #define I8042_DEV_NAME "i8042"
@@ -21,31 +22,44 @@
 
 typedef struct
 {
-    uint8_t two_ctrl;
+    isr_t kbd_isr;
+    isr_t mse_isr;
 }i8042_dev_t;
 
 
-static int i8042_irq(void *pv, isr_info_t *isr_inf)
+static int i8042_kbd_irq(void *pv, isr_info_t *isr_inf)
 {
     __inb(I8042_DATA_PORT);
-    kprintf("INTERRUPT\n");
+    kprintf("%s %s %d\n", __FILE__,__FUNCTION__,__LINE__);
 }
 
+static int i8042_mse_irq(void *pv, isr_info_t *isr_inf)
+{
+    __inb(I8042_DATA_PORT);
+    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+}
 
 static int i8042_dev_init(device_t *dev)
 {
+    static  i8042_dev_t i8042 = {0};
     uint8_t status_reg    = 0;
     uint8_t config_byte   = 0;
     uint8_t two_port_ctrl = 0;
     uint8_t ctrl_test     = 0;
     uint8_t port_test     = 0;
-    isr_install(i8042_irq, dev, 33, 0, NULL);
+
+    devmgr_dev_data_set(dev, &i8042);
+
+    /* install ISRs now to handle any potential arrival of data */
+    isr_install(i8042_kbd_irq, dev, IRQ(1), 0, &i8042.kbd_isr);
+    isr_install(i8042_mse_irq, dev, IRQ(12), 0, &i8042.mse_isr);
     /* flush the output buffer */
 
     do
     {
         __inb(I8042_DATA_PORT);
         status_reg = __inb(I8042_CMD_STS_PORT);
+
     }while(status_reg & 0x1);
 
     /* issue read the controller conf byte */
@@ -55,6 +69,7 @@ static int i8042_dev_init(device_t *dev)
     do
     {
         status_reg = __inb(I8042_CMD_STS_PORT);
+
     }while((status_reg & 0x1) == 0);
 
 
@@ -79,6 +94,10 @@ static int i8042_dev_init(device_t *dev)
 
     if(ctrl_test != 0x55)
     {
+        /* if the controller failed, remove the ISRs */
+        isr_uninstall(&i8042.kbd_isr, 0);
+        isr_uninstall(&i8042.mse_isr, 0);
+
         kprintf("CTRL test failed\n");
         return(-1);
     }
@@ -196,7 +215,6 @@ static int i8042_probe(device_t *dev)
     {
         if(fadt->BootFlags & ACPI_FADT_8042)
         {
-            
             status = 0;
         }
     }
