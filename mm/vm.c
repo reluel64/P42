@@ -472,7 +472,6 @@ virt_addr_t vm_alloc
     virt_size_t out_len = 0;
     
     int status = 0;
-    uint8_t int_status = 0;
 
     if(((virt != VM_BASE_AUTO) && (virt % PAGE_SIZE)) || 
         (len % PAGE_SIZE))
@@ -487,7 +486,7 @@ virt_addr_t vm_alloc
 
     alloc_flags = (alloc_flags & ~VM_MEM_TYPE_MASK) | VM_ALLOCATED;
 
-    spinlock_lock_int(&ctx->lock, &int_status);
+    spinlock_lock(&ctx->lock);
 
     /* Allocate virtual space */    
     space_addr = vm_space_alloc(ctx, 
@@ -498,7 +497,7 @@ virt_addr_t vm_alloc
     
     if(space_addr == VM_INVALID_ADDRESS)
     {
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock(&ctx->lock);
         return(VM_INVALID_ADDRESS);
     }
       
@@ -579,7 +578,7 @@ virt_addr_t vm_alloc
         vm_space_free(ctx, space_addr, len, NULL, NULL);
     }
 
-    spinlock_unlock_int(&ctx->lock, int_status);    
+    spinlock_unlock(&ctx->lock);    
 
     return(ret_address);
 }
@@ -615,7 +614,7 @@ virt_addr_t vm_map
 
     /* Allocate virtual memory */
 
-    spinlock_lock_int(&ctx->lock, &int_status);
+    spinlock_lock(&ctx->lock);
 
     space_addr = vm_space_alloc(ctx, 
                                virt, 
@@ -627,7 +626,7 @@ virt_addr_t vm_map
 
     if(space_addr == VM_INVALID_ADDRESS)
     {
-        spinlock_unlock_int(&ctx->lock, int_status);
+        spinlock_unlock(&ctx->lock);
         return(VM_INVALID_ADDRESS);
     }
 
@@ -704,7 +703,7 @@ virt_addr_t vm_map
         vm_space_free(ctx, space_addr, len, NULL, NULL);
     }
 
-    spinlock_unlock_int(&ctx->lock, int_status);
+    spinlock_unlock(&ctx->lock);
 
     return(ret_address);
 }
@@ -744,7 +743,7 @@ int vm_change_attr
      * until we change the vm space completely
      */ 
 
-    spinlock_lock_int(&ctx->lock, &int_flags);
+    spinlock_lock(&ctx->lock);
 
     /* release the space that we want to change attributes to */
     status = vm_space_free(ctx, 
@@ -758,7 +757,7 @@ int vm_change_attr
 
     if(status != 0)
     {
-        spinlock_unlock_int(&ctx->lock, int_flags);
+        spinlock_unlock(&ctx->lock);
         return(VM_FAIL);
     }
 
@@ -829,7 +828,7 @@ int vm_change_attr
         }
     }
 
-     spinlock_unlock_int(&ctx->lock, int_flags);
+     spinlock_unlock(&ctx->lock);
 
      /* if we're ok and the user wants the old flags, give it to them */
     if((status == VM_OK) && (old_mem_flags != NULL))
@@ -864,14 +863,14 @@ int vm_unmap
     }
 
     /* Lock the VM contexxt */
-    spinlock_lock_int(&ctx->lock, &int_flags);
+    spinlock_lock(&ctx->lock);
 
     status =  vm_space_free(ctx, vaddr, len, NULL, NULL);
     
     if(status != VM_OK)
     {
         kprintf("%s %d ERROR\n",__FUNCTION__,__LINE__);
-        spinlock_unlock_int(&ctx->lock, int_flags);
+        spinlock_unlock(&ctx->lock);
         while(1);
     }
     
@@ -893,7 +892,7 @@ int vm_unmap
                          vaddr,
                          len);
     
-    spinlock_unlock_int(&ctx->lock, int_flags);
+    spinlock_unlock(&ctx->lock);
 
     if(status != 0)
     {
@@ -931,14 +930,14 @@ int vm_free
        return(VM_FAIL);
     }
 
-    spinlock_lock_int(&ctx->lock, &int_flags);
+    spinlock_lock(&ctx->lock);
         
     status =  vm_space_free(ctx, vaddr, len, &old_flags, NULL);
     
     if(status != VM_OK)
     {
         kprintf("ERROR\n");
-        spinlock_unlock_int(&ctx->lock, int_flags);
+        spinlock_unlock(&ctx->lock);
         return(VM_FAIL);
     }
     
@@ -960,7 +959,7 @@ int vm_free
                              len);
     }
 
-    spinlock_unlock_int(&ctx->lock, int_flags);
+    spinlock_unlock(&ctx->lock);
 
     if(status != 0)
     {
