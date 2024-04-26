@@ -175,6 +175,34 @@ int linked_list_find_node
     return(-1);
 }
 
+int linked_list_concat
+(
+    list_head_t *src,
+    list_head_t *dst
+)
+{
+    if(src->count == 0)
+    {
+        return(-1);
+    }
+
+    if(dst->count == 0)
+    {
+        *dst = *src;
+    }
+    else
+    {
+        dst->list.prev->next = src->list.next;
+        src->list.next->prev = dst->list.prev;
+        dst->list.prev = src->list.prev;
+        dst->count += src->count;
+    }
+
+    linked_list_init(src);
+
+    return(0);
+}
+
 list_node_t *linked_list_first
 (
     list_head_t *lh

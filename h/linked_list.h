@@ -4,6 +4,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
+
+#define LINKED_LIST_INIT {.list.next = NULL, .list.prev = NULL, .count = 0}
+
 typedef struct list_node_t
 {
     struct list_node_t *prev;
