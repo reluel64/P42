@@ -25,10 +25,8 @@ void vm_ctx_show
         ctx = &vm_kernel_ctx;
     }
 
-    kprintf("FREE_DESC_PER_PAGE %d\n",ctx->free_per_slot);
+    kprintf("FREE_DESC_PER_PAGE  %d\n",ctx->free_per_slot);
     kprintf("ALLOC_DESC_PER_PAGE %d\n",ctx->alloc_per_slot);
-
-
 
     node = linked_list_first(&ctx->free_mem);
 

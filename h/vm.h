@@ -6,6 +6,8 @@
 #include <linked_list.h> 
 #include <pgmgr.h>
 
+#define VM_GUARD_SIZE (0x1000)
+
 /* Memory flags */
 #define VM_ATTR_WRITABLE          PGMGR_WRITABLE
 #define VM_ATTR_USER              PGMGR_USER

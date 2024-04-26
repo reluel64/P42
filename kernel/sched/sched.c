@@ -17,12 +17,13 @@
 #include <owner.h>
 
 #define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
-#define SCHED_IDLE_TASK    (PAGE_SIZE)
+#define SCHED_IDLE_THREAD_STACK_SIZE    (PAGE_SIZE)
 
 
-
-static list_head_t units;
-static spinlock_t  units_lock;
+static list_head_t units        = LINKED_LIST_INIT;
+static spinlock_t  units_lock   = SPINLOCK_INIT;
+static spinlock_t  threads_lock = SPINLOCK_INIT;
+static list_head_t threads      = LINKED_LIST_INIT;
 
 static void *sched_idle_thread
 (
@@ -311,7 +312,7 @@ int sched_unit_init
     kthread_create_static(&unit->idle, 
                          sched_idle_thread, 
                          unit, 
-                         SCHED_IDLE_TASK, 
+                         SCHED_IDLE_THREAD_STACK_SIZE, 
                          255,
                          NULL);
     
@@ -522,6 +523,15 @@ static uint32_t sched_tick
 
     return(0);
     
+}
+
+void sched_thread_set_priority
+(
+    sched_thread_t *th, 
+    uint16_t prio
+)
+{
+
 }
 
 /******************************************************************************/
