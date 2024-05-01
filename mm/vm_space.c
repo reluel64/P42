@@ -355,6 +355,8 @@ int vm_space_free
      */ 
     if(status < 0)
     {
+        kprintf("Extent of base 0x%x and length of 0x%x not present\n",
+                addr, len);
         return(VM_FAIL);
     }
 

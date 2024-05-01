@@ -1030,7 +1030,7 @@ int pgmgr_release_backend
     pgmgr_ctx_t *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
-    virt_size_t      *out_len
+    virt_size_t *out_len
 )
 {
     phys_addr_t attr_mask = 0;

@@ -936,7 +936,7 @@ int vm_free
     
     if(status != VM_OK)
     {
-        kprintf("ERROR\n");
+        kprintf("ERROR while trying to free the address 0x%x\n", vaddr);
         spinlock_unlock(&ctx->lock);
         return(VM_FAIL);
     }
