@@ -602,31 +602,6 @@ static int scheduler_balance
     sched_exec_unit_t *unit
 )
 {
-#if 0
-    uint8_t int_flag = 0;
-    sched_policy_t *policy = NULL;
-    int expected = 0;
-
-    /* lock the unit */
-    spinlock_lock_int(&unit->lock, &int_flag);
-
-    if(__atomic_compare_exchange_n(&in_balance, &expected, 1, 
-                                   0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
-   {
-
-        policy = unit->policy;
-
-        if(policy->load_balancing != NULL)
-        {
-            policy->load_balancing(unit->policy_data, &units);
-        }
-
-        __atomic_clear(&in_balance, __ATOMIC_SEQ_CST);
-   }
-
-
-   spinlock_unlock_int(&unit->lock, int_flag);
-#endif
     return(0);
 }
 
@@ -684,9 +659,7 @@ static void sched_enq
     if(prev_thread)
     {
         /* Clear thread's running flag */
-        __atomic_and_fetch(&prev_thread->flags, 
-                          ~(THREAD_RUNNING | THREAD_NEED_RESCHEDULE), 
-                          __ATOMIC_SEQ_CST);
+        prev_thread->flags &= ~(THREAD_RUNNING | THREAD_NEED_RESCHEDULE);
     }
 
     if(unit->current)
@@ -738,9 +711,7 @@ static void sched_deq
         unit->current = next_thread;
     }
        /* Set thread's running flag */
-    __atomic_or_fetch(&next_thread->flags, 
-                      THREAD_RUNNING, 
-                      __ATOMIC_SEQ_CST);
+    next_thread->flags |= THREAD_RUNNING;
 
     *next_th = next_thread;
 }
