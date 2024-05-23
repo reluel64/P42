@@ -101,13 +101,6 @@ typedef struct pgmgr_ctx_t
 typedef struct pgmgr_iter_callback_data_t pgmgr_iter_callback_data_t;
 typedef struct pgmgr_level_data_t         pgmgr_level_data_t;
 
-typedef struct pgmgr_contig_find_t
-{
-    phys_addr_t base;
-    phys_size_t pf_count;
-    phys_size_t pf_req;
-}pgmgr_contig_find_t;
-
 typedef struct pgmgr_level_data_t
 {
     pgmgr_ctx_t *ctx;
@@ -138,7 +131,7 @@ typedef struct pgmgr_iter_callback_data_t
     uint16_t            entry;
     uint8_t             shift;
     virt_addr_t         next_vaddr;
-    virt_size_t         increment;
+    virt_size_t         step;
 }pgmgr_iter_callback_data_t;
 
 

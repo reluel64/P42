@@ -4,6 +4,7 @@
 #include <port.h>
 #include <isr.h>
 #include <platform.h>
+#include <utils.h>
 
 #define IO_CONTROLLER "ioctrl"
 #define I8042_DEV_NAME "i8042"

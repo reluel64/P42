@@ -117,7 +117,7 @@ static void pgmgr_enable_nx(void)
     __wrmsr(0xC0000080, reg_val);
 }
 
-static int pgemgr_pml5_is_enabled(void)
+static int pgmgr_pml5_is_enabled(void)
 {
     uint32_t eax = 0;
     uint32_t ebx = 0;
@@ -196,13 +196,19 @@ static int pgmgr_attr_translate
     phys_addr_t pte = 0;
 
     if(attr & PGMGR_WRITABLE)
+    {
         pte |= PAGE_WRITABLE;
-    
+    }
+
     if(attr & PGMGR_USER)
+    {
         pte |= PAGE_USER;
-    
+    }
+
     if(!(attr & PGMGR_EXECUTABLE) && pgmgr.nx_support)
+    {
         pte |= PAGE_EXECUTE_DISABLE;
+    }
     
     /* Translate caching attributes */
     /*
@@ -384,7 +390,7 @@ static void pgmgr_iter_free_level
             * and if we are, we are asking to go to the upper level
             * so we are called again with the upper level
             */ 
-           if(ld->offset + iter_dat->increment >= ld->length)
+           if(ld->offset + iter_dat->step >= ld->length)
            {
                ld->cb_status |= PGMGR_CB_STEP_UP;
            }
@@ -665,7 +671,7 @@ static int pgmgr_iterate_levels
     
     pgmgr_iter_callback_data_t it_dat = {
                                             .entry = 0,
-                                            .increment = 0,
+                                            .step = 0,
                                             .next_vaddr = 0,
                                             .shift = 0,
                                             .vaddr = 0,    
@@ -718,10 +724,10 @@ static int pgmgr_iterate_levels
             ld->do_map = 0;
         }
 
-        it_dat.shift     = PGMGR_LEVEL_TO_SHIFT(ld->curr_level);
-        it_dat.increment = (virt_size_t)1 << it_dat.shift;
-        it_dat.vaddr     = ld->base + ld->offset, 
-        it_dat.entry     = (it_dat.vaddr >> it_dat.shift) & PGMGR_MAX_TABLE_INDEX; 
+        it_dat.shift = PGMGR_LEVEL_TO_SHIFT(ld->curr_level);
+        it_dat.step  = (virt_size_t)1 << it_dat.shift;
+        it_dat.vaddr = ld->base + ld->offset, 
+        it_dat.entry = (it_dat.vaddr >> it_dat.shift) & PGMGR_MAX_TABLE_INDEX; 
 
         /* If we haven't reached the target level then we have to go
          * down by obtaining the address for the lower page table entry 
@@ -788,7 +794,7 @@ static int pgmgr_iterate_levels
 
         it_dat.next_vaddr = ld->base    + 
                             ld->offset  + 
-                            it_dat.increment;
+                            it_dat.step;
 
         /* Check the next entery */
         ld->iter_cb(&it_dat,
@@ -903,7 +909,7 @@ static int pgmgr_iterate_levels
         }
 
        /* calculate the next offset */
-       ld->offset += it_dat.increment;
+       ld->offset += it_dat.step;
     }
    
     /* All right, we're done */
@@ -1306,7 +1312,7 @@ static int pgmgr_map_kernel(pgmgr_ctx_t *ctx)
                                     _KERNEL_VMA_END - _KERNEL_VMA,
                                     NULL);
 
-    kprintf("BUILT BACKEND\n");
+    kprintf("BUILT BACKEND - SIZE 0x%x\n", _KERNEL_VMA_END - _KERNEL_VMA);
 
     /* Map code section */
     pgmgr_map_pages(ctx, (virt_addr_t)&_code, 
@@ -1409,7 +1415,7 @@ int pgmgr_init(void)
     /* clear the pat memory */
     memset(pat, 0, sizeof(pat_t));
 
-    pgmgr.pml5_support = pgemgr_pml5_is_enabled();
+    pgmgr.pml5_support = pgmgr_pml5_is_enabled();
     pgmgr.nx_support   = pgmgr_check_nx();
 
     kprintf("PML5       %d\n", pgmgr.pml5_support);
