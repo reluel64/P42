@@ -12,13 +12,14 @@
 #define THREAD_ALLOCATED        (1 << 4)
 #define THREAD_NEED_RESCHEDULE  (1 << 5)
 #define THREAD_WOKE_BY_TIMER    (1 << 6)
+
 #define CPU_AFFINITY_VECTOR     (0x8)
 
 #define UNIT_THREADS_WAKE        (1 << 0)
 #define UNIT_THREADS_UNBLOCK     (1 << 1)
 #define UNIT_RESCHEDULE          (1 << 2)
 #define UNIT_START               (1 << 3)
-
+#define UNIT_NO_PREEMPT          (1 << 4)
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \

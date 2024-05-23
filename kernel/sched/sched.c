@@ -191,7 +191,7 @@ void sched_thread_mark_dead
 {
     if(th != NULL)
     {
-        __atomic_or_fetch(&th->flags, THREAD_DEAD, __ATOMIC_ACQUIRE);
+        th->flags |= THREAD_DEAD;
     }
 }
 
@@ -375,15 +375,13 @@ void sched_wake_thread
         spinlock_lock_int(&th->lock, &int_flag);
 
         /* clear the sleeping flag */
-        __atomic_and_fetch(&th->flags, ~THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+        th->flags &= ~THREAD_SLEEPING;
 
         /* thread is ready */
-        __atomic_or_fetch(&th->flags, THREAD_READY, __ATOMIC_SEQ_CST);
+        th->flags |= THREAD_READY;
         
         /* notify unit that there are threads to be awaken */
-        __atomic_or_fetch(&th->unit->flags, 
-                          UNIT_THREADS_WAKE, 
-                          __ATOMIC_SEQ_CST);
+       th->unit->flags |= UNIT_THREADS_WAKE;
         
         spinlock_unlock_int(&th->lock, int_flag);
     }
@@ -399,7 +397,7 @@ static uint32_t sched_timer_wake_thread
 
     sched_thread_t *th = thread;
     
-    __atomic_or_fetch(&th->flags, THREAD_WOKE_BY_TIMER, __ATOMIC_SEQ_CST);
+    th->flags |= THREAD_WOKE_BY_TIMER;
     
     sched_wake_thread(thread);
     return(0);
@@ -411,8 +409,6 @@ void sched_sleep
 )
 {
     uint8_t int_status = 0;
-
-    uint32_t th_flags = 0;
     timer_t tm;
     time_spec_t timeout ={.seconds = delay / 1000ull,
                           .nanosec = delay % 1000000ull
@@ -431,12 +427,10 @@ void sched_sleep
     spinlock_lock_int(&self->lock, &int_status);
 
     /* mark thread as sleeping */
-    __atomic_or_fetch(&self->flags, THREAD_SLEEPING, __ATOMIC_SEQ_CST);
+    self->flags |= THREAD_SLEEPING;
 
     /* thread not running and not ready */
-    __atomic_and_fetch(&self->flags, 
-                        ~(THREAD_RUNNING | THREAD_READY), 
-                        __ATOMIC_SEQ_CST);
+    self->flags &= ~(THREAD_RUNNING | THREAD_READY), 
 
 
     spinlock_unlock_int(&self->lock, int_status);
@@ -459,13 +453,11 @@ void sched_sleep
      */
     if(delay != WAIT_FOREVER)
     {
-        th_flags =  __atomic_fetch_and(&self->flags,  
-                                     ~THREAD_WOKE_BY_TIMER,
-                                     __ATOMIC_SEQ_CST);
-
         /* if we were woken up earlier, delete the timer from the timer queue*/
-        if(~th_flags & THREAD_WOKE_BY_TIMER)
+        if(~self->flags & THREAD_WOKE_BY_TIMER)
         {
+            self->flags &= ~THREAD_WOKE_BY_TIMER;
+
             if(timer_dequeue(NULL, &tm))
             {
                 kprintf("NOTHING TO DEQUEUE\n");
@@ -505,10 +497,7 @@ static uint32_t sched_tick
         }
         else
         {
-            __atomic_or_fetch(&th->flags, 
-                              THREAD_NEED_RESCHEDULE, 
-                              __ATOMIC_SEQ_CST);
-
+            th->flags |= THREAD_NEED_RESCHEDULE;
             th->remain = 255 - th->prio;
         }
     }
@@ -703,13 +692,11 @@ static void sched_enq
     if(unit->current)
     {
         prev_thread = unit->current;
-
-        state = __atomic_load_n(&unit->current->flags, __ATOMIC_SEQ_CST);
     
         /* check if the thread is dead */
-        if(state & THREAD_DEAD)
+        if(prev_thread->flags & THREAD_DEAD)
         {
-            linked_list_add_tail(&unit->dead_q, &unit->current->sched_node);
+            linked_list_add_tail(&unit->dead_q, &prev_thread->sched_node);
             prev_thread = NULL;
         }
         else if(unit->policy.enqueue != NULL)
@@ -772,27 +759,93 @@ static void sched_main(void)
     cpu    = cpu_current_get();
     unit   = cpu->sched;
     
-    /* Lock the execution unit */
-    spinlock_lock_int(&unit->lock, &int_flag);
+    if(~unit->flags & UNIT_NO_PREEMPT)
+    {
 
-    /* Add the thread to the policy queue */
+        /* Lock the execution unit */
+        spinlock_lock_int(&unit->lock, &int_flag);
 
-    sched_enq(unit, &prev_th);
+        /* Add the thread to the policy queue */
 
-    /* Ask the policy for the next thread */
-    sched_deq(unit, &next_th);
+        sched_enq(unit, &prev_th);
 
-    /* Switch context */
-    sched_context_switch(prev_th, next_th);
+        /* Ask the policy for the next thread */
+        sched_deq(unit, &next_th);
+
+        /* Switch context */
+        sched_context_switch(prev_th, next_th);
+        
+        /* update the unit */
+        cpu    = cpu_current_get();
+        unit   = cpu->sched;
+        next_th->unit = unit;
+
+        /* Unlock unit */
+        spinlock_unlock_int(&unit->lock, int_flag);
+
+        /* try to do some balancing work */
+        scheduler_balance(unit);
+    }
+}
+
+
+void sched_disable_preempt(void)
+{
+    uint8_t int_status = 0;
+    sched_exec_unit_t *unit = NULL;
+    cpu_t *cpu = NULL;
+
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
+
+    cpu = cpu_current_get();
+
+    if(cpu != NULL)
+    {
+        unit = cpu->sched;
+    }
+
+    if(unit != NULL)
+    {
+        unit->flags |= UNIT_NO_PREEMPT;
+    }
     
-    /* update the unit */
-    cpu    = cpu_current_get();
-    unit   = cpu->sched;
-    next_th->unit = unit;
+    if(int_status)
+    {
+        cpu_int_unlock();
+    }
+}
 
-    /* Unlock unit */
-    spinlock_unlock_int(&unit->lock, int_flag);
+void sched_enable_preempt(void)
+{
+    uint8_t int_status = 0;
+    sched_exec_unit_t *unit = NULL;
+    cpu_t *cpu = NULL;
 
-    /* try to do some balancing work */
-    scheduler_balance(unit);
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
+    cpu = cpu_current_get();
+
+    if(cpu != NULL)
+    {
+        unit = cpu->sched;
+    }
+
+    if(unit != NULL)
+    {
+        unit->flags &= ~UNIT_NO_PREEMPT;
+    }
+    
+    if(int_status)
+    {
+        cpu_int_unlock();
+    }
 }
