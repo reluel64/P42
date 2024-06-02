@@ -456,13 +456,14 @@ void sched_sleep
         /* if we were woken up earlier, delete the timer from the timer queue*/
         if(~self->flags & THREAD_WOKE_BY_TIMER)
         {
-            self->flags &= ~THREAD_WOKE_BY_TIMER;
-
             if(timer_dequeue(NULL, &tm))
             {
                 kprintf("NOTHING TO DEQUEUE\n");
             }
-        }    
+        }   
+        
+        /* clear the woke by timer flag */
+        self->flags &= ~THREAD_WOKE_BY_TIMER; 
     }
 }
 
