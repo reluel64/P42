@@ -46,6 +46,10 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
     sched_thread_t *thread = NULL;
     uint32_t        looped = 0;
 
+    if(sem == NULL)
+    {
+        return(-1);
+    }
 
     spinlock_lock_int(&sem->lock, &int_state);
 
@@ -118,6 +122,12 @@ int sem_release(sem_t *sem)
     sched_exec_unit_t *unit      = NULL;
     list_node_t       *pend_node = NULL;
     
+    if(sem == NULL)
+    {
+        return(-1);
+    }
+    
+
     spinlock_lock_int(&sem->lock, &int_state);
 
     if(__atomic_load_n(&sem->count, __ATOMIC_SEQ_CST) < sem->max_count)
