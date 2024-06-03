@@ -35,9 +35,9 @@ typedef uint32_t (*timer_handler_t) \
 typedef struct timer_dev_t
 {
     device_t    *backing_dev;  /* backing timer device      */
-    list_head_t timer_q;      /* timer queue               */
+    list_head_t active_q;      /* timer queue               */
     list_head_t pend_q;
-    spinlock_t  lock_q;       /* lock to ptorect the queue */
+    spinlock_t  lock_active_q;       /* lock to ptorect the queue */
     spinlock_t  lock_pend_q; 
     time_spec_t step;
     time_spec_t next_increment;

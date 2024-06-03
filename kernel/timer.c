@@ -11,7 +11,6 @@
 /* local variables */
 static timer_dev_t system_timer;
 
-
 static int timer_compare
 (
     time_spec_t *t1,
@@ -54,7 +53,7 @@ static uint8_t timer_increment
     if(step->nanosec + timer->nanosec >= 1000000000ull)
     {
         timer->seconds++;
-        timer->nanosec = step->nanosec;
+        timer->nanosec = (timer->nanosec + step->nanosec) - 1000000000ull;
     }
     else
     {
@@ -100,7 +99,7 @@ static uint32_t timer_queue_callback
 
     tm_dev = tm;
     
-    spinlock_lock(&tm_dev->lock_q);
+    spinlock_lock(&tm_dev->lock_active_q);
    static uint32_t  prev_sec = 0;
     /* increment our timer */
     timer_increment(&tm_dev->current_increment, step);
@@ -108,7 +107,7 @@ static uint32_t timer_queue_callback
     if(prev_sec != tm_dev->current_increment.seconds)
     {
         prev_sec = tm_dev->current_increment.seconds;
-        //kprintf("SEC %d NSEC %d\n",tm_dev->current_increment.seconds, tm_dev->current_increment.nanosec);
+        kprintf("SEC %d NSEC %d\n",tm_dev->current_increment.seconds, tm_dev->current_increment.nanosec);
     }
 #if 0
     /* if the smallest timer did not expire, just bail out */
@@ -120,7 +119,7 @@ static uint32_t timer_queue_callback
 #endif
 
 
-    c = (timer_t*)linked_list_first(&tm_dev->timer_q);
+    c = (timer_t*)linked_list_first(&tm_dev->active_q);
 
     while(c != NULL)
     {
@@ -134,7 +133,7 @@ static uint32_t timer_queue_callback
 
         if(status)
         {            
-            linked_list_remove(&tm_dev->timer_q, &c->node);
+            linked_list_remove(&tm_dev->active_q, &c->node);
             c->callback(c->arg, isr_inf);
         }
 
@@ -149,13 +148,13 @@ static uint32_t timer_queue_callback
     {
         n = (timer_t*)linked_list_next(&c->node);
         linked_list_remove(&tm_dev->pend_q, &c->node);
-        linked_list_add_tail(&tm_dev->timer_q, &c->node);    
+        linked_list_add_tail(&tm_dev->active_q, &c->node);    
         c = n;
     }
 
     spinlock_unlock(&tm_dev->lock_pend_q);
 
-    spinlock_unlock(&tm_dev->lock_q);
+    spinlock_unlock(&tm_dev->lock_active_q);
 
     return(0);
 }
@@ -180,12 +179,12 @@ int timer_set_system_timer
         return(-1);
     }
 
-    spinlock_lock_int(&system_timer.lock_q, &int_flag);
+    spinlock_lock_int(&system_timer.lock_active_q, &int_flag);
 
     system_timer.backing_dev = dev;
     func->set_handler(dev, timer_queue_callback, &system_timer);
 
-    spinlock_unlock_int(&system_timer.lock_q, int_flag);
+    spinlock_unlock_int(&system_timer.lock_active_q, int_flag);
 
     return(0);
 }
@@ -193,9 +192,10 @@ int timer_set_system_timer
 int timer_system_init(void)
 {
     memset(&system_timer, 0, sizeof(timer_dev_t));
-    linked_list_init(&system_timer.timer_q);
-    spinlock_init(&system_timer.lock_q);
-    
+    linked_list_init(&system_timer.active_q);
+    linked_list_init(&system_timer.pend_q);
+    spinlock_init(&system_timer.lock_active_q);
+    spinlock_init(&system_timer.lock_pend_q);
     return(0);
 }
 
@@ -232,7 +232,7 @@ int timer_enqeue
     tm->callback = func;
     tm->to_sleep = *ts;
     
-    spinlock_lock_int(&tmd->lock_pend_q, &int_sts);   
+    spinlock_lock_int(&tmd->lock_pend_q, &int_sts);
 
     linked_list_add_tail(&tmd->pend_q, &tm->node);
     
@@ -309,15 +309,15 @@ int timer_dequeue
     }
 
     /* Look into the active queue */
-    spinlock_lock_int(&tmd->lock_q, &int_sts);
+    spinlock_lock_int(&tmd->lock_active_q, &int_sts);
 
-    if(linked_list_find_node(&tmd->timer_q, &tm->node) == 0)
+    if(linked_list_find_node(&tmd->active_q, &tm->node) == 0)
     {
-        linked_list_remove(&tmd->timer_q, &tm->node);
+        linked_list_remove(&tmd->active_q, &tm->node);
         found = 1;
     }
 
-    spinlock_unlock_int(&tmd->lock_q, int_sts);
+    spinlock_unlock_int(&tmd->lock_active_q, int_sts);
 
     if(found == 1)
     {
