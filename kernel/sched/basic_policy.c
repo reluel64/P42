@@ -100,21 +100,34 @@ static int basic_enq_thread
 
     /* Add the thread in the corresponding queue */
 
-    linked_list_add_tail(lh, &th->sched_node);
+    if(lh != NULL)
+    {
+        linked_list_add_tail(lh, &th->sched_node);
+    }
 
     return(0);
 }
 
 static int basic_tick
 (
-    sched_exec_unit_t *unit,
-    uint32_t          *next_sleep
+    sched_exec_unit_t *unit
 )
 {
     list_node_t    *node        = NULL;
     sched_thread_t *th          = NULL;
     basic_policy_t *policy      = NULL;
    
+    th = unit->current;
+
+    if(th != NULL)
+    {
+        if(th->cpu_left > 0)
+        {
+            th->cpu_left--;
+        }
+    }
+
+
    return(0);
 }
 

@@ -394,7 +394,6 @@ static uint32_t sched_timer_wake_thread
     const void *isr
 )
 {
-
     sched_thread_t *th = thread;
     
     th->flags |= THREAD_WOKE_BY_TIMER;
@@ -489,24 +488,22 @@ static uint32_t sched_tick
     
     th = unit->current;
 
-    /* Update the current thread */
-    if(th != NULL)
-    {
-        if(th->remain > 1)
-        {
-            th->remain--;
-        }
-        else
-        {
-            th->flags |= THREAD_NEED_RESCHEDULE;
-            th->remain = 255 - th->prio;
-        }
-    }
-
     if(unit->policy.tick != NULL)
     {
         unit->policy.tick(unit, &next_tick);
     }
+
+    /* reset the thread cpu quota*/
+    if(th != NULL)
+    {
+        if(th->cpu_left == 0)
+        {
+            kprintf("REschduling\n");
+            th->flags |= THREAD_NEED_RESCHEDULE;
+            th->cpu_left = th->prio;
+        }
+    }
+
 
     /* all good, unlock the unit */
     spinlock_unlock(&unit->lock);
