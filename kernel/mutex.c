@@ -19,10 +19,9 @@ mutex_t *mtx_init
     }
     
     mtx->opts = options;
-
-    __atomic_store_n(&mtx->rlevel,     0, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&mtx->owner,      0, __ATOMIC_SEQ_CST);
-    __atomic_store_n(&mtx->owner_prio, 0, __ATOMIC_SEQ_CST);
+    mtx->rlevel = 0;
+    mtx->owner = 0;
+    mtx->owner_prio = 0;
     
     linked_list_init(&mtx->pendq);
     spinlock_init(&mtx->lock);
@@ -67,7 +66,12 @@ int mtx_acquire
     uint8_t         looped       = 0;
     list_node_t     *iter_node   = NULL;
     sched_thread_t  *iter_thread = NULL;
-    
+
+    if(mtx == NULL)
+    {
+        return(-1);
+    }
+
     spinlock_lock_int(&mtx->lock, &int_state);
 
     thread = sched_thread_self();
@@ -199,6 +203,11 @@ int mtx_release
     sched_exec_unit_t *unit      = NULL;
     list_node_t       *pend_node = NULL;
     void              *expected  = NULL;
+
+    if(mtx == NULL)
+    {
+        return(-1);
+    }
 
     spinlock_lock_int(&mtx->lock, &int_state);
 
