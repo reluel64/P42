@@ -242,3 +242,39 @@ size_t linked_list_count
 {
     return(lh->count);
 }
+
+list_node_t * list_get_first
+(
+    list_head_t *lh
+)
+{
+    list_node_t *ln = NULL;
+
+    if(lh->list.next != NULL)
+    {
+        ln = lh->list.next;
+        ln->prev = NULL;
+        lh->list.next = ln->next;
+        lh->count--;
+    }
+
+    return(ln);
+}
+
+list_node_t * list_get_last
+(
+    list_head_t *lh
+)
+{
+    list_node_t *ln = NULL;
+    
+    if(lh->list.prev != NULL)
+    {
+        ln = lh->list.prev;
+        ln->prev->next = NULL;
+        lh->list.prev = ln->prev;
+        lh->count--;
+    }
+
+    return(ln);
+}
