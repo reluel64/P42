@@ -129,7 +129,10 @@ int sched_start_thread
     spinlock_unlock(&th->lock);
 }
 
-sched_thread_t *sched_thread_self(void)
+sched_thread_t *sched_thread_self
+(
+    void
+)
 {
     sched_exec_unit_t *unit = NULL;
     cpu_t             *cpu  = NULL;
@@ -380,6 +383,9 @@ void sched_wake_thread
         /* thread is ready */
         th->flags |= THREAD_READY;
         
+        spinlock_lock(&)
+
+
         /* notify unit that there are threads to be awaken */
        th->unit->flags |= UNIT_THREADS_WAKE;
         
@@ -425,17 +431,19 @@ void sched_sleep
 
     spinlock_lock_int(&self->lock, &int_status);
 
-    /* mark thread as sleeping */
-    self->flags |= THREAD_SLEEPING;
+    /* mark thread as sleeping if we have any delay specified*/
+    if(delay != 0)
+    {
+        self->flags |= THREAD_SLEEPING;
 
-    /* thread not running and not ready */
-    self->flags &= ~(THREAD_RUNNING | THREAD_READY), 
-
+        /* thread not running and not ready */
+        self->flags &= ~(THREAD_RUNNING | THREAD_READY), 
+    }
 
     spinlock_unlock_int(&self->lock, int_status);
 
     /* don't bother to add the thread to the timer if delay is WAIT_FOREVER */
-    if(delay != WAIT_FOREVER)
+    if((delay != WAIT_FOREVER) && (delay != 0))
     {
         timer_enqeue_static(NULL, 
                             &timeout, 
@@ -450,7 +458,7 @@ void sched_sleep
     /* If the delay is wait forever, then we did not push anything so
      * don't look for a timer because there isn't one
      */
-    if(delay != WAIT_FOREVER)
+    if((delay != WAIT_FOREVER) && (delay != 0))
     {
         /* if we were woken up earlier, delete the timer from the timer queue*/
         if(~self->flags & THREAD_WOKE_BY_TIMER)
@@ -490,7 +498,7 @@ static uint32_t sched_tick
 
     if(unit->policy.tick != NULL)
     {
-        unit->policy.tick(unit, &next_tick);
+        unit->policy.tick(unit);
     }
 
     /* reset the thread cpu quota*/
@@ -498,7 +506,6 @@ static uint32_t sched_tick
     {
         if(th->cpu_left == 0)
         {
-            kprintf("REschduling\n");
             th->flags |= THREAD_NEED_RESCHEDULE;
             th->cpu_left = th->prio;
         }
