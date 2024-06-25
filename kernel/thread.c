@@ -42,7 +42,7 @@ static int thread_setup
     /* align the stack size to page size */
     stack_size = ALIGN_UP(stack_sz, PAGE_SIZE);
 
-    /* thake into account the guard pages */
+    /* take into account the guard pages */
     stack_size += (PAGE_SIZE  << 1);
 
     stack_origin = vm_alloc(ow->vm_ctx, 
