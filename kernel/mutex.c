@@ -144,9 +144,9 @@ int mtx_acquire
         }
 
         /* Add it to the mutex pend queue */
-    #ifdef MTX_DEBUG
+#ifdef MTX_DEBUG
         kprintf("BLOCKING %x\n",thread);
-    #endif
+#endif
 
         /* insert the mutex in the queue based on either
          * FIFO or Priority

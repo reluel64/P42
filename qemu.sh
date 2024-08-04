@@ -1,6 +1,6 @@
 clear
-qemu-system-x86_64 -machine q35,accel=kvm -cpu Icelake-Server,+x2apic -smp 8 \
--drive format=raw,file='/home/alex/disk.img' -m 16G       \
+qemu-system-x86_64 -machine q35,accel=kvm -cpu Icelake-Server,+x2apic -smp 1 \
+-drive format=raw,file='/home/alex/disk.img' -m 26G       \
 -no-reboot                                                           \
 -no-shutdown                                                         \
 -chardev stdio,mux=on,id=char0                                       \
@@ -9,8 +9,7 @@ qemu-system-x86_64 -machine q35,accel=kvm -cpu Icelake-Server,+x2apic -smp 8 \
 -serial chardev:char0                                                \
 -usb                                                                 \
 -device usb-ehci,id=ehci                                             \
--device qemu-xhci,id=xhci
-
+-device qemu-xhci,id=xhci           
 #qemu-system-x86_64 -machine q35,accel=kvm -cpu qemu64,+x2apic -smp 8 \
 
 #clear

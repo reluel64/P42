@@ -99,13 +99,15 @@ typedef struct sched_exec_unit_t
     list_node_t      node;      /* node in units list                          */
     cpu_t            *cpu;      /* cpu structure that is tied to the scheduler * 
                                  * execution unit                              */ 
-    sched_thread_t   *current;   /* current thread                             */
-    sched_thread_t    idle;      /* our dearest idle task                      */
-    list_head_t       dead_q;    /* queue of dead threads on the current CPU   */
-    spinlock_t        lock;      /* lock to protect the queues                 */
-    uint32_t          flags;     /* flags for the execution unit               */
-    device_t         *timer_dev; /* timer device which is connected to this unit  */
-    sched_policy_t    policy;
+    sched_thread_t *current;   /* current thread                             */
+    sched_thread_t  idle;      /* our dearest idle task                      */
+    list_head_t     dead_q;    /* queue of dead threads on the current CPU   */
+    spinlock_t      lock;      /* lock to protect the queues                 */
+    uint32_t        flags;     /* flags for the execution unit               */
+    device_t       *timer_dev; /* timer device which is connected to this unit  */
+    sched_policy_t  policy;
+    spinlock_t      wake_q_lock; /* lock for the wake queue */
+    list_head_t     wake_q;    /* queue of threads that wait to be woken up  */
 }sched_exec_unit_t;
 
 typedef struct sched_owner_t
@@ -127,6 +129,7 @@ int sched_unit_init
 );
 
 int sched_init(void);
+
 int sched_init_thread
 (
     sched_thread_t    *th,

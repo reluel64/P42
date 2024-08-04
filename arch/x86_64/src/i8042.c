@@ -5,7 +5,7 @@
 #include <isr.h>
 #include <platform.h>
 #include <utils.h>
-
+#include <semaphore.h>
 #define IO_CONTROLLER "ioctrl"
 #define I8042_DEV_NAME "i8042"
 #define I8042_CMD_DISABLE_PORT1    (0xAD)
@@ -26,12 +26,13 @@ typedef struct
     isr_t kbd_isr;
     isr_t mse_isr;
 }i8042_dev_t;
-
+extern sem_t *kb_sem;
 
 static int i8042_kbd_irq(void *pv, isr_info_t *isr_inf)
 {
     __inb(I8042_DATA_PORT);
-    kprintf("%s %s %d\n", __FILE__,__FUNCTION__,__LINE__);
+    sem_release(kb_sem);
+  //  kprintf("%s %s %d\n", __FILE__,__FUNCTION__,__LINE__);
 }
 
 static int i8042_mse_irq(void *pv, isr_info_t *isr_inf)

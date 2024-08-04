@@ -382,8 +382,6 @@ void sched_wake_thread
 
         /* thread is ready */
         th->flags |= THREAD_READY;
-        
-        spinlock_lock(&)
 
 
         /* notify unit that there are threads to be awaken */
@@ -437,7 +435,7 @@ void sched_sleep
         self->flags |= THREAD_SLEEPING;
 
         /* thread not running and not ready */
-        self->flags &= ~(THREAD_RUNNING | THREAD_READY), 
+        self->flags &= ~(THREAD_RUNNING | THREAD_READY);
     }
 
     spinlock_unlock_int(&self->lock, int_status);

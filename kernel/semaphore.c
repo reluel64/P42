@@ -4,7 +4,12 @@
 #include <scheduler.h>
 #include <semaphore.h>
 
-sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count)
+sem_t *sem_init
+(
+    sem_t *sem, 
+    uint32_t init_val, 
+    uint32_t max_count
+)
 {
     if(sem == NULL)
     {
@@ -22,7 +27,11 @@ sem_t *sem_init(sem_t *sem, uint32_t init_val, uint32_t max_count)
     return(sem);
 }
 
-sem_t *sem_create(uint32_t init_val, uint32_t max_count)
+sem_t *sem_create
+(
+    uint32_t init_val, 
+    uint32_t max_count
+)
 {
     sem_t *sem = NULL;
     sem_t *ret_sem = NULL;
@@ -40,7 +49,11 @@ sem_t *sem_create(uint32_t init_val, uint32_t max_count)
     return(ret_sem);
 }
 
-int sem_acquire(sem_t *sem, uint32_t wait_ms)
+int sem_acquire
+(
+    sem_t *sem, 
+    uint32_t wait_ms
+)
 {
     uint8_t         int_state = 0;
     sched_thread_t *thread = NULL;
@@ -115,7 +128,10 @@ int sem_acquire(sem_t *sem, uint32_t wait_ms)
     return(0);
 }
 
-int sem_release(sem_t *sem)
+int sem_release
+(
+    sem_t *sem
+)
 {
     uint8_t           int_state  = 0;
     sched_thread_t    *thread    = NULL;

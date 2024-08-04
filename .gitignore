@@ -2,9 +2,10 @@
 *.bin
 *.vscode
 kernel.bin.txt
-.sconsign.dblite
 diss.txt
 *sconsign.dblite
-.sconsign.dblite
 disassm.txt
 qemu.sh
+dissasm.txt
+.sconsign.dblite
+dump.txt

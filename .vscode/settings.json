@@ -1,6 +1,6 @@
 {
-    "editor.fontFamily":"Cascadia Code",
-    "editor.fontSize": 11,
+    "editor.fontFamily":"JetBrains Mono",
+    "editor.fontSize": 10,
     "editor.fontLigatures": false,
     "editor.trimAutoWhitespace": true,
     "editor.renderWhitespace": "all",
@@ -9,30 +9,35 @@
     "editor.tabSize": 4,
     "editor.useTabStops": false,
     "editor.insertSpaces": true,
-    "editor.cursorSmoothCaretAnimation": true,
+    "editor.cursorSmoothCaretAnimation": "on",
     "editor.cursorBlinking": "blink",
     "editor.guides.bracketPairs":true,
-   
+    
     "editor.guides.bracketPairsHorizontal":false,
     "editor.rulers": [80],
 
+
     "files.autoSave": "afterDelay",
-    "files.autoSaveDelay": 100,
+    "files.autoSaveDelay": 1000,
     "terminal.integrated.fontSize": 11,
+    "git.ignoreLimitWarning": true,
+    "editor.smoothScrolling":false,
+    "workbench.colorTheme": "Monokai Classic",
     "files.associations": {
-        "platform.h": "c",
-        "thread.h": "c",
+        "linked_list.h": "c",
+        "stdint.h": "c",
+        "types.h": "c",
+        "port.h": "c",
         "scheduler.h": "c",
-        "mutex.h": "c",
-        "cpu.h": "c",
-        "stdatomic.h": "c",
-        "apic_timer.h": "c",
-        "pagemgr.h": "c",
-        "paging.h": "c",
-        "vm.h": "c",
+        "pfmgr.h": "c",
         "pgmgr.h": "c",
-        "vm_extent.h": "c"
+        "chrono": "c",
+        "variant": "c",
+        "semaphore.h": "c",
+        "acpi.h": "c",
+        "pic8259.h": "c",
+        "cstdint": "c"
     },
-    "git.ignoreLimitWarning": true
-   
+    "cmake.configureOnOpen": false,
+
 }

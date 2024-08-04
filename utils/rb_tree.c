@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
-typedef struct rb_node;
+
 
 typedef int (*rb_tree_cmp)(void *tree_node, void *key);
 

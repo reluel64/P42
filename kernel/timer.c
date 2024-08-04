@@ -107,7 +107,6 @@ static uint32_t timer_queue_callback
     if(prev_sec != tm_dev->current_increment.seconds)
     {
         prev_sec = tm_dev->current_increment.seconds;
-        kprintf("SEC %d NSEC %d\n",tm_dev->current_increment.seconds, tm_dev->current_increment.nanosec);
     }
 #if 0
     /* if the smallest timer did not expire, just bail out */
