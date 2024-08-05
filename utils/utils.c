@@ -227,3 +227,51 @@ size_t strlen(const char *str)
     return(i);
 }
 #endif
+
+
+
+int binary_search
+(
+    const void *array,
+    const size_t elem_count,
+    size_t elem_sz,
+    int (*compare)(const void *elem, void *pv),
+    void *pv
+)
+{
+    uint8_t * start = NULL;
+    size_t mid = 0;
+    void *elem = NULL;
+    int cmp = 0;
+
+    start = (uint8_t *) array;
+
+    for(mid = elem_count; mid != 0; mid >>= 1)
+    {
+        /* start at half the interval */
+        elem = (void*)(start +  (mid >> 1) * elem_sz);
+
+        cmp = compare(elem, pv);
+
+        /* found it - break the loop */
+        if(cmp == 0)
+        {
+            break;
+        }
+        
+        /* key > elem  - we have to go on the right */
+        if(cmp > 0)
+        {  
+            /* advance the new half */
+            start = (uint8_t *)elem + elem_sz;
+            mid --;
+        }
+
+        /* otherwise we keep going left by dividing the interval in 2*/
+
+        /* make sure the elem is set to NULL in case we wnd the loop */
+        elem = NULL;
+    }
+
+    return(elem);
+}
