@@ -3,7 +3,6 @@
     "editor.fontSize": 10,
     "editor.fontLigatures": false,
     "editor.trimAutoWhitespace": true,
-    "editor.renderWhitespace": "all",
     "editor.inlineSuggest.enabled": true,
     "editor.bracketPairColorization.enabled": true,
     "editor.tabSize": 4,

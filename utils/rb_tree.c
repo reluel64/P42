@@ -1,419 +1,12 @@
-#include <stdint.h>
-#include <stddef.h>
+/* Red-Black tree implementation */
 
+#include <rb_tree.h>
 
-typedef int (*rb_tree_cmp)(void *tree_node, void *key);
-
-typedef enum
-{
-    BLACK,
-    RED
-}rb_color_t;
-
-typedef struct rb_node
-{
-    struct rb_node *parent;
-    struct rb_node *left;
-    struct rb_node *right;
-    rb_color_t color;
-}rb_node_t;
-
-typedef struct rb_tree
-{
-    uint32_t node_count;
-    rb_node_t *root;
-}rb_tree_t;
-
-void rb_left_rotate(rb_tree_t *tree, rb_node_t *node)
-{
-    rb_node_t *y = node->right;
-    
-    node->right = y->left;
-
-    if(y->left != NULL)
-    {
-        y->left->parent = node;
-    }
-
-    y->parent = node->parent;
-
-    if(node->parent == NULL)
-    {
-        tree->root = y;
-    }
-    else if(node == node->parent->left)
-    {
-        node->parent->left = y;
-    }
-    else
-    {
-        node->parent->right = y; 
-    }
-
-    y->left = node;
-    node->parent = y;
-}
-
-void rb_right_rotate
-(
-    rb_tree_t *tree, 
-    rb_node_t *node
-)
-{
-    rb_node_t *y = node->left;
-    
-    node->left = y->right;
-
-    if(y->right != NULL)
-    {
-        y->right->parent = node;
-    }
-
-    y->parent = node->parent;
-
-    if(node->parent == NULL)
-    {
-        tree->root = y;
-    }
-    else if(node == node->parent->right)
-    {
-        node->parent->right = y;
-    }
-    else
-    {
-        node->parent->left = y; 
-    }
-
-    y->right = node;
-    node->parent = y;
-}
-
-
-
-rb_node_t *rb_tree_min
-(
-    rb_node_t *node
-)
-{
-    rb_node_t *min = NULL;
-
-    min = node;
-
-    if(min != NULL)
-    {
-        while(min->left != NULL)
-        {
-            min = min->left;
-        }
-    }
-
-    return(min);
-}
-
-rb_node_t *rb_tree_max
-(
-    rb_node_t *node
-)
-{
-    rb_node_t *max = NULL;
-
-    max = node;
-
-    if(max != NULL)
-    {
-        while(max->right != NULL)
-        {
-            max = max->right;
-        }
-    }
-    
-    return(max);
-}
-
-void rb_tree_insert_fixup
-(
-    rb_tree_t *tree,
-    rb_node_t *node
-)
-{
-    rb_node_t *y = NULL;
-
-    while(node->parent->color == RED)
-    {
-        if(node->parent == node->parent->parent->left)
-        {
-            y = node->parent->parent->right;
-
-            if(y->color == RED)
-            {
-                node->parent->color = BLACK;
-                y->color = BLACK;
-                node->parent->parent->color = RED;
-                node = node->parent->parent;
-            }
-            else
-            {
-                if(node == node ->parent->right)
-                {
-                    node = node->parent;
-                    rb_left_rotate(tree, node);
-                }
-
-                node->parent->color = BLACK;
-                node->parent->parent->color = RED;
-                rb_right_rotate(tree, node->parent->parent);
-            }
-        }
-        else
-        {
-            y = node->parent->parent->right;
-
-            if(y->color == RED)
-            {
-                node->parent->color = BLACK;
-                y->color = BLACK;
-                node->parent->parent->color = RED;
-                node = node->parent->parent;
-            }
-            else
-            {
-                if(node == node->parent->left)
-                {
-                    node = node->parent;
-                    rb_right_rotate(tree, node);
-                }
-
-                node->parent->color = BLACK;
-                node->parent->parent->color = RED;
-                rb_left_rotate(tree, node->parent->parent);
-            }
-        }
-    }
-
-    tree->root->color = BLACK;
-}
-
-void rb_transplant
-(
-    rb_tree_t *tree,
-    rb_node_t *node_1,
-    rb_node_t *node_2
-)
-{
-    if(node_1->parent == NULL)
-    {
-        tree->root = node_2;
-    }
-    else if(node_1 == node_1->parent->left)
-    {
-        node_1->parent->left = node_2;
-    }
-    else
-    {
-        node_1->parent->right = node_2;
-    }
-
-    node_2->parent = node_1->parent;
-}
-
-uint32_t rb_tree_delete_fixup
-(
-    rb_tree_t *tree,
-    rb_node_t *node
-)
-{
-    rb_node_t *w = NULL;
-
-    while((node != tree->root) && node->color == BLACK)
-    {
-        if(node == node->parent->left)
-        {
-            w = node->parent->right;
-
-            if(w->color == RED)
-            {
-                w->color = BLACK;
-                node->parent->color = RED;
-                rb_left_rotate(tree, node->parent);
-                w = node->parent->right;
-            }
-
-            if((w->left->color == BLACK) && (w->right->color == BLACK))
-            {
-                w->color = RED;
-                node = node->parent;
-            }
-            else
-            {
-                if(w->right->color == BLACK)
-                {
-                    w->left->color = BLACK;
-                    w->color = RED;
-                    rb_right_rotate(tree, w);
-                    w = node->parent->right;
-                }
-
-                w->color = node->parent->color;
-                node->parent->color = BLACK;
-                w->right->color = BLACK;
-
-                rb_left_rotate(tree, node->parent);
-                node = tree->root;
-            }
-        }
-        else
-        {
-            w = node->parent->left;
-
-            if(w->color == RED)
-            {
-                w->color = BLACK;
-                node->parent->color = RED;
-                rb_right_rotate(tree, node->parent);
-                w = node->parent->left;
-            }
-
-            if((w->right->color == BLACK) && (w->left->color == BLACK))
-            {
-                w->color = RED;
-                node = node->parent;
-            }
-            else
-            {
-                if(w->left->color == BLACK)
-                {
-                    w->right->color = BLACK;
-                    w->color = RED;
-                    rb_left_rotate(tree, w);
-                    w = node->parent->left;
-                }
-
-                w->color = node->parent->color;
-                node->parent->color = BLACK;
-                w->left->color = BLACK;
-                rb_right_rotate(tree, node->parent);
-                node = tree->root;
-            }
-        }
-    }
-
-    node->color = BLACK;
-}
-
-uint32_t rb_tree_insert
-(
-    rb_tree_t *tree, 
-    rb_tree_cmp func,
-    void *key,
-    rb_node_t *node
-)
-{
-    rb_node_t *x = NULL;
-    rb_node_t *y = NULL;
-    uint32_t  status = 0;
-    int cmp_result = 0;
-
-    x = tree->root;
-
-    while(x != NULL)
-    {
-        y = x;
-
-        cmp_result = func(x, key);
-
-        /* already in the tree - just break*/
-        if(cmp_result == 0)
-        {
-            return(-1);
-        }
-        else if(cmp_result < 0)
-        {
-            x = x->left;
-        }
-        else
-        {
-            x = x->right;
-        }
-    }
-
-    node->parent = y;
-
-    if(y == NULL)
-    {
-        tree->root = node;
-    }
-    else if(cmp_result < 0)
-    {
-        y->left = node;
-    }
-    else
-    {
-        y->right = node;
-    }
-
-    node->left = NULL;
-    node->right = NULL;
-    node->color = RED;
-
-    rb_tree_insert_fixup(tree, node);
-}
-
-uint32_t rb_tree_delete
-(
-    rb_tree_t *tree,
-    rb_node_t *node
-)
-{
-    rb_node_t *y = NULL;
-    rb_node_t *x = NULL;
-
-    rb_color_t orig_color = BLACK;
-
-    y = node;
-    orig_color = y->color;
-
-    if(node->left == NULL)
-    {
-        x = node->right;
-        rb_transplant(tree, node, node->right);
-    }
-    else if(node->right == NULL)
-    {
-        x = node->left;
-        rb_transplant(tree, node, node->left);
-    }
-    else
-    {
-        y = rb_tree_min(node->right);
-        orig_color = y->color;
-        x = y->right;
-
-        if(y != node->right)
-        {
-            rb_transplant(tree, y, y->right);
-            y->right = node->right;
-            y->right->parent = y;
-        }
-        else
-        {
-            x->parent = y;
-            rb_transplant(tree, node, y);
-            y->left = node->left;
-            y->left->parent = y;
-            y->color = node->color;
-        }
-    }
-
-    if(orig_color == BLACK)
-    {
-        rb_tree_delete_fixup(tree, x);
-    }
-}
 
 uint32_t rb_tree_find
 (
     rb_tree_t *tree, 
-    rb_tree_cmp cmp_func, 
+    rb_tree_commpare cmp_func, 
     void *key,
     rb_node_t **result
 )
@@ -449,4 +42,425 @@ uint32_t rb_tree_find
     }
 
     return(status);
+}
+
+static void rb_transplant
+(
+    rb_tree_t *t,
+    rb_node_t *u,
+    rb_node_t *v
+)
+{
+    if(u->parent == &t->nil)
+    {
+        t->root = v;
+    } 
+    else if(u == u->parent->left)
+    {
+        u->parent->left = v;
+    }
+    else
+    {
+        u->parent->right = v;
+    }
+
+    v->parent = u->parent;
+}
+
+rb_node_t *rb_tree_minimum
+(
+    rb_tree_t *t,
+    rb_node_t *x
+)
+{
+    while(x->left != &t->nil)
+    {
+        x = x->left;
+    }
+
+    return(x);
+}
+
+rb_node_t *rb_tree_maximum
+(
+    rb_tree_t *t,
+    rb_node_t *x
+)
+{
+    while(x->right != &t->nil)
+    {
+        x = x->right;
+    }
+
+    return(x);
+}
+
+static void rb_left_rotate
+(
+    rb_tree_t *t,
+    rb_node_t *x
+)
+{
+    rb_node_t *y = NULL;
+
+    y = x->right;
+    x->right = y->left;
+
+    if(y->left != &t->nil)
+    {
+        y->left->parent = x;
+    }
+
+    y->parent = x->parent;
+
+    if(x->parent == &t->nil)
+    {
+        t->root = y;
+    }
+    else if(x == x->parent->left)
+    {
+        x->parent->left = y;
+    }
+    else
+    {
+        x->parent->right = y;
+    }
+
+    y->left = x;
+    x->parent = y;
+}
+
+static void rb_right_rotate
+(
+    rb_tree_t *t,
+    rb_node_t *x
+)
+{
+    rb_node_t *y = NULL;
+
+    y = x->left;
+    x->left = y->right;
+
+    if(y->right != &t->nil)
+    {
+        y->right->parent = x;
+    }
+
+    y->parent = x->parent;
+
+    if(x->parent == &t->nil)
+    {
+        t->root = y;
+    }
+    else if(x == x->parent->right)
+    {
+        x->parent->right = y;
+    }
+    else
+    {
+        x->parent->left = y;
+    }
+
+    y->right = x;
+    x->parent = y;
+}
+
+static void rb_insert_fixup
+(
+    rb_tree_t *t,
+    rb_node_t *z
+)
+{
+    rb_node_t *y = NULL;
+    
+    while( z->parent->color == RED)
+    {
+        if(z->parent == z->parent->parent->left)
+        {
+            y = z->parent->parent->right;
+
+            if(y->color == RED)
+            {
+                z->parent->color = BLACK;
+                y->color = BLACK;
+                z->parent->parent->color = RED;
+                z = z->parent->parent;
+            }
+            else
+            {
+                if(z == z->parent->right)
+                {
+                    z = z->parent;
+                    rb_left_rotate(t, z);
+                }
+
+                z->parent->color = BLACK;
+                z->parent->parent->color = RED;
+                rb_right_rotate(t, z->parent->parent);
+            }
+        }
+        else
+        {
+            y = z->parent->parent->left;
+
+            if(y->color == RED)
+            {
+                z->parent->color = BLACK;
+                y->color = BLACK;
+                z->parent->parent->color = RED;
+                z = z->parent->parent;
+            }
+            else
+            {
+                if(z == z->parent->left)
+                {
+                    z = z->parent;
+                    rb_right_rotate(t, z);
+                }
+                z->parent->color = BLACK;
+                z->parent->parent->color = RED;
+                rb_left_rotate(t, z->parent->parent);
+            }
+        }
+    }
+
+    t->root->color = BLACK;
+}
+
+static void rb_delete_fixup
+(
+    rb_tree_t *t,
+    rb_node_t *x
+)
+{
+    rb_node_t *w = NULL;
+
+    while(x != t->root && x->color == BLACK)
+    {
+        if(x == x->parent->left)
+        {
+            w = x->parent->right;
+
+            if(w->color == RED)
+            {
+                w->color = BLACK;
+                x->parent->color = RED;
+                rb_left_rotate(t, x->parent);
+                w = x->parent->right;
+            }
+
+            if((w->left->color == BLACK) && (w->right->color == BLACK))
+            {
+                w->color = RED;
+                x = x->parent;
+            }
+            else
+            {
+                if(w->right->color == BLACK)
+                {
+                    w->left->color = BLACK;
+                    w->color = RED;
+                    rb_right_rotate(t, w);
+                    w = x->parent->right;
+                }
+
+                w->color = x->parent->color;
+                x->parent->color = BLACK;
+                w->right->color = BLACK;
+                rb_left_rotate(t, x->parent);
+                x = t->root;
+            }
+        }
+        else
+        {
+            w = x->parent->left;
+
+            if(w->color == RED)
+            {
+                w->color = BLACK;
+                x->parent->color = RED;
+                rb_right_rotate(t, x->parent);
+                w = x->parent->left;
+            }
+
+            if((w->right->color == BLACK) && (w->left->color == BLACK))
+            {
+                w->color = RED;
+                x = x->parent;
+            }
+            else
+            {
+                if(w->left->color == BLACK)
+                {
+                    w->right->color = BLACK;
+                    w->color = RED;
+                    rb_left_rotate(t, w);
+                    w = x->parent->left;
+                }
+
+                w->color = x->parent->color;
+                x->parent->color = BLACK;
+                w->left->color = BLACK;
+                rb_right_rotate(t, x->parent);
+                x = t->root;
+            }
+        }
+    }
+}
+
+int rb_insert
+(
+    rb_tree_t *t,
+    rb_node_t *z,
+    rb_tree_commpare cmp,
+    void *cmp_pv
+    
+)
+{
+    rb_node_t *x = NULL;
+    rb_node_t *y = NULL;
+    int cmp_result = 0;
+    int result = -1;
+    uint8_t found = 0;
+    x = t->root;
+    y = &t->nil;
+
+
+    while(x != &t->nil)
+    {
+        y = x;
+
+        cmp_result = cmp(y, cmp_pv);
+
+        if(cmp_result < 0)
+        {
+            x = x->left;
+        }
+        else if(cmp_result > 0)
+        {
+            x = x->right;
+        }
+        else
+        {
+            found = 1;
+            break;
+        }
+    }
+
+    if(found == 0)
+    {
+
+        z->parent = y;
+        z->left = &t->nil;
+        z->right = &t->nil;
+        z->color = RED;
+
+        if(y == &t->nil)
+        {
+            t->root = z;
+        }
+        else if(cmp_result < 0)
+        {
+            y->left = z;
+            
+        }
+        else if(cmp_result > 0)
+        {
+            y->right = z;
+        }
+
+        rb_insert_fixup(t, z);
+        
+        result = 0;
+    }
+   
+
+    return(result);
+}
+
+int rb_delete
+(
+    rb_tree_t *t,
+    rb_node_t *z
+)
+{
+    rb_node_t *x = NULL;
+    rb_node_t *y = NULL;
+    rb_color_t y_orig_color = BLACK;
+
+    y = z;
+    y_orig_color = y->color;
+
+    if(z->left == &t->nil)
+    {
+        x = z->right;
+        rb_transplant(t, z, z->right);
+    }
+    else if(z->right == &t->nil)
+    {
+        x = z->left;
+        rb_transplant(t, z, z->left);
+    }
+    else
+    {
+        y = rb_tree_minimum(t, z->right);
+        y_orig_color = y->color;
+        x = y->right;
+
+        if(y != z->right)
+        {
+            rb_transplant(t,y, y->right);
+            y->right = z->right;
+            y->right->parent = y;
+        }
+        else
+        {
+            x->parent = y;
+        }
+
+        rb_transplant(t, z, y);
+        y->left = z->left;
+        y->left->parent = y;
+        y->color =z->color;
+    }
+
+    if(y_orig_color == BLACK)
+    {
+        rb_delete_fixup(t, x);
+    }
+}
+
+void rb_tree_init
+(
+    rb_tree_t *t
+)
+{
+    t->root = &t->nil;
+}
+
+typedef struct
+{
+    rb_node_t n;
+    int x;
+}val_t ;
+
+
+
+
+int comp(rb_node_t *n,  void *pv)
+{
+    val_t *key = pv;
+    val_t *tn = (val_t*)n;
+
+    if(key->x < tn->x)
+    {
+        return(-1);
+    }
+    else if(key->x > tn->x)
+    {
+        return(1);
+    }
+
+    return(0);
+    
 }
