@@ -4,6 +4,24 @@
 #include <stddef.h>
 #include <stdint.h>
 
+void  *binary_search
+(
+    const void *array,
+    const size_t elem_count,
+    size_t elem_sz,
+    int (*compare)(const void *elem, void *pv),
+    void *pv
+);
+
+int insertion_sort
+(
+    void *array,
+    const size_t element_count,
+    const size_t element_sz,
+    int (*compare) (const void *left, const void *right, void *pv),
+    void *pv
+);
+
 void *memset(void *ptr, int value, size_t num);
 void *memcpy(void *dest, const void *src, size_t num);
 int memcmp(const void *ptr1, const void *ptr2, size_t num);

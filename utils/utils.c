@@ -230,7 +230,7 @@ size_t strlen(const char *str)
 
 
 
-int binary_search
+void  *binary_search
 (
     const void *array,
     const size_t elem_count,
@@ -274,4 +274,69 @@ int binary_search
     }
 
     return(elem);
+}
+
+
+int insertion_sort
+(
+    void *array,
+    const size_t element_count,
+    const size_t element_sz,
+    int (*compare) (const void *left, const void *right, void *pv),
+    void *pv
+)
+{
+    size_t i = 1;
+    size_t j = 0;
+    uint8_t *left = NULL;
+    uint8_t *right = NULL;
+    int ret = -1;
+    uint8_t temp = 0;
+    uint8_t stop = 0;
+
+    if(compare != NULL && array != NULL)
+    {
+        while(i < element_count)
+        {
+            j = i;
+
+            while(j > 0)
+            {
+                left = (uint8_t *)array + ((j - 1) * element_sz);
+                right = (uint8_t *)array + (j * element_sz);
+
+                ret = compare(left, right, pv);
+
+                if(ret > 0)
+                {
+                    for(size_t e = 0; e < element_sz; e++)
+                    {
+                        temp = *left;
+                        *left = *right;
+                        *right = temp;
+                        left++;
+                        right++;
+                    }
+                }
+                else if(ret < 0)
+                {
+                    stop = 1;
+                    break;
+                }
+
+                j--;
+            }
+
+            i++;
+
+            if(stop)
+            {
+                break;
+            }
+        }
+
+        ret = 0;
+    }
+
+    return(ret);
 }
