@@ -24,9 +24,7 @@ typedef struct rb_tree
     rb_node_t nil;
 }rb_tree_t;
 
-
 typedef int (*rb_tree_commpare)(rb_node_t *tree_node, void *key);
-
 
 void rb_tree_init
 (
@@ -45,7 +43,6 @@ int rb_insert
     rb_node_t *z,
     rb_tree_commpare cmp,
     void *cmp_pv
-    
 );
 
 #endif

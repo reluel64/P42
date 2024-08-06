@@ -437,30 +437,3 @@ void rb_tree_init
 {
     t->root = &t->nil;
 }
-
-typedef struct
-{
-    rb_node_t n;
-    int x;
-}val_t ;
-
-
-
-
-int comp(rb_node_t *n,  void *pv)
-{
-    val_t *key = pv;
-    val_t *tn = (val_t*)n;
-
-    if(key->x < tn->x)
-    {
-        return(-1);
-    }
-    else if(key->x > tn->x)
-    {
-        return(1);
-    }
-
-    return(0);
-    
-}
