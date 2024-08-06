@@ -435,5 +435,9 @@ void rb_tree_init
     rb_tree_t *t
 )
 {
+    t->nil.color = BLACK;
+    t->nil.left = NULL;
+    t->nil.right = NULL;
+    t->nil.parent = NULL;
     t->root = &t->nil;
 }
