@@ -235,7 +235,7 @@ void  *binary_search
     const void *array,
     const size_t elem_count,
     size_t elem_sz,
-    int (*compare)(const void *elem, void *pv),
+    int (*compare)(void *elem, void *pv),
     void *pv
 )
 {
@@ -282,7 +282,7 @@ int insertion_sort
     void *array,
     const size_t element_count,
     const size_t element_sz,
-    int (*compare) (const void *left, const void *right, void *pv),
+    int (*compare) (void *left, void *right, void *pv),
     void *pv
 )
 {
@@ -317,6 +317,8 @@ int insertion_sort
                         left++;
                         right++;
                     }
+
+                    ret = 0;
                 }
                 else if(ret < 0)
                 {
@@ -334,8 +336,6 @@ int insertion_sort
                 break;
             }
         }
-
-        ret = 0;
     }
 
     return(ret);

@@ -336,14 +336,9 @@ int rb_insert
         {
             x = x->left;
         }
-        else if(cmp_result > 0)
-        {
-            x = x->right;
-        }
         else
         {
-            found = 1;
-            break;
+            x = x->right;
         }
     }
 
