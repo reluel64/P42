@@ -14,14 +14,6 @@
 
 extern vm_ctx_t vm_kernel_ctx;
 
-static int vm_virt_is_present
-(
-    virt_addr_t virt,
-    virt_size_t len,
-    list_head_t *lh,
-    uint32_t ent_per_slot
-);
-
 static uint32_t vm_extent_avail
 (
     list_head_t *lh
@@ -169,7 +161,7 @@ static int vm_extent_alloc_tracking
         slot->avail = ext_per_slot;
 
         /* wipe out the memory */
-        memset(slot, 0, sizeof(VM_SLOT_SIZE));
+        memset(slot, 0, VM_SLOT_SIZE);
 
         /* add the slot to the list where it is required */
         linked_list_add_tail(lh, &slot->node);
