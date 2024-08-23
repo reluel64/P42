@@ -22,21 +22,6 @@
     "git.ignoreLimitWarning": true,
     "editor.smoothScrolling":false,
     "workbench.colorTheme": "Monokai Classic",
-    "files.associations": {
-        "linked_list.h": "c",
-        "stdint.h": "c",
-        "types.h": "c",
-        "port.h": "c",
-        "scheduler.h": "c",
-        "pfmgr.h": "c",
-        "pgmgr.h": "c",
-        "chrono": "c",
-        "variant": "c",
-        "semaphore.h": "c",
-        "acpi.h": "c",
-        "pic8259.h": "c",
-        "cstdint": "c"
-    },
     "cmake.configureOnOpen": false,
 
 }
