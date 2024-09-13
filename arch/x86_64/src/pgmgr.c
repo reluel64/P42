@@ -891,7 +891,7 @@ static int pgmgr_iterate_levels
                     }
                 }
             }
-            /* Check if we've max level and if we did, 
+            /* Check if we've reached max level and if we did, 
              * begin from the top level 
              */
             if(ld->curr_level >= ctx->max_level)

@@ -13,8 +13,10 @@ int linked_list_init
 )
 {
     if(lh == NULL)
+    {
         return(-1);
-    
+    }
+
     lh->list.next  = NULL;
     lh->list.prev  = NULL;
     lh->count      = 0;
@@ -103,7 +105,6 @@ int linked_list_add_before
     list_node_t *nn
 )
 {
-
     if(lh->list.next == nn)
     {
         lh->list.next = nn;
@@ -161,18 +162,12 @@ int linked_list_find_node
 
     work_ln = linked_list_first(lh);
 
-    while(work_ln)
+    while(work_ln && work_ln != ln)
     {
-        if(work_ln == ln)
-        {
-            return(0);
-        }
-
         work_ln = linked_list_next(work_ln);
-
     }
     
-    return(-1);
+    return((work_ln == NULL) ? -1 : 0);
 }
 
 int linked_list_concat
