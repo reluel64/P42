@@ -1,4 +1,4 @@
-#include <scheduler.h>
+#include <sched.h>
 #include <linked_list.h>
 #include <utils.h>
 #include <liballoc.h>
@@ -156,6 +156,7 @@ static int basic_init
 
 static sched_policy_t basic_policy = 
 {
+    .node        = {.next = NULL, .prev = NULL},
     .dequeue     = basic_deq_thread,
     .enqueue     = basic_enq_thread,
     .tick        = basic_tick,
@@ -169,7 +170,7 @@ int basic_register
     sched_policy_t *policy
 )
 {
-    memcpy(policy, &basic_policy, sizeof(sched_policy_t));
+    sched_policy_register(&basic_policy);
     return(0);
 }
 

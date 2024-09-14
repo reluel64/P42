@@ -16,7 +16,7 @@
 #include <timer.h>
 #include <i8254.h>
 #include <apic_timer.h>
-#include <scheduler.h>
+#include <sched.h>
 #include <ioapic.h>
 #include <thread.h>
 

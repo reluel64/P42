@@ -9,7 +9,7 @@
 #include <vm.h>
 #include <intc.h>
 #include <platform.h>
-#include <scheduler.h>
+#include <sched.h>
 #include <context.h>
 #include <thread.h>
 #include <isr.h>
@@ -20,10 +20,12 @@
 #define SCHED_IDLE_THREAD_STACK_SIZE    (PAGE_SIZE)
 
 
-static list_head_t units        = LINKED_LIST_INIT;
-static spinlock_t  units_lock   = SPINLOCK_INIT;
-static spinlock_t  threads_lock = SPINLOCK_INIT;
-static list_head_t threads      = LINKED_LIST_INIT;
+static list_head_t units         = LINKED_LIST_INIT;
+static list_head_t threads       = LINKED_LIST_INIT;
+static list_head_t policies      = LINKED_LIST_INIT;
+static spinlock_t  units_lock    = SPINLOCK_INIT;
+static spinlock_t  threads_lock  = SPINLOCK_INIT;
+static spinlock_t  policies_lock = SPINLOCK_INIT;
 
 static void *sched_idle_thread
 (
@@ -726,8 +728,8 @@ static void sched_main(void)
     sched_thread_t    *next_th = NULL;
     sched_thread_t    *prev_th = NULL;
     sched_policy_t    *policy  = NULL;
-    int               status = 0;
-    int               balance_sts = -1;
+    int32_t           status = 0;
+    int32_t           balance_sts = -1;
     uint8_t           int_flag = 0;
 
     cpu    = cpu_current_get();
@@ -822,4 +824,30 @@ void sched_enable_preempt(void)
     {
         cpu_int_unlock();
     }
+}
+
+int32_t sched_policy_register
+(
+    sched_policy_t *p
+)
+{
+    uint8_t int_status = 0;
+    list_node_t *n = NULL;
+    int32_t node_found = 0;
+    int32_t ret = -1;
+
+    spinlock_lock_int(&policies_lock, &int_status);
+
+    node_found = linked_list_find_node(&policies, &p->node);
+
+    if(node_found == -1)
+    {
+        linked_list_add_tail(&policies, &p->node);
+        ret = 0;
+    }
+
+    spinlock_unlock_int(&policies_lock, int_status);
+
+    return(ret);
+
 }

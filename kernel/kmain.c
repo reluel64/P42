@@ -16,7 +16,7 @@
 #include <intc.h>
 #include <utils.h>
 #include <isr.h>
-#include <scheduler.h>
+#include <sched.h>
 #include <semaphore.h>
 #include <mutex.h>
 #include <context.h>

@@ -9,7 +9,7 @@
 #include <linked_list.h>
 #include <liballoc.h>
 #include <platform.h>
-#include <scheduler.h>
+#include <sched.h>
 
 typedef struct isr_list_t
 {

@@ -1,7 +1,7 @@
 #ifndef owner_h
 #define owner_h
 
-#include <scheduler.h>
+#include <sched.h>
 
 int owner_kernel_init
 (

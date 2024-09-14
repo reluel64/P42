@@ -2,7 +2,7 @@
 #define mutexh
 #include <linked_list.h>
 #include <spinlock.h>
-#include <scheduler.h>
+#include <sched.h>
 
 #define MUTEX_RECUSRIVE (1 << 0)
 #define MUTEX_FIFO      (1 << 1)

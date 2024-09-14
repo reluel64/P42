@@ -47,7 +47,7 @@
  */
 #include <vm.h>
 #include <liballoc.h>
-#include <scheduler.h>
+#include <sched.h>
 #include <semaphore.h>
 #include <mutex.h>
 #include "acpi.h"

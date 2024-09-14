@@ -1,4 +1,4 @@
-#include <scheduler.h>
+#include <sched.h>
 #include <context.h>
 #include <utils.h>
 #include <vm.h>

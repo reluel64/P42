@@ -44,6 +44,9 @@ typedef unsigned char cpu_aff_t[CPU_AFFINITY_VECTOR] ;
 
 typedef struct sched_policy_t
 {
+
+    list_node_t node;
+    
     char *policy_name;
 
     int (*dequeue)
@@ -189,6 +192,14 @@ void sched_thread_exit
     void *exit_val
 );
 
-void schedule(void);
+void schedule
+(
+    void
+);
+
+int32_t  sched_policy_register
+(
+    sched_policy_t *p
+);
 
 #endif

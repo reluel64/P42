@@ -4,7 +4,6 @@
 #include <vm_space.h>
 #include <utils.h>
 #include <pfmgr.h>
-#include <paging.h>
 
 vm_ctx_t vm_kernel_ctx;
 

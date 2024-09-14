@@ -1,7 +1,7 @@
 #include <vm.h>
 #include <liballoc.h>
 #include <linked_list.h>
-#include <scheduler.h>
+#include <sched.h>
 #include <mutex.h>
 #include <utils.h>
 

@@ -2,7 +2,6 @@
  * Part of P42 Kernel
  */
 
-#include <paging.h>
 #include <pgmgr.h>
 #include <vm.h>
 #include <stddef.h>
