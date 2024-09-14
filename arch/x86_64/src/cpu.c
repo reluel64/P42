@@ -81,7 +81,9 @@ uint32_t cpu_id_get(void)
         __cpuid(&eax, &ebx, &ecx, &edx);
 
         if(eax != 0 && ebx != 0 && ecx != 0 && edx != 0)
+        {
             return(edx);
+        }
     }
 
     else if(hi_leaf)
@@ -94,7 +96,9 @@ uint32_t cpu_id_get(void)
         __cpuid(&eax, &ebx, &ecx, &edx);
 
         if(eax != 0 && ebx != 0 && ecx != 0 && edx != 0)
+        {
             return(edx);
+        }
     }
 
     eax = 0x1;
@@ -158,8 +162,10 @@ static int cpu_idt_entry_encode
 {
 
     if(idt_entry == NULL)
+    {
         return(-1);
-
+    }
+    
     /* set address of the handler */
     idt_entry->offset_1 = (ih & 0xffff);
     idt_entry->offset_2 = (ih & 0xffff0000) >> 16 ;
