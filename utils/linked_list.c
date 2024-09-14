@@ -7,7 +7,7 @@
  * linked_list_init - initializes list head 
  */
 
-int linked_list_init
+int32_t linked_list_init
 (
     list_head_t *lh
 )
@@ -24,7 +24,7 @@ int linked_list_init
     return(0);
 }
 
-int linked_list_add_head
+int32_t linked_list_add_head
 (
     list_head_t *lh, 
     list_node_t *ln
@@ -52,7 +52,7 @@ int linked_list_add_head
    return(0);
 }
 
-int linked_list_add_tail
+int32_t linked_list_add_tail
 (
     list_head_t *lh, 
     list_node_t *ln
@@ -80,7 +80,7 @@ int linked_list_add_tail
     return(0);
 }
 
-int linked_list_add_after
+int32_t linked_list_add_after
 (
     list_head_t *lh, 
     list_node_t *an, 
@@ -98,7 +98,7 @@ int linked_list_add_after
     return(0);
 }
 
-int linked_list_add_before
+int32_t linked_list_add_before
 (
     list_head_t *lh, 
     list_node_t *bn, 
@@ -117,7 +117,7 @@ int linked_list_add_before
     return(0);
 }
 
-int linked_list_remove
+int32_t linked_list_remove
 (
     list_head_t *lh, 
     list_node_t *ln
@@ -152,7 +152,7 @@ int linked_list_remove
     return(0);
 }
 
-int linked_list_find_node
+int32_t linked_list_find_node
 (
     list_head_t *lh, 
     list_node_t *ln
@@ -170,7 +170,7 @@ int linked_list_find_node
     return((work_ln == NULL) ? -1 : 0);
 }
 
-int linked_list_concat
+int32_t linked_list_concat
 (
     list_head_t *src,
     list_head_t *dst

@@ -137,8 +137,6 @@ void spinlock_write_unlock_int(spinlock_t *s, uint8_t flag)
     }
 }
 
-
-
 void spinlock_read_lock(spinlock_t *s)
 {
 
