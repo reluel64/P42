@@ -2,6 +2,8 @@
 #include <acpi.h>
 #include <defs.h>
 #include <vm.h>
+#include <utils.h>
+
 #define CONFIG_ADDRESS (0xCF8)
 #define CONFIG_DATA    (0xCFC)
 #define CONFIG_SPACE_SIZE (256)
