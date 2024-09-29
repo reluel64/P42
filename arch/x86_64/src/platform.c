@@ -108,7 +108,6 @@ InstallHandlers (void)
 
 
 #define ACPI_MAX_INIT_TABLES    1024
-static ACPI_TABLE_DESC      TableArray[ACPI_MAX_INIT_TABLES];
 
 
 /*

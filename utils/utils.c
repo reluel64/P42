@@ -5,8 +5,6 @@
 #include <utils.h>
 #include <spinlock.h>
 
-static spinlock_t kprintf_lock = SPINLOCK_INIT;
-
 void* memset(void* ptr, int value, size_t num)
 {
     uint8_t* start = (uint8_t*)ptr;
@@ -68,9 +66,6 @@ void *memcpy(void *dest, const void *src, size_t num)
 
 int memcmp(const void *ptr1, const void *ptr2, size_t num)
 {
-    char byte1 = 0;
-    char byte2 = 0;
-
     for(size_t i = 0; i < num; i++)
     {
         if(((char*)ptr1)[i] != ((char*)ptr2)[i])
@@ -135,9 +130,6 @@ int kprintf(char *fmt,...)
     char ch = 0;
     char nbuf[64];
     uint64_t num = 0;
-    uint8_t  int_flag = 0;
-
-   // spinlock_lock_int(&kprintf_lock, &int_flag);
     
     while(fmt[0]!= '\0')
     {
@@ -196,7 +188,8 @@ int kprintf(char *fmt,...)
         fmt++;
     }
     va_end(lst);
-  //  spinlock_unlock_int(&kprintf_lock, int_flag);
+
+    return(0);
 }
 
 #if 0

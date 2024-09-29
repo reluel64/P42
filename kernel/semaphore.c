@@ -135,7 +135,6 @@ int sem_release
 {
     uint8_t           int_state  = 0;
     sched_thread_t    *thread    = NULL;
-    sched_exec_unit_t *unit      = NULL;
     list_node_t       *pend_node = NULL;
     
     if(sem == NULL)

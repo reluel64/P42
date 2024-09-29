@@ -79,8 +79,6 @@ void spinlock_unlock_int(spinlock_t *s, uint8_t flag)
 
 void spinlock_read_lock_int(spinlock_t *s, uint8_t *flag)
 {
-    uint8_t int_status = 0;
-
     *flag = cpu_int_check();
     cpu_int_lock();
 

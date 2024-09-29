@@ -21,6 +21,8 @@ int _owner_setup
     o = owner;
 
     linked_list_init(&o->threads);
+
+    return(0);
 }
 
 int owner_kernel_init

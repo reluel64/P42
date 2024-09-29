@@ -26,7 +26,6 @@ static int apic_timer_isr(void *drv, isr_info_t *inf)
 {
     apic_timer_t  *timer     = NULL;
     device_t      *dev = NULL;
-    uint8_t       int_flag = 0;
 
     dev = devmgr_dev_get_by_name(APIC_TIMER_NAME, inf->cpu_id);
 
@@ -88,12 +87,9 @@ static int apic_timer_init(device_t *dev)
 {  
     device_t           *apic_dev    = NULL;
     driver_t           *apic_drv    = NULL;
-    apic_device_t      *apic        = NULL;
     apic_drv_private_t *apic_drv_pv = NULL;
     apic_timer_t       *apic_timer  = NULL;
-    device_t           *pit         = NULL;
     uint32_t            data        = 0;
-    timer_api_t        *api         = NULL;
     int                int_status   = 0;
     timer_t            calib_timer;
     time_spec_t        req_res      = {.nanosec = 1000000, .seconds = 0};
@@ -123,9 +119,6 @@ static int apic_timer_init(device_t *dev)
     spinlock_rw_init(&apic_timer->lock);
 
     devmgr_dev_data_set(dev, apic_timer);
-
-    pit = devmgr_dev_get_by_name(PIT8254_TIMER, 0);
-    api = devmgr_dev_api_get(pit);
 
     data = 0b1011;
     apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
@@ -260,7 +253,6 @@ static int apic_timer_toggle(device_t *dev, int en)
 {
     device_t           *apic_dev    = NULL;
     driver_t           *apic_drv    = NULL;
-    apic_device_t      *apic        = NULL;
     apic_drv_private_t *apic_drv_pv = NULL;
     apic_timer_t       *apic_timer  = NULL;
     uint32_t            data        = 0;

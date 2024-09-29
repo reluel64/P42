@@ -432,7 +432,6 @@ int cpu_ap_start
     ACPI_MADT_LOCAL_APIC   *lapic          = NULL;
     ACPI_MADT_LOCAL_X2APIC *x2lapic        = NULL;
     ACPI_SUBTABLE_HEADER   *subhdr         = NULL;
-    int                    use_x2_apic     = 0;
     uint32_t               started_cpu     = 1;
     uint32_t               start_cpu_id    = 0;
     device_t               *target_cpu_dev = NULL;

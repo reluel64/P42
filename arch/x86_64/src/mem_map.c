@@ -223,10 +223,7 @@ static void mem_map_show_e820(void)
     multiboot_info_t       *mb_info         = NULL;
     memory_map_entry_t      mem_entry;
 
-    memory_map_entry_t      last_entry;
     multiboot_memory_map_t *mb_mem_map      = NULL;
-    uint32_t                sig             = 0;
-    uint64_t                mem_map         = 0;
     uint64_t                map_length      = 0;
 
 

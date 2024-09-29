@@ -730,7 +730,6 @@ static int pfmgr_mark_bmp
     phys_size_t pf
 )
 {
-    phys_size_t length      = 0;
     phys_size_t bmp_pos     = 0;
     phys_size_t pf_pos      = 0;
     phys_size_t pf_ix       = 0;
@@ -815,7 +814,6 @@ static int pfmgr_clear_bmp
     phys_size_t         pf
 )
 {
-    phys_size_t length      = 0;
     phys_size_t bmp_pos     = 0;
     phys_size_t pf_pos      = 0;
     phys_size_t pf_ix       = 0;
@@ -889,7 +887,6 @@ static int pfmgr_check_available_memory
 )
 {
     list_node_t *fnode = NULL;
-    pfmgr_free_range_t *free_range = NULL;
     fnode = linked_list_first(&base.freer);
 
     while(fnode)
@@ -897,6 +894,8 @@ static int pfmgr_check_available_memory
         
         fnode = linked_list_next(fnode);
     }
+
+    return(0);
 }
 
 
@@ -924,7 +923,6 @@ static int _pfmgr_alloc
     int                 lkup_sts   = 0;
     int                 cb_status  = 0;
     virt_addr_t         alloc_len  = 0;
-    uint8_t             int_flag   = 0;
 
     spinlock_lock(&pfmgr_lock);
     
@@ -1203,7 +1201,6 @@ static int _pfmgr_free
                                       .phys_base   = 0
                                      };
     virt_size_t len = 0;
-    uint8_t     int_flag = 0;
 
     spinlock_lock(&pfmgr_lock);
     
@@ -1280,7 +1277,6 @@ static int _pfmgr_free
 void pfmgr_early_init(void)
 {
     pfmgr_init_t init;
-    uint8_t      int_flag = 0;
 
     spinlock_lock(&pfmgr_lock);
 
@@ -1302,11 +1298,9 @@ void pfmgr_early_init(void)
 int pfmgr_init(void)
 {
     phys_addr_t     phys = 0;
-    phys_size_t     struct_size = 0;
     virt_size_t     size = 0;
     phys_addr_t     next_phys = 0;
     pfmgr_range_header_t *hdr = (pfmgr_range_header_t*)VM_INVALID_ADDRESS;
-    pfmgr_range_header_t temp_hdr;
 
 
     linked_list_init(&base.freer);

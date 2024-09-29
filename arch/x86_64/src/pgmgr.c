@@ -353,9 +353,6 @@ static void pgmgr_iter_free_level
 )
 {
     phys_addr_t addr = 0;
-    virt_addr_t *up_level = NULL;
-    uint8_t shift = 0;
-    uint16_t entry = 0;
 
     ld->error  = PGMGR_ERR_OK;
 
@@ -452,8 +449,6 @@ static void pgmgr_iter_alloc_level
 {
     pgmgr_ctx_t *ctx = NULL;
     
-    virt_size_t len = 0;
-    virt_addr_t new_offset = 0;
     ctx       = ld->ctx;
 
     ld->error  = PGMGR_ERR_OK;
@@ -574,8 +569,6 @@ static void pgmgr_iter_alloc_page
     uint32_t op
 )
 {
-    pgmgr_ctx_t        *ctx = NULL;
-
     ld->error  = PGMGR_ERR_OK;
 
     switch(op)
@@ -626,8 +619,6 @@ static void pgmgr_iter_change_attribs
     uint32_t op
 )
 {
-    pgmgr_ctx_t        *ctx = NULL;
-
     ld->error  = PGMGR_ERR_OK;
     
     switch(op)
@@ -1039,7 +1030,6 @@ int pgmgr_release_backend
     virt_size_t *out_len
 )
 {
-    phys_addr_t attr_mask = 0;
     pgmgr_level_data_t ld;
     int status = 0;
 
@@ -1133,7 +1123,6 @@ int pgmgr_release_pages
     virt_size_t *out_len
 )
 {
-    phys_addr_t attr_mask = 0;
     pgmgr_level_data_t ld;
     int status = 0;
 
@@ -1341,7 +1330,7 @@ static int pgmgr_map_kernel(pgmgr_ctx_t *ctx)
                    (virt_addr_t)&_bss - _KERNEL_VMA);
 
     kprintf("Done mapping kernel sections\n");
-    return(0);
+    return(status);
 }
 
 int pgmgr_ctx_init
@@ -1609,7 +1598,6 @@ static int pgmgr_per_cpu_invl_handler
     isr_info_t *inf
 )
 {
-    int status = 0;
  //kprintf("INVALIDATE  on CPU %x\n",inf->cpu_id);
     __write_cr3(__read_cr3());
     

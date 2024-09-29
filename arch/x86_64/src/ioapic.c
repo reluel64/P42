@@ -298,15 +298,12 @@ static int ioapic_device_init
     ioapic_t   *ioapic   = NULL;
     uint32_t   dev_index = 0;
     uint32_t   vector    = 0;
-    uint32_t   irq       = 0;
     uint16_t   int_flags = 0;
     uint8_t    polarity  = 0;
     uint8_t    trigger    = 0;
     ioredtbl_t *tbl = NULL;
     ioredtbl_t temp_tbl;
     ioapic_ver_t version;
-    uint8_t    redir_tbl_count = 0;
-    uint32_t   ioapic_tbl_index = 0;
     uint32_t   redir_vector     = 0;
 
     cb_data = (void**)pv;
@@ -597,4 +594,5 @@ int ioapic_register(void)
 {
     devmgr_drv_add(&ioapic_drv);
     devmgr_drv_init(&ioapic_drv);
+    return(0);
 }

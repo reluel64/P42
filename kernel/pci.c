@@ -46,9 +46,9 @@
                       slot,                               \
                       function                            \
                      )                                    \
-                     ((ecm_base)                        + \
-                     (((bus) - (ecam_start_bus)) << 20) | \
-                     (slot) << 15                       | \
+                     (((ecm_base)                        + \
+                     (((bus) - (ecam_start_bus)) << 20)) | \
+                     (slot) << 15                        | \
                      (function) << 12)
 
 
@@ -124,7 +124,6 @@ int pci_enumerate
     ACPI_STATUS          status           = 0;
     ACPI_TABLE_MCFG      *mcfg            = NULL;
     ACPI_MCFG_ALLOCATION *allocation      = NULL;
-    ACPI_TABLE_HEADER    *hdr             = NULL;
     uint32_t             mcfg_alloc_count = 0;
     phys_addr_t          phys_conf        = 0;
     pci_header_common    *phc             = NULL;

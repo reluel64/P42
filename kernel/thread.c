@@ -120,7 +120,7 @@ int thread_start
     sched_thread_t *th
 )
 {
-    sched_start_thread(th);
+    return(sched_start_thread(th));
 }
 
 int thread_create_static

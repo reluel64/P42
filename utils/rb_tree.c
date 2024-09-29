@@ -423,6 +423,8 @@ int rb_delete
     {
         rb_delete_fixup(t, x);
     }
+
+    return(0);
 }
 
 void rb_tree_init

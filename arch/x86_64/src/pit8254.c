@@ -150,7 +150,6 @@ static int pit8254_set_handler
 {
     pit8254_dev_t *timer = NULL;
     uint8_t        int_flag = 0;
-    int           ret = -1;
 
     timer = devmgr_dev_data_get(dev);
 

@@ -164,12 +164,10 @@ void isr_dispatcher
     virt_addr_t iframe
 )
 {
-    int               status     = 0;
     isr_list_t        *int_lst   = NULL;
     isr_t             *intr      = NULL;
     list_node_t       *node      = NULL;
     cpu_t             *cpu       = NULL;
-    int               int_status = 0;
     isr_info_t        inf = {.cpu_id = 0, .iframe = 0};
   
     if(index < MAX_HANDLERS)

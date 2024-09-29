@@ -32,13 +32,15 @@ static int i8042_kbd_irq(void *pv, isr_info_t *isr_inf)
 {
     __inb(I8042_DATA_PORT);
     sem_release(kb_sem);
-  //  kprintf("%s %s %d\n", __FILE__,__FUNCTION__,__LINE__);
+    return(0);
 }
 
 static int i8042_mse_irq(void *pv, isr_info_t *isr_inf)
 {
     __inb(I8042_DATA_PORT);
     kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
+    return(0);
 }
 
 static int i8042_dev_init(device_t *dev)
@@ -81,7 +83,7 @@ static int i8042_dev_init(device_t *dev)
     config_byte = config_byte & ~((1 << 0) | (1 << 1) | (1 << 6));
 
     /* check if we have two ports */
-    two_port_ctrl = (config_byte & (1 << 5) != 0);
+    two_port_ctrl = ((config_byte & (1 << 5)) != 0);
 
     /* Issue test on the controller */
     __outb(I8042_CMD_STS_PORT, I8042_CMD_TEST_CTRL);
@@ -234,6 +236,8 @@ static int i8042_drv_init(driver_t *drv)
     devmgr_dev_name_set(dev, I8042_DEV_NAME);
     devmgr_dev_index_set(dev, 0);
     devmgr_dev_add(dev, NULL);
+
+    return(0);
 }
 
 static driver_t i8042_drv = 
@@ -252,4 +256,5 @@ int i8042_register(void)
 {
     devmgr_drv_add(&i8042_drv);
     devmgr_drv_init(&i8042_drv);
+    return(0);
 }

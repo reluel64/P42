@@ -14,12 +14,6 @@ static spinlock_t  drv_list_lock;
 static device_t    root_bus;
 static spinlock_t  dev_list_lock;
 
-static int devmgr_add_device_to_drv
-(
-    device_t *dev, 
-    const driver_t *drv
-);
-
 static int devmgr_dev_add_to_parent
 (
     device_t *dev,
@@ -166,8 +160,6 @@ int devmgr_dev_remove
     uint8_t remove_children
 )
 {
-
-    device_t *parent      = NULL;
     device_t *child       = NULL;
     uint8_t   int_flag    = 0;
     size_t    stack_index = 0;

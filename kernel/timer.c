@@ -11,35 +11,6 @@
 /* local variables */
 static timer_dev_t system_timer;
 
-static int timer_compare
-(
-    time_spec_t *t1,
-    time_spec_t *t2
-)
-{
-    if(t1->seconds > t2->seconds)
-    {
-        return(1);
-    }
-    else if(t1->seconds < t2->seconds)
-    {
-        return(-1);
-    }
-    else
-    {
-        if(t1->nanosec > t2->nanosec)
-        {
-            return(2);
-        }
-        else if(t1->nanosec < t2->nanosec)
-        {
-            return(-2);
-        }
-    }
-
-    return(0);
-}
-
 static uint8_t timer_increment
 (
     time_spec_t       *timer,

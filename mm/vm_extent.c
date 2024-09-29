@@ -1136,7 +1136,6 @@ int vm_extent_compact_hdr
 {
     vm_extent_t   *empty_ext = NULL;
     vm_extent_t   *cursor    = NULL;
-    list_node_t   *node      = NULL;
     int           status     = VM_FAIL;
 
     if(hdr == NULL || ext_per_slot == 0)
@@ -1249,7 +1248,6 @@ static uint8_t vm_extent_merge_in_hdr
     vm_extent_t *dst_ext      = NULL;
     uint8_t     joined        = 0;
     uint32_t    loops         = 0;
-    uint32_t    element_count = 0;
     uint8_t     result        = -1;
     
 

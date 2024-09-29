@@ -16,7 +16,6 @@
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
-static isr_t lint_isr  = ZERO_ISR_INIT;
 static isr_t error_isr = ZERO_ISR_INIT;
 static isr_t spur_isr  = ZERO_ISR_INIT;
 static isr_t eoi_isr   = ZERO_ISR_INIT;
@@ -370,12 +369,7 @@ static int apic_dev_init(device_t *dev)
     apic_device_t       *apic     = NULL;
     driver_t            *drv      = NULL;
     apic_drv_private_t  *apic_drv = NULL;
-    uint32_t            lint      = 0;
-    uint32_t            flags     = 0;
-    uint8_t             polarity  = 0;
-    uint8_t             trigger   = 0;
     uint32_t            data      = 0;
-    uint64_t            apic_base = 0;
     int                 int_status = 0;
 
     kprintf("APIC_DEV_INIT\n");

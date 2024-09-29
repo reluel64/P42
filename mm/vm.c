@@ -96,7 +96,6 @@ static int vm_setup_protected_regions
     vm_ctx_t *ctx
 )
 {
-    vm_slot_hdr_t *hdr = NULL;
     uint32_t   rsrvd_count = 0;
 
     vm_extent_t re[] = 
@@ -183,7 +182,6 @@ static int vm_ctx_init
     virt_addr_t   vm_max  = 0;
     vm_slot_hdr_t *hdr    = NULL;
     vm_extent_t   ext     = VM_EXTENT_INIT;
-    int           status  = 0;
 
     vm_max = cpu_virt_max();
 
@@ -283,7 +281,7 @@ static int vm_adjust_for_guard
     virt_size_t *len
 )
 {
-    
+    return(0);
 }
 
 int vm_init(void)
@@ -454,7 +452,7 @@ int vm_ctx_destroy
     vm_ctx_t *ctx
 )
 {
-
+    return(0);
 }
 
 virt_addr_t vm_alloc
@@ -597,7 +595,6 @@ virt_addr_t vm_map
     virt_size_t out_len = 0;
     virt_addr_t ret_address = VM_INVALID_ADDRESS;
     int status = 0;
-    uint8_t int_status = 0;
     
     if((len % PAGE_SIZE) || (phys % PAGE_SIZE))
     {
@@ -723,7 +720,6 @@ int vm_change_attr
     uint32_t    current_mem_flags   = 0;
     uint32_t    current_alloc_flags = 0;
     uint32_t    new_mem_flags       = 0;
-    uint8_t     int_flags           = 0;
 
     if(ctx == NULL)
     {
@@ -846,8 +842,6 @@ int vm_unmap
 )
 {
     int         status    = 0;
-    virt_size_t out_len   = 0;
-    uint8_t     int_flags = 0;
 
     if(ctx == NULL)
     {
@@ -910,7 +904,6 @@ int vm_free
     virt_size_t len
 )
 {
-    uint8_t int_flags = 0;
     int status = 0;
     uint32_t old_flags = 0;
     

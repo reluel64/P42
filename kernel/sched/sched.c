@@ -66,7 +66,6 @@ void sched_thread_entry_point
     sched_thread_t *th
 )
 {
-    int             int_status   = 0;
     th_entry_point_t entry_point = NULL;
     uint8_t int_flag = 0;
     void *ret_val = NULL;
@@ -129,6 +128,8 @@ int sched_start_thread
     /* Unlock everything */
     spinlock_unlock_int(&unit->lock, int_flag);
     spinlock_unlock(&th->lock);
+
+    return(0);
 }
 
 sched_thread_t *sched_thread_self
@@ -255,8 +256,6 @@ int sched_unit_init
 {
     sched_exec_unit_t *unit        = NULL;
     list_node_t       *node        = NULL;
-    list_node_t       *next_node   = NULL;
-    sched_thread_t    *pend_th     = NULL;
     uint8_t           int_flag     = 0;
     uint8_t           use_tick_ipi = 0;
     timer_api_t       *funcs       = NULL;
@@ -502,10 +501,7 @@ static uint32_t sched_tick
 )
 {
     sched_exec_unit_t *unit         = NULL;
-    sched_policy_t    *policy       = NULL;
-    list_node_t       *node         = NULL;
     sched_thread_t    *th           = NULL;
-    uint32_t          next_tick     = UINT32_MAX;
 
     unit = pv_unit;
 
@@ -553,10 +549,6 @@ static void *sched_idle_thread
 )
 {
     sched_exec_unit_t *unit       = NULL;
-    sched_thread_t    *th         = NULL;
-    int                int_status = 0;
-    list_node_t        *c         = NULL;
-    list_node_t        *n         = NULL;
     timer_api_t        *func      = NULL;
     unit = (sched_exec_unit_t*)pv;
 
@@ -655,7 +647,7 @@ static int sched_peek_next_thread
     list_node_t *n = NULL;
     sched_policy_t *p = NULL;
     sched_thread_t *next_thread = NULL;
-
+    
     n = linked_list_first(&policies);
 
     while(n)
@@ -667,13 +659,14 @@ static int sched_peek_next_thread
 
         if(next_thread != NULL)
         {
+            *next = next_thread;
             break;
         }
 
         n = linked_list_next(n);
     }
 
-    return(next_thread);
+    return(0);
 }
 
 
@@ -686,8 +679,6 @@ static void sched_enq
     sched_thread_t **prev_th
 )
 {
-
-    uint32_t state = 0;
     sched_thread_t *prev_thread = NULL;
 
     if(unit->current == NULL)
@@ -778,9 +769,6 @@ static void sched_main(void)
     sched_exec_unit_t *unit    = NULL;
     sched_thread_t    *next_th = NULL;
     sched_thread_t    *prev_th = NULL;
-    sched_policy_t    *policy  = NULL;
-    int32_t           status = 0;
-    int32_t           balance_sts = -1;
     uint8_t           int_flag = 0;
 
     cpu    = cpu_current_get();
@@ -883,7 +871,6 @@ int32_t sched_policy_register
 )
 {
     uint8_t int_status = 0;
-    list_node_t *n = NULL;
     int32_t node_found = 0;
     int32_t ret = -1;
 
