@@ -49,24 +49,42 @@ typedef struct sched_policy_t
     
     char *policy_name;
 
-    int (*dequeue)
+    int32_t (*dequeue)
     (
         sched_exec_unit_t *unit,
-        sched_thread_t    **next
+        sched_thread_t    *th
     );
 
-    int (*enqueue)
+    int32_t (*enqueue)
     (
         sched_exec_unit_t *unit,
-        sched_thread_t *prev
+        sched_thread_t *th
     );
 
-    int (*tick)
+    int32_t (*peek_next)
+    (
+        sched_exec_unit_t *unit,
+        sched_thread_t **th
+    );
+
+    int32_t (*select_thread)
+    (
+        sched_exec_unit_t *unit,
+        sched_thread_t *th
+    );
+
+    int32_t (*put_prev)
+    (
+        sched_exec_unit_t *unit,
+        sched_thread_t *th
+    );
+
+    int32_t (*tick)
     (
         sched_exec_unit_t *unit
     );
 
-    int(*init)
+    int32_t (*unit_init)
     (
         sched_exec_unit_t *unit
     );

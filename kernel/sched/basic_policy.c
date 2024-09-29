@@ -3,109 +3,139 @@
 #include <utils.h>
 #include <liballoc.h>
 
+
+#define BASIC_POLICY_MAX_UNITS 128
+
+typedef struct basic_policy_unit_t
+{
+    sched_exec_unit_t *unit;
+    list_head_t threads;
+}basic_policy_unit_t;
+
 typedef struct basic_policy_t
 {
-    list_head_t ready_q;
-    list_head_t sleep_q;
+    basic_policy_unit_t units[BASIC_POLICY_MAX_UNITS];
 }basic_policy_t;
 
+static basic_policy_t policy = {0};
 
-static int basic_deq_thread
+static basic_policy_unit_t *basic_unit_get
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t   **next
+    sched_exec_unit_t *unit
 )
 {
-    list_node_t *th        = NULL;
-    list_node_t *next_th   = NULL;
-    sched_thread_t *thread = NULL;
-    basic_policy_t *policy = NULL;
+    cpu_t *cpu = NULL;
+    basic_policy_unit_t *bpu = NULL;
 
-    policy = unit->policy.pv;
-    
-    /* Check sleeping threads */
-
-    if(__atomic_fetch_and(&unit->flags, 
-                          ~UNIT_THREADS_WAKE,
-                          __ATOMIC_SEQ_CST) & 
-                          UNIT_THREADS_WAKE)
+    if(unit != NULL)
     {
-        
-        th = linked_list_first(&policy->sleep_q);
+        cpu = unit->cpu;
+    }
 
-        while(th)
+    if(cpu != NULL)
+    {
+        if(cpu->cpu_id < BASIC_POLICY_MAX_UNITS)
         {
-            next_th = linked_list_next(th);
-
-            thread = SCHED_NODE_TO_THREAD(th);
-
-            if(!(__atomic_load_n(&thread->flags, __ATOMIC_SEQ_CST) & 
-                THREAD_SLEEPING))
-            {
-                linked_list_remove(&policy->sleep_q, th);
-                linked_list_add_tail(&policy->ready_q, th);
-            }
-
-            th = next_th;
+            bpu = &policy.units[cpu->cpu_id];
         }
     }
 
-    th = linked_list_first(&policy->ready_q);
-
-    if(th == NULL)
-    {
-        return(-1);
-    }
-    
-    linked_list_remove(&policy->ready_q, th);
-
-    thread = SCHED_NODE_TO_THREAD(th);
-
-    *next = thread;
-
-    return(0);
-
+    return(bpu);
 }
 
-static int basic_enq_thread
+static int32_t basic_enqueue
 (
     sched_exec_unit_t *unit,
-    sched_thread_t    *th
+    sched_thread_t *th
+)
+{
+    basic_policy_unit_t *bpu = NULL;
+    int32_t status = -1;
+
+
+    bpu = basic_unit_get(unit);
+
+    if(bpu != NULL && th != NULL)
+    {
+        linked_list_add_head(&bpu->threads, &th->sched_node);
+        status = 0;
+    }
+
+    return(status);
+}
+
+static int32_t basic_dequeue
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t *th
+)
+{
+    basic_policy_unit_t *bpu = NULL;
+    int32_t status = -1;
+
+
+    bpu = basic_unit_get(unit);
+
+    if(bpu != NULL && th != NULL)
+    {
+        linked_list_remove(&bpu->threads, &th->sched_node);
+        status = 0;
+    }
+
+    return(status);
+}
+
+static int32_t basic_peek_next_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t **th
+)
+{
+    list_node_t *n = NULL;
+    basic_policy_unit_t *bpu = NULL;
+    int32_t result = -1;
+
+    bpu = basic_unit_get(unit);
+
+    if((bpu != NULL) && (th != NULL))
+    {
+        n = linked_list_last(&bpu->threads);
+        *th = SCHED_NODE_TO_THREAD(n);
+        result = 0;
+    }
+
+    return(result);
+}
+
+static int32_t basic_select_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t *th
 )
 {
 
-    uint32_t state = 0;
-    list_head_t *lh = NULL;
-    basic_policy_t *policy = NULL;
-
-    policy = unit->policy.pv;
-
-   state = __atomic_load_n(&th->flags, __ATOMIC_SEQ_CST) & THREAD_STATE_MASK;
-
-    switch(state)
-    {
-        case THREAD_SLEEPING:
-            lh = &policy->sleep_q;
-            break;
-
-        case THREAD_READY:
-            lh = &policy->ready_q;
-            break;
-
-        default:
-            kprintf("%s %d STATE %d THREAD %x\n",__FUNCTION__, __LINE__, state,th);
-            while(1);
-            break;
-    }
-
-    /* Add the thread in the corresponding queue */
-
-    if(lh != NULL)
-    {
-        linked_list_add_tail(lh, &th->sched_node);
-    }
-
+    
     return(0);
+}
+
+static int32_t basic_put_prev_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t *th
+)
+{
+    basic_policy_unit_t *bpu = NULL;
+    int32_t result = -1;
+
+    bpu = basic_unit_get(unit);
+
+    if((bpu != NULL) && (th != NULL))
+    {
+        linked_list_add_head(&bpu->threads, &th->sched_node);
+        result = 0;
+    }
+
+    return(result);
 }
 
 static int basic_tick
@@ -131,38 +161,37 @@ static int basic_tick
    return(0);
 }
 
-static int basic_init
+static int basic_unit_init
 (
     sched_exec_unit_t *unit
 )
 {
-    basic_policy_t *bp = NULL;
+    basic_policy_unit_t *bpu = NULL;
 
-    bp = kcalloc(sizeof(basic_policy_t), 1);
-
-    if(bp == NULL)
+    if(unit != NULL && unit->cpu != NULL)
     {
-        return(-1);
+        bpu = &policy.units[unit->cpu->cpu_id];
+        bpu->unit = unit;
+        linked_list_init(&bpu->threads);
     }
-
-    /* initialize queues */
-    linked_list_init(&bp->ready_q);
-    linked_list_init(&bp->sleep_q);
-
-    unit->policy.pv = bp;
 
     return(0);
 }
 
+
+
 static sched_policy_t basic_policy = 
 {
-    .node        = {.next = NULL, .prev = NULL},
-    .dequeue     = basic_deq_thread,
-    .enqueue     = basic_enq_thread,
-    .tick        = basic_tick,
-    .init        = basic_init,
-    .policy_name = "basic",
-    .pv          = NULL
+    .node             = {.next = NULL, .prev = NULL},
+    .dequeue          = basic_dequeue,
+    .enqueue          = basic_enqueue,
+    .tick             = basic_tick,
+    .unit_init        = basic_unit_init,
+    .peek_next        = basic_peek_next_thread,
+    .select_thread    = basic_select_thread,
+    .put_prev         = basic_put_prev_thread,
+    .policy_name      = "basic",
+    .pv               = &policy
 };
 
 int basic_register
@@ -170,6 +199,7 @@ int basic_register
     sched_policy_t *policy
 )
 {
+    memset(&policy, 0, sizeof(basic_policy_t));
     sched_policy_register(&basic_policy);
     return(0);
 }

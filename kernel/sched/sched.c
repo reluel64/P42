@@ -260,6 +260,7 @@ int sched_unit_init
     uint8_t           int_flag     = 0;
     uint8_t           use_tick_ipi = 0;
     timer_api_t       *funcs       = NULL;
+    sched_policy_t    *policy      = NULL;
 
 
     kprintf("================================================\n");
@@ -304,10 +305,27 @@ int sched_unit_init
     /* Set up the spinlock for the unit */
     spinlock_init(&unit->lock);
     
+
     basic_register(&unit->policy);
 
-    /* initialize instance of policy */
-    unit->policy.init(unit);
+
+
+    /* Do per policy initalization */
+    spinlock_lock_int(&policies_lock, &int_flag);
+
+    node = linked_list_first(&policies);
+
+    while(node != NULL)
+    {
+        policy = (sched_policy_t*)node;
+    
+        unit->policy.unit_init(unit);
+
+        node = linked_list_next(node);    
+    }
+
+    spinlock_unlock_int(&policies_lock, int_flag);
+
     
 
     /* Initialize the idle thread
@@ -627,6 +645,39 @@ void schedule(void)
     }
 }
 
+
+static int sched_peek_next_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t **next
+)
+{
+    list_node_t *n = NULL;
+    sched_policy_t *p = NULL;
+    sched_thread_t *next_thread = NULL;
+
+    n = linked_list_first(&policies);
+
+    while(n)
+    {
+
+        p = (sched_policy_t*)n;
+
+        p->peek_next(unit, &next_thread); 
+
+        if(next_thread != NULL)
+        {
+            break;
+        }
+
+        n = linked_list_next(n);
+    }
+
+    return(next_thread);
+}
+
+
+
 /* enqueue a thread */
 
 static void sched_enq
@@ -836,7 +887,7 @@ int32_t sched_policy_register
     int32_t node_found = 0;
     int32_t ret = -1;
 
-    spinlock_lock_int(&policies_lock, &int_status);
+    spinlock_write_lock_int(&policies_lock, &int_status);
 
     node_found = linked_list_find_node(&policies, &p->node);
 
@@ -846,7 +897,7 @@ int32_t sched_policy_register
         ret = 0;
     }
 
-    spinlock_unlock_int(&policies_lock, int_status);
+    spinlock_write_unlock_int(&policies_lock, int_status);
 
     return(ret);
 
