@@ -138,7 +138,7 @@ void spinlock_write_unlock_int(spinlock_t *s, uint8_t flag)
 void spinlock_read_lock(spinlock_t *s)
 {
 
-    while(!__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) > 0)
+    while(__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) == 0)
     {
         cpu_pause();
     }

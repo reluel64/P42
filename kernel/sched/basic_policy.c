@@ -143,9 +143,7 @@ static int basic_tick
     sched_exec_unit_t *unit
 )
 {
-    list_node_t    *node        = NULL;
     sched_thread_t *th          = NULL;
-    basic_policy_t *policy      = NULL;
    
     th = unit->current;
 

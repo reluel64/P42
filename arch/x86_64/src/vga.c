@@ -158,5 +158,6 @@ static io_entry_t vga_entry =
 
 static int vga_io_register(void)
 {
-    io_entry_register(&vga_entry);
+   
+    return(io_entry_register(&vga_entry));
 }

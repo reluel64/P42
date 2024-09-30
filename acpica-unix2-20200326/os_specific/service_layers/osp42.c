@@ -131,6 +131,7 @@ static int acpi_unmap(virt_addr_t addr, virt_size_t size)
 int acpi_mem_mgr_on()
 {
     mem_mgr_ready = 1;
+    return(0);
 }
 
 /* Terminal support for AcpiExec only */
@@ -477,12 +478,13 @@ AcpiOsPrintf (
     const char              *Fmt,
     ...)
 {
+#if 0
     va_list                 Args;
     UINT8                   Flags;
 
 
     Flags = AcpiGbl_DbOutputFlags;
-    #if 0
+
     if (Flags & ACPI_DB_REDIRECTABLE_OUTPUT)
     {
         /* Output is directable to either a file (if open) or the console */
@@ -533,10 +535,11 @@ AcpiOsVprintf (
     const char              *Fmt,
     va_list                 Args)
 {
+#if 0
     UINT8                   Flags;
     char                    Buffer[ACPI_VPRINTF_BUFFER_SIZE];
 
-#if 0
+
     /*
      * We build the output string in a local buffer because we may be
      * outputting the buffer twice. Using vfprintf is problematic because
@@ -599,12 +602,13 @@ AcpiOsGetLine (
     UINT32                  BufferLength,
     UINT32                  *BytesRead)
 {
+#if 0
     int                     InputChar;
     UINT32                  EndOfLine;
 
 
     /* Standard AcpiOsGetLine for all utilities except AcpiExec */
-#if 0
+
     for (EndOfLine = 0; ; EndOfLine++)
     {
         if (EndOfLine >= BufferLength)
@@ -635,9 +639,9 @@ AcpiOsGetLine (
     {
         *BytesRead = EndOfLine;
     }
-
+#endif
     return (AE_OK);
-    #endif
+
 }
 #endif
 

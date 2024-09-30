@@ -21,10 +21,10 @@
 
 
 static list_head_t units         = LINKED_LIST_INIT;
-static list_head_t threads       = LINKED_LIST_INIT;
+/*static list_head_t threads       = LINKED_LIST_INIT;*/
 static list_head_t policies      = LINKED_LIST_INIT;
 static spinlock_t  units_lock    = SPINLOCK_INIT;
-static spinlock_t  threads_lock  = SPINLOCK_INIT;
+/*static spinlock_t  threads_lock  = SPINLOCK_INIT;*/
 static spinlock_t  policies_lock = SPINLOCK_INIT;
 
 static void *sched_idle_thread
@@ -318,7 +318,7 @@ int sched_unit_init
     {
         policy = (sched_policy_t*)node;
     
-        unit->policy.unit_init(unit);
+        policy->unit_init(unit);
 
         node = linked_list_next(node);    
     }

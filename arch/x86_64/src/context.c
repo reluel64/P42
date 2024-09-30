@@ -39,7 +39,7 @@ int context_init
     virt_addr_t   *context   = NULL;
     vm_ctx_t      *vm_ctx    = NULL;
     virt_addr_t   rsp0       = 0;
-    virt_addr_t   *user_start = NULL;
+    /* virt_addr_t   *user_start = NULL; */
 
     owner = th->owner;
 
@@ -133,7 +133,7 @@ int context_destroy
     {
         /* sanitize the RSP0 stack */
         memset((void*) rsp0, 0, PAGE_SIZE);
-        vm_free(owner->vm_ctx, rsp0, PAGE_SIZE);
+        vm_free(vm_ctx, rsp0, PAGE_SIZE);
     }
 
     /* sanitize context memory */

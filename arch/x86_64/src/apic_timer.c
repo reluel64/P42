@@ -288,7 +288,7 @@ static int apic_timer_reset(device_t *dev)
 {
     return(apic_timer_toggle(dev, 1));
 }
-
+#if 0
 static int apic_timer_resolution_get
 (
     device_t    *dev, 
@@ -306,7 +306,7 @@ static int apic_timer_resolution_get
 
     return(0);
 }
-
+#endif
 static timer_api_t apic_timer_api = 
 {
     .enable       = apic_timer_enable,
