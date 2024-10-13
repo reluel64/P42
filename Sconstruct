@@ -1,12 +1,13 @@
 import os
 import shutil
+
 obj_list = []
 
 linker_script = 'arch/x86_64/linker.ld'
 
 env=Environment(
                 ENV       = {'PATH' : os.environ['PATH'] + ':/home/alex/opt/cross/bin'},
-                CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=large -Og',
+                CCFLAGS   = '-ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -mcmodel=large -Og -Wall',
                 LINKFLAGS = '-T ' + linker_script + ' -lgcc -z max-page-size=0x1000 -ffreestanding -nostdlib',
                 CC        = 'x86_64-elf-gcc',
                 CPPPATH   = [Dir("h"), Dir('acpica-unix2-20200326/include'),Dir('arch/x86_64/h')] ,
@@ -34,6 +35,7 @@ for obj in objects:
 
 Export('env')
 #print(env['ENV']['PATH'])
+env.SConsignFile("/tmp/P42.db")
 kernel = env.Program(
                     target = 'kernel.bin', 
                     source=obj_list
