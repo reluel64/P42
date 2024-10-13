@@ -5,9 +5,10 @@
 #include <stdint.h>
 
 #define SPINLOCK_INIT {.lock = 0};
+#define SPINLOCK_RW_INIT {.lock = UINT32_MAX};
 typedef struct spinlock_t
 {
-    volatile int lock;
+    volatile uint32_t lock;
 }spinlock_t;
 
 
