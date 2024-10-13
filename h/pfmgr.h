@@ -140,7 +140,7 @@ extern phys_addr_t _bss_end;
 #define _BOOT_PAGING_LENGTH (((phys_addr_t)&BOOT_PAGING_LENGTH))
 
 #define PF_PER_ITEM (64)
-#define BITMAP_SIZE_FOR_AREA(x)  (((x) / PAGE_SIZE) / 8)
+#define BITMAP_SIZE_FOR_AREA(x)  (((x) >> 15))
 #define GIGA_BYTE(x) ((x) * 1024ull * 1024ull *1024ull)
 #define MEGA_BYTE(x) ((x) * 1024ull *1024ull)
 #define KILO_BYTE(x) ((x) * 1024ull)
