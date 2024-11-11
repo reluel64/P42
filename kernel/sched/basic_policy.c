@@ -197,7 +197,6 @@ int basic_register
     sched_policy_t *policy
 )
 {
-    memset(&policy, 0, sizeof(basic_policy_t));
     sched_policy_register(&basic_policy);
     return(0);
 }

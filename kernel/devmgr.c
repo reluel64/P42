@@ -10,9 +10,9 @@
 
 
 static list_head_t drv_list;
-static spinlock_t  drv_list_lock;
+static spinlock_rw_t  drv_list_lock;
 static device_t    root_bus;
-static spinlock_t  dev_list_lock;
+static spinlock_rw_t  dev_list_lock;
 
 static int devmgr_dev_add_to_parent
 (

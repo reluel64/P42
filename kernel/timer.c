@@ -9,7 +9,7 @@
 
 
 /* local variables */
-static timer_dev_t system_timer;
+static timer_dev_t system_timer = {0};
 
 static uint8_t timer_increment
 (

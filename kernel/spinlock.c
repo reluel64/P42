@@ -11,7 +11,7 @@ void spinlock_init(spinlock_t *s)
     s->lock       = 0;
 }
 
-void spinlock_rw_init(spinlock_t *s)
+void spinlock_rw_init(spinlock_rw_t *s)
 {
     s->lock = UINT32_MAX;
 }
@@ -19,7 +19,7 @@ void spinlock_rw_init(spinlock_t *s)
 void spinlock_lock(spinlock_t *s)
 {  
     int expected = 0;    
-
+    
     while(!__atomic_compare_exchange_n(&s->lock, 
                                       &expected, 1, 0, 
                                       __ATOMIC_SEQ_CST, 
@@ -77,7 +77,7 @@ void spinlock_unlock_int(spinlock_t *s, uint8_t flag)
     }
 }
 
-void spinlock_read_lock_int(spinlock_t *s, uint8_t *flag)
+void spinlock_read_lock_int(spinlock_rw_t *s, uint8_t *flag)
 {
     *flag = cpu_int_check();
     cpu_int_lock();
@@ -90,7 +90,7 @@ void spinlock_read_lock_int(spinlock_t *s, uint8_t *flag)
     __atomic_sub_fetch(&s->lock, 1, __ATOMIC_SEQ_CST);    
 }
 
-void spinlock_read_unlock_int(spinlock_t *s, uint8_t flag)
+void spinlock_read_unlock_int(spinlock_rw_t *s, uint8_t flag)
 {
 
     if(__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) < UINT32_MAX)
@@ -102,7 +102,7 @@ void spinlock_read_unlock_int(spinlock_t *s, uint8_t flag)
     }
 }
 
-void spinlock_write_lock_int(spinlock_t *s, uint8_t *flag)
+void spinlock_write_lock_int(spinlock_rw_t *s, uint8_t *flag)
 {
     uint32_t expected = UINT32_MAX;
 
@@ -120,7 +120,7 @@ void spinlock_write_lock_int(spinlock_t *s, uint8_t *flag)
     }
 }
 
-void spinlock_write_unlock_int(spinlock_t *s, uint8_t flag)
+void spinlock_write_unlock_int(spinlock_rw_t *s, uint8_t flag)
 {
     uint32_t expected = 0;
 
@@ -135,7 +135,7 @@ void spinlock_write_unlock_int(spinlock_t *s, uint8_t flag)
     }
 }
 
-void spinlock_read_lock(spinlock_t *s)
+void spinlock_read_lock(spinlock_rw_t *s)
 {
 
     while(__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) == 0)
@@ -147,7 +147,7 @@ void spinlock_read_lock(spinlock_t *s)
     
 }
 
-void spinlock_read_unlock(spinlock_t *s)
+void spinlock_read_unlock(spinlock_rw_t *s)
 {
 
     if(__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) < UINT32_MAX)
@@ -155,7 +155,7 @@ void spinlock_read_unlock(spinlock_t *s)
 
 }
 
-void spinlock_write_lock(spinlock_t *s)
+void spinlock_write_lock(spinlock_rw_t *s)
 {
     uint32_t expected = UINT32_MAX;
 
@@ -170,7 +170,7 @@ void spinlock_write_lock(spinlock_t *s)
     }
 }
 
-void spinlock_write_unlock(spinlock_t *s)
+void spinlock_write_unlock(spinlock_rw_t *s)
 {
     uint32_t expected = 0;
 

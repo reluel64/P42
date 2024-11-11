@@ -880,7 +880,7 @@ static int pfmgr_clear_bmp
 
 int pfmgr_show = 0;
 /* pfmgr_alloc - allocates page frames */
-
+#if 0
 static int pfmgr_check_available_memory
 (
     phys_size_t req_pf
@@ -897,7 +897,7 @@ static int pfmgr_check_available_memory
 
     return(0);
 }
-
+#endif
 
 static int _pfmgr_alloc
 (

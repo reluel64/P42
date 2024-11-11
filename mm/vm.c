@@ -274,16 +274,6 @@ static int vm_ctx_init
     return(VM_OK);
 }
 
-static int vm_adjust_for_guard
-(
-    vm_ctx_t *ctx,
-    virt_addr_t *vaddr,
-    virt_size_t *len
-)
-{
-    return(0);
-}
-
 int vm_init(void)
 {
     int status = 0;

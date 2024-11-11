@@ -13,7 +13,7 @@
 
 typedef struct apic_timer_t
 {
-    spinlock_t           lock;
+    spinlock_rw_t        lock;
     uint32_t             calib_value;
     timer_tick_handler_t handler;
     void                *handler_data;

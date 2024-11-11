@@ -19,13 +19,12 @@
 #define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
 #define SCHED_IDLE_THREAD_STACK_SIZE    (PAGE_SIZE)
 
-
-static list_head_t units         = LINKED_LIST_INIT;
-/*static list_head_t threads       = LINKED_LIST_INIT;*/
-static list_head_t policies      = LINKED_LIST_INIT;
-static spinlock_t  units_lock    = SPINLOCK_INIT;
-/*static spinlock_t  threads_lock  = SPINLOCK_INIT;*/
-static spinlock_t  policies_lock = SPINLOCK_INIT;
+static list_head_t    threads       = LINKED_LIST_INIT;
+static list_head_t    units         = LINKED_LIST_INIT;
+static list_head_t    policies      = LINKED_LIST_INIT;
+static spinlock_rw_t  units_lock    = SPINLOCK_RW_INIT;
+static spinlock_rw_t  threads_lock  = SPINLOCK_RW_INIT;
+static spinlock_rw_t  policies_lock = SPINLOCK_RW_INIT;
 
 static void *sched_idle_thread
 (
@@ -100,6 +99,21 @@ void sched_thread_entry_point
     {
         cpu_pause();
     }
+}
+
+int sched_activate_thread
+(
+    sched_thread_t *th
+)
+{
+    uint8_t int_flag = 0;
+
+    spinlock_write_lock_int(&threads_lock, &int_flag);
+
+
+    spinlock_write_unlock_int(&threads_lock, int_flag);
+
+    return(0);
 }
 
 int sched_start_thread
@@ -307,13 +321,11 @@ int sched_unit_init
 
     basic_register(&unit->policy);
 
-
-
     /* Do per policy initalization */
-    spinlock_lock_int(&policies_lock, &int_flag);
+    spinlock_read_lock_int(&policies_lock, &int_flag);
 
     node = linked_list_first(&policies);
-
+ 
     while(node != NULL)
     {
         policy = (sched_policy_t*)node;
@@ -323,9 +335,9 @@ int sched_unit_init
         node = linked_list_next(node);    
     }
 
-    spinlock_unlock_int(&policies_lock, int_flag);
+    spinlock_read_unlock_int(&policies_lock, int_flag);
 
-    
+   
 
     /* Initialize the idle thread
      * as we will switch to it when we finish 
@@ -638,7 +650,7 @@ void schedule(void)
 }
 
 
-static int sched_peek_next_thread
+static int sched_next_thread
 (
     sched_exec_unit_t *unit,
     sched_thread_t **next

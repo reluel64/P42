@@ -14,7 +14,7 @@
 typedef struct isr_list_t
 {
     list_head_t head;
-    spinlock_t  lock;
+    spinlock_rw_t  lock;
 
 }isr_list_t;
 

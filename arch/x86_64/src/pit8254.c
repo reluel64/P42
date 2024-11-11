@@ -30,7 +30,7 @@
 
 typedef struct pit8254_dev_t
 {
-    spinlock_t           lock; 
+    spinlock_rw_t           lock; 
     uint16_t             divider;
     timer_tick_handler_t handler;
     void                *handler_data;

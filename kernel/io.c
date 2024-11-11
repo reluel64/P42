@@ -8,9 +8,9 @@
 
 
 static list_head_t io_entries;
-static spinlock_t  io_entry_lock;
+static spinlock_rw_t  io_entry_lock;
 static io_open_fd_t  opened[128];
-static spinlock_t  opened_fd_lock;
+static spinlock_rw_t  opened_fd_lock;
 
 int io_entry_register
 (

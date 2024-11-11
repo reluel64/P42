@@ -95,6 +95,8 @@ typedef struct sched_policy_t
 
 typedef struct sched_thread_t
 {
+    list_node_t        system_node;  /* system-wide node                              */
+    list_node_t        unit_node;    /* unit wide-node                                */
     list_node_t        sched_node;   /* node in the queue                             */
     list_node_t        pend_node;    /* node for synchronization                      */
     list_node_t        owner_node;   /* node for the onwer                            */
@@ -102,7 +104,7 @@ typedef struct sched_thread_t
     virt_size_t        stack_sz;     /* stack size                                    */  
     uint32_t           flags;        /* thread flags                                  */
     void              *owner;        /* owner of the thread - if kernel, owner = null */
-    virt_addr_t        context;
+    virt_addr_t        context;      /* thread context                                */
     uint32_t           id;           /* thread id                                     */
     uint16_t           prio;         /* priority                                      */
     void              *entry_point;  /* entry point of the thread                     */
@@ -129,6 +131,7 @@ typedef struct sched_exec_unit_t
     sched_policy_t  policy;
     spinlock_t      wake_q_lock; /* lock for the wake queue */
     list_head_t     wake_q;    /* queue of threads that wait to be woken up  */
+    list_head_t     unit_threads;
 }sched_exec_unit_t;
 
 typedef struct sched_owner_t
