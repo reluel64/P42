@@ -54,7 +54,6 @@ static int32_t basic_enqueue
 
 
     bpu = basic_unit_get(unit);
-
     if(bpu != NULL && th != NULL)
     {
         linked_list_add_head(&bpu->threads, &th->sched_node);
@@ -196,6 +195,7 @@ static sched_policy_t basic_policy =
     .select_thread    = basic_select_thread,
     .put_prev         = basic_put_prev_thread,
     .policy_name      = "basic",
+    .id               = sched_basic_policy,
     .pv               = &policy
 };
 

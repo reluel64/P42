@@ -43,12 +43,19 @@ typedef struct sched_thread_t    sched_thread_t;
 typedef unsigned char cpu_aff_t[CPU_AFFINITY_VECTOR] ;
 
 
+typedef enum sched_policy_id
+{
+    sched_idle_task_policy = 0,
+    sched_basic_policy = 1
+}sched_policy_id_t;
+
 typedef struct sched_policy_t
 {
 
     list_node_t node;
     
     char *policy_name;
+    sched_policy_id_t id;
 
     int32_t (*dequeue)
     (
