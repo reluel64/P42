@@ -157,10 +157,13 @@ static int vm_extent_alloc_tracking
     if(status == 0)
     {
         slot        = (vm_slot_hdr_t*)alloc_ext.base;
-        slot->avail = ext_per_slot;
-
+        
         /* wipe out the memory */
         memset(slot, 0, VM_SLOT_SIZE);
+        
+        slot->avail = ext_per_slot;
+
+        
 
         /* add the slot to the list where it is required */
         linked_list_add_tail(lh, &slot->node);
