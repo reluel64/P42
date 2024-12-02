@@ -19,7 +19,6 @@
 #define UNIT_THREADS_WAKE        (1 << 0)
 #define UNIT_THREADS_UNBLOCK     (1 << 1)
 #define UNIT_RESCHEDULE          (1 << 2)
-#define UNIT_START               (1 << 3)
 #define UNIT_NO_PREEMPT          (1 << 4)
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \

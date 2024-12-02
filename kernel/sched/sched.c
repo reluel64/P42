@@ -426,8 +426,6 @@ int sched_unit_init
         kprintf("No timer - will rely on resched IPIs only\n");
     }
 
-    unit->flags |= UNIT_START;
-
     /* Enter the scheduler's code */
     schedule();
     
