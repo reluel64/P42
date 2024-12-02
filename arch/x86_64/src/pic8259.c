@@ -17,7 +17,13 @@
 #define ICW1_LTIM (1 << 3)
 #define ICW1_PIC_INIT (1 << 4)
 
-static int pic8259_isr(void *pv, uint64_t ec)
+static isr_t pic8259_eoi = {0};
+
+static int pic8259_eoi_isr
+(
+    void *dev, 
+    isr_info_t *inf
+)
 {
     kprintf("%s %d %d\n",__FILE__,__FUNCTION__,__LINE__);
     __outb(PIC1_COMMAND,( 1<<5 ));
@@ -25,7 +31,10 @@ static int pic8259_isr(void *pv, uint64_t ec)
     return(0);
 }
 
-static int pic8259_probe(device_t *dev)
+static int pic8259_probe
+(
+    device_t *dev
+)
 {
     int has_pic             = 0;
     ACPI_STATUS             status  = AE_OK;
@@ -50,7 +59,10 @@ static int pic8259_probe(device_t *dev)
     return(has_pic ? 0 : -1);
 }
 
-static int pic8259_drv_init(driver_t *drv)
+static int pic8259_drv_init
+(
+    driver_t *drv
+)
 {
     device_t *dev = NULL;
 
@@ -65,12 +77,23 @@ static int pic8259_drv_init(driver_t *drv)
             kprintf("%s %d failed to add device\n");
             return(-1);
         }
+        else
+        {
+            isr_install(pic8259_eoi_isr,
+                        dev,
+                        0, 
+                        1, 
+                        &pic8259_eoi);
+        }
     }
 
     return(0);
 }
 
-static int pic8259_dev_init(device_t *drv)
+static int pic8259_dev_init
+(
+    device_t *drv
+)
 {
 
     __outb(PIC1_COMMAND, ICW1_IC4|ICW1_PIC_INIT);
@@ -88,14 +111,20 @@ static int pic8259_dev_init(device_t *drv)
     return(0);
 }
 
-static int pic8259_disable(device_t *dev)
+static int pic8259_disable
+(
+    device_t *dev
+)
 {
     __outb(0xa1, 0xff);
     __outb(0x21, 0xff);
     return(0);
 }
 
-static int pic8259_enable(device_t *dev)
+static int pic8259_enable
+(
+    device_t *dev
+)
 {
   
     __outb(0xa1, 0);
@@ -125,7 +154,10 @@ static driver_t pic8259 =
 };
 
 
-int pic8259_register(void)
+int pic8259_register
+(
+    void
+)
 {
     devmgr_drv_add(&pic8259);
     devmgr_drv_init(&pic8259);

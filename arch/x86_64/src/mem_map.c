@@ -255,15 +255,18 @@ int mem_map_iter
 {
     multiboot_info_t       *mb_info         = NULL;
     memory_map_entry_t      mem_entry;
-    memory_map_entry_t      dom_entry;
     multiboot_memory_map_t *mb_mem_map      = NULL;
-    uint32_t                sig             = 0;
-    uint64_t                mem_map         = 0;
     uint64_t                map_length      = 0;
     int                     has_numa        = 0;
+    
+#ifdef USE_NUMA_DOMAINS
+    uint32_t                sig             = 0;
+    uint64_t                mem_map         = 0;
+    memory_map_entry_t      dom_entry;
     int                     numa_dom_status = 0;
     phys_size_t             next_pos        = 0;
     int                     in_domain       = 0;
+#endif
 
 #ifdef MEM_MAP_TEST_CALLBACK
     callback = mem_map_test_callback;
@@ -296,7 +299,7 @@ int mem_map_iter
                 callback(&mem_entry, pv); 
             }
         }
-#if 0
+#ifdef USE_NUMA_DOMAINS
         else
         {
             mem_map_show_e820();
