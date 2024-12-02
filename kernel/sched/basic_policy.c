@@ -85,7 +85,7 @@ static int32_t basic_dequeue
     return(status);
 }
 
-static int32_t basic_peek_next_thread
+static int32_t basic_pick_next_thread
 (
     sched_exec_unit_t *unit,
     sched_thread_t **th
@@ -100,8 +100,12 @@ static int32_t basic_peek_next_thread
     if((bpu != NULL) && (th != NULL))
     {
         n = linked_list_last(&bpu->threads);
-        *th = SCHED_NODE_TO_THREAD(n);
-        result = 0;
+        if(n != NULL)
+        {
+            *th = SCHED_NODE_TO_THREAD(n);
+            result = 0;
+        }
+
     }
 
     return(result);
@@ -113,7 +117,6 @@ static int32_t basic_select_thread
     sched_thread_t *th
 )
 {
-
     th->cpu_left = th->prio;
     return(0);
 }
@@ -189,7 +192,7 @@ static sched_policy_t basic_policy =
     .enqueue          = basic_enqueue,
     .tick             = basic_tick,
     .unit_init        = basic_unit_init,
-    .pick_next        = basic_peek_next_thread,
+    .pick_next        = basic_pick_next_thread,
     .select_thread    = basic_select_thread,
     .put_prev         = basic_put_prev_thread,
     .policy_name      = "basic",
@@ -198,7 +201,7 @@ static sched_policy_t basic_policy =
 
 int basic_register
 (
-    sched_policy_t *policy
+    void
 )
 {
     sched_policy_register(&basic_policy);
