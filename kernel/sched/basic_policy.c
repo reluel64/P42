@@ -114,7 +114,7 @@ static int32_t basic_select_thread
 )
 {
 
-    
+    th->cpu_left = th->prio;
     return(0);
 }
 
@@ -131,6 +131,10 @@ static int32_t basic_put_prev_thread
 
     if((bpu != NULL) && (th != NULL))
     {
+        /* remove thread from current position */
+        linked_list_remove(&bpu->threads, &th->sched_node);
+
+        /* put thread at the head of the queue */
         linked_list_add_head(&bpu->threads, &th->sched_node);
         result = 0;
     }
@@ -138,13 +142,13 @@ static int32_t basic_put_prev_thread
     return(result);
 }
 
-static int basic_tick
+static int32_t basic_tick
 (
     sched_exec_unit_t *unit
 )
 {
     sched_thread_t *th          = NULL;
-   
+    int32_t status = 0;
     th = unit->current;
 
     if(th != NULL)
@@ -152,11 +156,11 @@ static int basic_tick
         if(th->cpu_left > 0)
         {
             th->cpu_left--;
+            status = 1;
         }
     }
 
-
-   return(0);
+   return(status);
 }
 
 static int basic_unit_init
@@ -185,7 +189,7 @@ static sched_policy_t basic_policy =
     .enqueue          = basic_enqueue,
     .tick             = basic_tick,
     .unit_init        = basic_unit_init,
-    .peek_next        = basic_peek_next_thread,
+    .pick_next        = basic_peek_next_thread,
     .select_thread    = basic_select_thread,
     .put_prev         = basic_put_prev_thread,
     .policy_name      = "basic",

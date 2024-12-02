@@ -12,6 +12,7 @@
 #define THREAD_ALLOCATED        (1 << 4)
 #define THREAD_NEED_RESCHEDULE  (1 << 5)
 #define THREAD_WOKE_BY_TIMER    (1 << 6)
+#define THREAD_INACTIVE         (1 << 7)
 
 #define CPU_AFFINITY_VECTOR     (0x8)
 
@@ -61,7 +62,7 @@ typedef struct sched_policy_t
         sched_thread_t *th
     );
 
-    int32_t (*peek_next)
+    int32_t (*pick_next)
     (
         sched_exec_unit_t *unit,
         sched_thread_t **th
@@ -114,7 +115,7 @@ typedef struct sched_thread_t
     uint32_t          cpu_left;      /* reamining time before task switch             */
     void              *rval;         /* return value                                  */
     cpu_aff_t         affinity;
-
+    sched_policy_t    *policy;
 }sched_thread_t;
 
 typedef struct sched_exec_unit_t
@@ -128,7 +129,6 @@ typedef struct sched_exec_unit_t
     spinlock_t      lock;      /* lock to protect the queues                 */
     uint32_t        flags;     /* flags for the execution unit               */
     device_t       *timer_dev; /* timer device which is connected to this unit  */
-    sched_policy_t  policy;
     spinlock_t      wake_q_lock; /* lock for the wake queue */
     list_head_t     wake_q;    /* queue of threads that wait to be woken up  */
     list_head_t     unit_threads;
