@@ -25,7 +25,7 @@ static int pic8259_eoi_isr
     isr_info_t *inf
 )
 {
-    kprintf("%s %d %d\n",__FILE__,__FUNCTION__,__LINE__);
+    //kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     __outb(PIC1_COMMAND,( 1<<5 ));
     __outb(PIC2_COMMAND,( 1<<5 ));
     return(0);
