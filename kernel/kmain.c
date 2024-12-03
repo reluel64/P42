@@ -32,9 +32,16 @@ void *kmain_sys_init
     void *arg
 )
 {
+    kprintf("Performing platform initialization...\n");
     platform_init();    
-
-    while(1);
+    kprintf("Platform init complete\n");
+    pfmgr_show_free_memory();
+    vm_ctx_show(NULL);
+    while(1)
+    {
+        sched_sleep(1000);
+        kprintf("Testttt\n");
+    }
 
     return(NULL);
 }

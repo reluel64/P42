@@ -4,7 +4,7 @@
 #include <liballoc.h>
 
 
-#define BASIC_POLICY_MAX_UNITS 128
+#define BASIC_POLICY_MAX_UNITS 4096
 
 typedef struct basic_policy_unit_t
 {
