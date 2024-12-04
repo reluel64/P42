@@ -118,7 +118,7 @@ void sched_thread_entry_point
     {
         ret_val = entry_point(th->arg);
     }
-    kprintf("Thread ended\n");
+
     /* The thread is now dead */
     spinlock_lock_int(&th->lock, &int_flag);
 
@@ -136,7 +136,7 @@ void sched_thread_entry_point
     }
 }
 
-int sched_create_thread
+int32_t sched_track_thread
 (
     sched_thread_t *th
 )
@@ -151,39 +151,82 @@ int sched_create_thread
     return(0);
 }
 
+
+int32_t sched_untrack_thread
+(
+    sched_thread_t *th
+)
+{
+    uint8_t int_flag = 0;
+
+    /* add thread to the global list */
+    spinlock_write_lock_int(&threads_lock, &int_flag);
+    linked_list_remove(&threads, &th->system_node);
+    spinlock_write_unlock_int(&threads_lock, int_flag);
+
+    return(0);
+}
+
+int32_t sched_pin_task_to_unit
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t *th
+)
+{
+    int32_t status = 0;
+    uint8_t int_status = 0;
+
+    spinlock_lock_int(&unit->lock, &int_status);
+    /* this thread belongs to this unit */
+    th->unit = unit;
+    linked_list_add_head(&unit->unit_threads, &th->unit_node);
+
+    spinlock_unlock_int(&unit->lock, int_status);
+
+    return(status);
+}
+
+int32_t sched_unpin_task_from_unit
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t *th
+)
+{
+    int32_t status = 0;
+    uint8_t int_status = 0;
+    
+    spinlock_lock_int(&unit->lock, &int_status);
+    /* this thread belongs to this unit */
+    th->unit = NULL;
+    linked_list_remove(&unit->unit_threads, &th->unit_node);
+
+    spinlock_unlock_int(&unit->lock, int_status);
+
+    return(status);
+}
+
 int sched_start_thread
 (
     sched_thread_t *th
 )
 {
-   
     cpu_t *cpu = NULL;
     sched_exec_unit_t *unit = NULL;
-    uint8_t int_flag = 0;
 
     cpu = cpu_current_get();
 
     unit = cpu->sched;
     
-    sched_create_thread(th);
+    sched_track_thread(th);
 
     th->policy = sched_get_policy_by_id(th != &unit->idle ? sched_basic_policy : 
                                                             sched_idle_task_policy);
 
-    /* Lock everything */
-    spinlock_lock(&th->lock);
-    spinlock_lock_int(&unit->lock, &int_flag);
 
-    /* this thread belongs to this unit */
-    th->unit = unit;
-    linked_list_add_head(&unit->unit_threads, &th->unit_node);
+    sched_pin_task_to_unit(unit, th);
 
     /* enqueue the thread to the policy so it will get executed */
     sched_enq(unit, th);
-
-    /* Unlock everything */
-    spinlock_unlock_int(&unit->lock, int_flag);
-    spinlock_unlock(&th->lock);
 
     return(0);
 }

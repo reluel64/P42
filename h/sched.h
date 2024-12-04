@@ -44,8 +44,9 @@ typedef unsigned char cpu_aff_t[CPU_AFFINITY_VECTOR] ;
 
 typedef enum sched_policy_id
 {
-    sched_idle_task_policy = 0,
-    sched_basic_policy = 1
+    sched_policy_default = 0,
+    sched_idle_task_policy = 1,
+    sched_basic_policy = 2
 }sched_policy_id_t;
 
 typedef struct sched_policy_t
