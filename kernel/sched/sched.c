@@ -51,6 +51,7 @@ static void sched_context_switch
 
 static uint32_t sched_timer_wake_thread
 (
+    timer_t *tm,
     void *thread,
     const void *isr
 );
@@ -77,6 +78,11 @@ static int32_t sched_deq
 (
     sched_exec_unit_t *unit,
     sched_thread_t    *th
+);
+
+static uint8_t sched_preemption_enabled
+(
+    sched_exec_unit_t *unit
 );
 
 
@@ -159,7 +165,7 @@ int32_t sched_untrack_thread
 {
     uint8_t int_flag = 0;
 
-    /* add thread to the global list */
+    /* remove thread to the global list */
     spinlock_write_lock_int(&threads_lock, &int_flag);
     linked_list_remove(&threads, &th->system_node);
     spinlock_write_unlock_int(&threads_lock, int_flag);
@@ -205,29 +211,73 @@ int32_t sched_unpin_task_from_unit
     return(status);
 }
 
+int32_t sched_find_least_used_unit
+(
+    sched_exec_unit_t **unit
+)
+{
+    uint8_t int_status = 0;
+    list_node_t *ln = NULL;
+    sched_exec_unit_t *least_busy = NULL;
+    sched_exec_unit_t *cursor = NULL;
+    
+    spinlock_read_lock_int(&units_lock, &int_status);
+    ln = linked_list_first(&units);
+
+    while(ln)
+    {
+        cursor = (sched_exec_unit_t*)ln;
+
+        if(least_busy == NULL)
+        {
+            least_busy = cursor;
+        }
+        else
+        {
+            if(linked_list_count(&cursor->unit_threads) < 
+               linked_list_count(&least_busy->unit_threads))
+            {
+                least_busy = cursor;
+            }
+        }
+
+        ln = linked_list_next(ln);
+    }
+
+    *unit = least_busy;
+    spinlock_read_unlock_int(&units_lock, int_status);
+    return(0);
+}
+
 int sched_start_thread
 (
     sched_thread_t *th
 )
 {
-    cpu_t *cpu = NULL;
     sched_exec_unit_t *unit = NULL;
-
-    cpu = cpu_current_get();
-
-    unit = cpu->sched;
+    uint8_t int_status = 0;
     
+    spinlock_lock_int(&th->lock, &int_status);
+    
+    /* get the most available unit */
+    sched_find_least_used_unit(&unit);
+
+    /* add the thread to the tracking list */
     sched_track_thread(th);
 
+    /* pick the policy for the thread */
     th->policy = sched_get_policy_by_id(th != &unit->idle ? sched_basic_policy : 
                                                             sched_idle_task_policy);
 
 
+    /* pin the thread to the unit */
     sched_pin_task_to_unit(unit, th);
 
     /* enqueue the thread to the policy so it will get executed */
+    spinlock_lock(&unit->lock);
     sched_enq(unit, th);
-
+    spinlock_unlock(&unit->lock);
+    spinlock_unlock_int(&th->lock, int_status);
     return(0);
 }
 
@@ -323,6 +373,138 @@ void sched_thread_exit
     }
 }
 
+
+void sched_disable_preempt(void)
+{
+    uint8_t int_status = 0;
+    sched_exec_unit_t *unit = NULL;
+    cpu_t *cpu = NULL;
+
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
+
+    cpu = cpu_current_get();
+
+    if(cpu != NULL)
+    {
+        unit = cpu->sched;
+    }
+
+    if(unit != NULL)
+    {
+        if(__atomic_load_n(&unit->preempt_lock, __ATOMIC_SEQ_CST) < UINT32_MAX)
+        {
+            __atomic_add_fetch(&unit->preempt_lock, 1, __ATOMIC_SEQ_CST);
+        }
+    }
+    
+    if(int_status)
+    {
+        cpu_int_unlock();
+    }
+}
+
+void sched_enable_preempt(void)
+{
+    uint8_t int_status = 0;
+    sched_exec_unit_t *unit = NULL;
+    cpu_t *cpu = NULL;
+
+    int_status = cpu_int_check();
+
+    if(int_status)
+    {
+        cpu_int_lock();
+    }
+
+    cpu = cpu_current_get();
+
+    if(cpu != NULL)
+    {
+        unit = cpu->sched;
+    }
+
+    if(unit != NULL)
+    {
+        if(__atomic_load_n(&unit->preempt_lock, __ATOMIC_SEQ_CST) > 0)
+        {
+            __atomic_sub_fetch(&unit->preempt_lock, 1, __ATOMIC_SEQ_CST);
+        }
+    }
+    
+    if(int_status)
+    {
+        cpu_int_unlock();
+    }
+}
+
+static uint8_t sched_preemption_enabled
+(
+    sched_exec_unit_t *unit
+)
+{
+    return(__atomic_load_n(&unit->preempt_lock, __ATOMIC_SEQ_CST) == 0);
+}
+
+int32_t sched_policy_register
+(
+    sched_policy_t *p
+)
+{
+    uint8_t int_status = 0;
+    int32_t node_found = 0;
+    int32_t ret = -1;
+
+    spinlock_write_lock_int(&policies_lock, &int_status);
+
+    node_found = linked_list_find_node(&policies, &p->node);
+
+    if(node_found == -1)
+    {
+        linked_list_add_tail(&policies, &p->node);
+        ret = 0;
+    }
+
+    spinlock_write_unlock_int(&policies_lock, int_status);
+
+    return(ret);
+
+}
+
+sched_policy_t *sched_get_policy_by_id
+(
+    sched_policy_id_t id
+)
+{
+    list_node_t *ln = NULL;
+    sched_policy_t *policy = NULL;
+
+    ln = linked_list_first(&policies);
+
+    while(ln != NULL)
+    {
+        policy = (sched_policy_t*)ln;
+
+        if(policy->id == id)
+        {
+            break;
+        }
+        else
+        {
+            policy = NULL;
+        }
+
+        ln = linked_list_next(ln);
+    }
+
+    return(policy);
+}
+
+
 /*
  * sched_init - initialize scheduler structures
  */ 
@@ -335,11 +517,13 @@ int sched_init(void)
     /* Initialize units list */
     linked_list_init(&units);
     
+    /* register basic scheduling policy */
     basic_register();
 
+    /* register idle task policy */
     idle_task_register();
-    /* intialize the owner */
 
+    /* intialize the owner */
     owner_kernel_init();
 
     return(0);
@@ -491,17 +675,18 @@ void sched_wake_thread
 
     if(th != NULL)
     {
+        spinlock_lock(&th->unit->lock);
         spinlock_lock_int(&th->lock, &int_flag);
 
-        /* clear the sleeping flag */
+        th->flags |= THREAD_READY;
         th->flags &= ~THREAD_SLEEPING;
 
-        /* thread is ready */
-        th->flags |= THREAD_READY;
-
+       
         /* put the thread back to the policy */
         sched_enq(th->unit, th);
-        
+
+        spinlock_unlock(&th->unit->lock);
+
         spinlock_unlock_int(&th->lock, int_flag);
     }
 }
@@ -509,13 +694,12 @@ void sched_wake_thread
 
 static uint32_t sched_timer_wake_thread
 (
+    timer_t *timer,
     void *thread,
     const void *isr
 )
 {
-    sched_thread_t *th = thread;
-    
-    th->flags |= THREAD_WOKE_BY_TIMER;
+//    kprintf("Waking up thread %x\n",thread);
     sched_wake_thread(thread);
     return(0);
 }
@@ -546,12 +730,7 @@ void sched_sleep
     /* mark thread as sleeping if we have any delay specified*/
     if(delay != 0)
     {
-        self->flags |= THREAD_SLEEPING;
-
-        /* thread not running and not ready */
-        self->flags &= ~(THREAD_RUNNING | THREAD_READY);
-
-        sched_deq(self->unit, self);
+        self->flags &= ~THREAD_READY;
     }
 
     /* don't bother to add the thread to the timer if delay is WAIT_FOREVER */
@@ -574,16 +753,10 @@ void sched_sleep
     if((delay != WAIT_FOREVER) && (delay != 0))
     {
         /* if we were woken up earlier, delete the timer from the timer queue*/
-        if(~self->flags & THREAD_WOKE_BY_TIMER)
+        if(timer_dequeue(NULL, &tm))
         {
-            if(timer_dequeue(NULL, &tm))
-            {
-                kprintf("NOTHING TO DEQUEUE\n");
-            }
-        }   
-        
-        /* clear the woke by timer flag */
-        self->flags &= ~THREAD_WOKE_BY_TIMER; 
+            kprintf("TIMER NO LONGER IN QUEUE\n");
+        }
     }
 }
 
@@ -599,6 +772,7 @@ static uint32_t sched_tick
     sched_exec_unit_t *unit         = NULL;
     sched_thread_t    *th           = NULL;
     uint8_t resched = 0;
+    uint8_t preempt = 0;
     unit = pv_unit;
 
     /* lock the unit */
@@ -610,17 +784,20 @@ static uint32_t sched_tick
     {
         if(th->policy != NULL)
         {
-           
             if(th->policy->tick != NULL)
             {
-        
                 resched = (th->policy->tick(unit) == 0);
             }
         }
 
         if(resched)
         {
-            th->flags |= THREAD_NEED_RESCHEDULE;
+            preempt = sched_preemption_enabled(unit);
+
+            if(preempt)
+            {
+                th->flags |= THREAD_NEED_RESCHEDULE;
+            }
         }
     }
 
@@ -665,12 +842,14 @@ static void *sched_idle_thread
 
     if(unit->cpu->cpu_id > 0)
     {
+        #if 0
         func = devmgr_dev_api_get(unit->timer_dev);
 
         if((func != NULL) && (func->disable != NULL))
         {
             func->disable(unit->timer_dev);
         }
+        #endif
     }
 #endif
 
@@ -698,13 +877,20 @@ int sched_need_resched
 {
     sched_thread_t *th = NULL;
     int need_resched  = 1;
-    
+    uint8_t preemption = 0;
     /* if we have a thread, check if we have to do rescheduling */
     if(unit->current)
     {
         th = unit->current;
         need_resched = (th->flags & THREAD_NEED_RESCHEDULE) == 
                                     THREAD_NEED_RESCHEDULE;
+    }
+
+    preemption = sched_preemption_enabled(unit);
+
+    if(preemption == 0)
+    {
+        need_resched = 0;
     }
     
     return(need_resched);
@@ -735,6 +921,7 @@ static int32_t sched_select_thread
 )
 {
     int32_t result = -1;
+    
     if(th->policy != NULL)
     {
         result = th->policy->select_thread(unit, th);
@@ -768,7 +955,6 @@ static int32_t sched_enq
 {
     if(th->policy != NULL)
     {
-        
         th->policy->enqueue(unit, th);
     }
     return(0);
@@ -782,7 +968,10 @@ static int32_t sched_deq
     sched_thread_t    *th
 )
 {
-    th->policy->dequeue(unit, th);
+    if(th->policy->dequeue != NULL)
+    {
+        th->policy->dequeue(unit, th);
+    }
     return(0);
 }
 
@@ -858,6 +1047,20 @@ static int32_t sched_next_thread
     return(status); 
 }
 
+static void  sched_block_thread
+(
+    sched_exec_unit_t *unit,
+    sched_thread_t *th
+)
+{
+    if(~th->flags & THREAD_SLEEPING)
+    {
+        //kprintf("Blocking thread %x sttus %d\n",th, th->flags);
+        sched_deq(unit, th);
+        th->flags |= THREAD_SLEEPING;
+    }
+}
+
 static void sched_main(void)
 {
     cpu_t             *cpu     = NULL;
@@ -869,16 +1072,26 @@ static void sched_main(void)
     cpu    = cpu_current_get();
     unit   = cpu->sched;
     
-    if(~unit->flags & UNIT_NO_PREEMPT)
+    if(sched_preemption_enabled(unit))
     {
         /* Lock the execution unit */
         spinlock_lock_int(&unit->lock, &int_flag);
 
         prev_th = unit->current;
 
+       if(prev_th != NULL)
+        {
+            if(~prev_th->flags & THREAD_READY)
+            {
+                sched_block_thread(unit, prev_th);
+            }
+        }
+
         sched_next_thread(unit, prev_th, &next_th);
     
         unit->current = next_th;
+
+ 
 
         /* Switch context */
         sched_context_switch(prev_th, next_th);
@@ -886,120 +1099,4 @@ static void sched_main(void)
         /* Unlock unit */
         spinlock_unlock_int(&unit->lock, int_flag);
     }
-}
-
-
-void sched_disable_preempt(void)
-{
-    uint8_t int_status = 0;
-    sched_exec_unit_t *unit = NULL;
-    cpu_t *cpu = NULL;
-
-    int_status = cpu_int_check();
-
-    if(int_status)
-    {
-        cpu_int_lock();
-    }
-
-    cpu = cpu_current_get();
-
-    if(cpu != NULL)
-    {
-        unit = cpu->sched;
-    }
-
-    if(unit != NULL)
-    {
-        unit->flags |= UNIT_NO_PREEMPT;
-    }
-    
-    if(int_status)
-    {
-        cpu_int_unlock();
-    }
-}
-
-void sched_enable_preempt(void)
-{
-    uint8_t int_status = 0;
-    sched_exec_unit_t *unit = NULL;
-    cpu_t *cpu = NULL;
-
-    int_status = cpu_int_check();
-
-    if(int_status)
-    {
-        cpu_int_lock();
-    }
-    cpu = cpu_current_get();
-
-    if(cpu != NULL)
-    {
-        unit = cpu->sched;
-    }
-
-    if(unit != NULL)
-    {
-        unit->flags &= ~UNIT_NO_PREEMPT;
-    }
-    
-    if(int_status)
-    {
-        cpu_int_unlock();
-    }
-}
-
-int32_t sched_policy_register
-(
-    sched_policy_t *p
-)
-{
-    uint8_t int_status = 0;
-    int32_t node_found = 0;
-    int32_t ret = -1;
-
-    spinlock_write_lock_int(&policies_lock, &int_status);
-
-    node_found = linked_list_find_node(&policies, &p->node);
-
-    if(node_found == -1)
-    {
-        linked_list_add_tail(&policies, &p->node);
-        ret = 0;
-    }
-
-    spinlock_write_unlock_int(&policies_lock, int_status);
-
-    return(ret);
-
-}
-
-sched_policy_t *sched_get_policy_by_id
-(
-    sched_policy_id_t id
-)
-{
-    list_node_t *ln = NULL;
-    sched_policy_t *policy = NULL;
-
-    ln = linked_list_first(&policies);
-
-    while(ln != NULL)
-    {
-        policy = (sched_policy_t*)ln;
-
-        if(policy->id == id)
-        {
-            break;
-        }
-        else
-        {
-            policy = NULL;
-        }
-
-        ln = linked_list_next(ln);
-    }
-
-    return(policy);
 }
