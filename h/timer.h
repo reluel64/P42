@@ -13,10 +13,11 @@
 #define TIMER_NOT_INIT    (1 << 0)
 #define TIMER_PERIODIC    (1 << 0)
 #define TIMER_ONESHOT     (1 << 1)
-
+#define TIMER_PROCESSED   (1 << 2)
 #define TIMER_RESOLUTION_NS  (1000000000ull) // nanosecond
 #define NODE_TO_TIMER (node)    ((uint8_t*)(node) - offsetof((node), timer_t))
 
+typedef struct timer_t timer_t;
 
 typedef struct time_spec_t
 {
@@ -29,7 +30,7 @@ typedef uint32_t (*timer_tick_handler_t) \
                  (void *arg, const time_spec_t *step, const void *isr_inf);
 
 typedef uint32_t (*timer_handler_t) \
-                 (void *arg, const void *isr_inf);
+                 (timer_t *tm, void *arg, const void *isr_inf);
 
 
 typedef struct timer_dev_t
