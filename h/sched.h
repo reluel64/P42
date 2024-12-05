@@ -11,15 +11,9 @@
 #define THREAD_DEAD             (1 << 3)
 #define THREAD_ALLOCATED        (1 << 4)
 #define THREAD_NEED_RESCHEDULE  (1 << 5)
-#define THREAD_WOKE_BY_TIMER    (1 << 6)
 #define THREAD_INACTIVE         (1 << 7)
 
 #define CPU_AFFINITY_VECTOR     (0x8)
-
-#define UNIT_THREADS_WAKE        (1 << 0)
-#define UNIT_THREADS_UNBLOCK     (1 << 1)
-#define UNIT_RESCHEDULE          (1 << 2)
-#define UNIT_NO_PREEMPT          (1 << 4)
 
 #define THREAD_STATE_MASK (THREAD_RUNNING | \
                           THREAD_READY    | \
@@ -135,6 +129,7 @@ typedef struct sched_exec_unit_t
     list_head_t     dead_q;    /* queue of dead threads on the current CPU   */
     spinlock_t      lock;      /* lock to protect the queues                 */
     uint32_t        flags;     /* flags for the execution unit               */
+    uint32_t        preempt_lock; /* preemption lock count */
     device_t       *timer_dev; /* timer device which is connected to this unit  */
     spinlock_t      wake_q_lock; /* lock for the wake queue */
     list_head_t     wake_q;    /* queue of threads that wait to be woken up  */
