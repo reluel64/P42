@@ -133,12 +133,15 @@ static int32_t basic_put_prev_thread
 
     if((bpu != NULL) && (th != NULL))
     {
-        /* remove thread from current position */
-        linked_list_remove(&bpu->threads, &th->sched_node);
+        if(linked_list_find_node(&bpu->threads, &th->sched_node) == 0)
+        {
+            /* remove thread from current position */
+            linked_list_remove(&bpu->threads, &th->sched_node);
 
-        /* put thread at the head of the queue */
-        linked_list_add_head(&bpu->threads, &th->sched_node);
-        result = 0;
+            /* put thread at the head of the queue */
+            linked_list_add_head(&bpu->threads, &th->sched_node);
+            result = 0;
+        }
     }
 
     return(result);
