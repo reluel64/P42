@@ -104,7 +104,8 @@ static uint32_t timer_queue_callback
         if(status)
         {            
             linked_list_remove(&tm_dev->active_q, &c->node);
-            c->callback(c->arg, isr_inf);
+            c->callback(c, c->arg, isr_inf);
+            c->flags |= TIMER_PROCESSED;
         }
 
         c = n;
@@ -112,16 +113,8 @@ static uint32_t timer_queue_callback
 
     spinlock_lock(&tm_dev->lock_pend_q);
     
-    c = (timer_t*) linked_list_first(&tm_dev->pend_q);
-
-    while(c)
-    {
-        n = (timer_t*)linked_list_next(&c->node);
-        linked_list_remove(&tm_dev->pend_q, &c->node);
-        linked_list_add_tail(&tm_dev->active_q, &c->node);    
-        c = n;
-    }
-
+    linked_list_concat(&tm_dev->pend_q, &tm_dev->active_q);
+    
     spinlock_unlock(&tm_dev->lock_pend_q);
 
     spinlock_unlock(&tm_dev->lock_active_q);
@@ -243,7 +236,7 @@ int timer_enqeue_static
     tm->arg = arg;
     tm->callback = func;
     tm->to_sleep = *ts;
-
+    tm->flags    = 0;
     spinlock_lock_int(&tmd->lock_pend_q, &int_sts);   
 
     linked_list_add_tail(&tmd->pend_q, &tm->node);
@@ -263,7 +256,7 @@ int timer_dequeue
     uint8_t     int_sts = 0;
     timer_dev_t *tmd = NULL;
     int found = 0;
-
+    
     if(timer_dev == NULL)
     {
         tmd = &system_timer;
@@ -278,8 +271,19 @@ int timer_dequeue
         return(-1);
     }
 
+    if(tm->flags & TIMER_PROCESSED)
+    {
+        return(0);
+    }
+    int_sts = cpu_int_check();
+
+    if(int_sts)
+    {
+        cpu_int_lock();
+    }
+
     /* Look into the active queue */
-    spinlock_lock_int(&tmd->lock_active_q, &int_sts);
+    spinlock_lock(&tmd->lock_active_q);
 
     if(linked_list_find_node(&tmd->active_q, &tm->node) == 0)
     {
@@ -287,24 +291,27 @@ int timer_dequeue
         found = 1;
     }
 
-    spinlock_unlock_int(&tmd->lock_active_q, int_sts);
+    spinlock_unlock(&tmd->lock_active_q);
 
-    if(found == 1)
+    if(found == 0)
     {
-        return(0);
+        /* Look into the pend queue */
+        spinlock_lock(&tmd->lock_pend_q);
+
+        if(linked_list_find_node(&tmd->pend_q, &tm->node) == 0)
+        {
+            linked_list_remove(&tmd->pend_q, &tm->node);
+            found = 1;
+        }
+
+        spinlock_unlock(&tmd->lock_pend_q);
     }
-
-    /* Look into the pend queue */
-    spinlock_lock_int(&tmd->lock_pend_q, &int_sts);
-
-    if(linked_list_find_node(&tmd->pend_q, &tm->node) == 0)
+    
+    if(int_sts)
     {
-        linked_list_remove(&tmd->pend_q, &tm->node);
-        found = 1;
+        cpu_int_unlock();
     }
-
-    spinlock_unlock_int(&tmd->lock_pend_q, int_sts);
-
+    
     if(found == 1)
     {
         return(0);
