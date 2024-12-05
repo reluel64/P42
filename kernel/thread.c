@@ -80,7 +80,7 @@ static int thread_setup
     th->arg          = arg;
     th->entry_point  = entry_pt;
     th->stack_sz     = stack_sz;
-    th->flags        = THREAD_INACTIVE;
+    th->flags        = THREAD_READY;
     th->owner        = owner;
     th->policy       = NULL;
     
