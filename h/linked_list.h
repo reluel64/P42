@@ -97,4 +97,10 @@ list_node_t * list_get_last
     list_head_t *lh
 );
 
+int32_t linked_list_concat
+(
+    list_head_t *src,
+    list_head_t *dst
+);
+
 #endif
