@@ -67,6 +67,7 @@ static int apic_timer_probe(device_t *dev)
 
 static uint32_t apic_timer_loop
 (
+    timer_t *tm,
     void *arg,
     const void *isr
 )
