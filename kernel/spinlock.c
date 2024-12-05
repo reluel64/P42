@@ -122,8 +122,10 @@ void spinlock_read_unlock_int
 {
 
     if(__atomic_load_n(&s->lock, __ATOMIC_SEQ_CST) < UINT32_MAX)
+    {
         __atomic_add_fetch(&s->lock, 1, __ATOMIC_SEQ_CST);
-
+    }
+    
     if(flag)
     {
         cpu_int_unlock();
