@@ -23,7 +23,9 @@ void vm_ctx_show
     {
         ctx = &vm_kernel_ctx;
     }
-
+    kprintf("ALLOC HEADERS %d | FREE HEADERS %d\n",
+                        linked_list_count(&ctx->alloc_mem),
+                        linked_list_count(&ctx->free_mem));
     kprintf("FREE_DESC_PER_PAGE  %d\n",ctx->free_per_slot);
     kprintf("ALLOC_DESC_PER_PAGE %d\n",ctx->alloc_per_slot);
 

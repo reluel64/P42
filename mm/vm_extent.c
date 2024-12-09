@@ -32,6 +32,19 @@ static uint8_t vm_extent_merge_in_hdr
     uint32_t      max_loops
 );
 
+static int vm_extent_compact_hdr
+(
+    vm_slot_hdr_t *hdr,
+    uint32_t ext_per_slot
+);
+
+
+int vm_extent_compact_all_hdr
+(
+    list_head_t *lh,
+    uint32_t ext_per_slot
+);
+
 #define VM_SLOT_ALLOC_FLAGS  (VM_ALLOCATED | VM_PERMANENT | \
                               VM_HIGH_MEM  | VM_LOCKED)
 
@@ -602,7 +615,7 @@ int vm_extent_insert
         return(VM_FAIL);
     }
 
-  //  kprintf("INSERTING %x %x\n",ext->base, ext->length);
+    //kprintf("INSERTING %x %x\n",ext->base, ext->length);
     if(ext->length == 0)
     {
         return(VM_NOENT);
@@ -636,17 +649,6 @@ int vm_extent_insert
                 {
                     return(VM_OK);
                 }
-#if 0
-                else
-                {
-                    if(vm_extent_merge_in_hdr(hdr, 
-                                              ext_per_slot,
-                                              ext_per_slot / 4) == VM_OK)
-                    {
-
-                    }
-                }
-#endif
             }
         }
         en = next_en;
@@ -717,7 +719,7 @@ int vm_extent_extract
     uint32_t      ext_pos  = 0;
 
     /* no length? no entry */
-    if(!ext || !ext->length)
+    if((ext == NULL) || (ext->length == 0))
     {
         kprintf("NO LENGTH, NO ENTRY\n");
         return(VM_FAIL);
@@ -976,12 +978,18 @@ int vm_extent_merge
     list_node_t   *src_ln  = NULL;
     list_node_t   *dst_ln  = NULL;
     uint8_t        merged = 0;
+    uint8_t        compact_after_merge = 0;
     int            status   = VM_FAIL;
+    uint32_t       dst_used = 0;
+    uint32_t       src_used = 0;
 
     if(lh == NULL || ext_per_slot == 0)
     {
         return(VM_FAIL);
     }    
+
+    /* do compaction of all headers */
+    vm_extent_compact_all_hdr(lh, ext_per_slot);
 
     do
     {
@@ -999,9 +1007,11 @@ int vm_extent_merge
                 continue;
             }
 
+            dst_used = ext_per_slot - dst_hdr->avail;
+
             /* cycle through the potential destination extents */
             
-            for(uint32_t d_ix = 0; d_ix < ext_per_slot; d_ix++)
+            for(uint32_t d_ix = 0; d_ix < dst_used; d_ix++)
             {
                 dst_ext = &dst_hdr->extents[d_ix];
 
@@ -1016,7 +1026,7 @@ int vm_extent_merge
                 while(src_ln)
                 {
                     src_hdr = (vm_slot_hdr_t*)src_ln;
-
+                    compact_after_merge = 0;
                     /* Skip empty headers */
                     if(src_hdr->avail == ext_per_slot)
                     {
@@ -1024,7 +1034,11 @@ int vm_extent_merge
                         continue;
                     }
 
-                    for(uint32_t s_ix = 0; s_ix < ext_per_slot; s_ix++)
+
+                    src_used = ext_per_slot - src_hdr->avail;
+
+
+                    for(uint32_t s_ix = 0; s_ix < src_used; s_ix++)
                     {
                         src_ext = &src_hdr->extents[s_ix];
 
@@ -1044,6 +1058,7 @@ int vm_extent_merge
                         if(vm_extent_join(src_ext, dst_ext) == VM_OK)
                         {   
                             merged = 1;
+                            compact_after_merge = 1;
                             /* Clear the extent as it is merged in dest */
                             memset(src_ext, 0, sizeof(vm_extent_t));
                             
@@ -1062,6 +1077,12 @@ int vm_extent_merge
                                 kprintf("SOMETHING IS WRONG\n");
                             }
                         }
+                    }
+
+                    /* do compaction of the extents after merge */
+                    if(compact_after_merge)
+                    {
+                       vm_extent_compact_hdr(src_hdr, ext_per_slot);
                     }
 
                     src_ln = linked_list_next(src_ln);
@@ -1091,10 +1112,9 @@ int vm_extent_compact_all_hdr
 )
 {
     vm_slot_hdr_t *hdr       = NULL;
-    vm_extent_t   *empty_ext = NULL;
-    vm_extent_t   *cursor    = NULL;
     list_node_t   *node      = NULL;
     int           status     = VM_FAIL;
+    int           ret        = VM_FAIL;
 
     if(lh == NULL || ext_per_slot == 0)
     {
@@ -1106,44 +1126,23 @@ int vm_extent_compact_all_hdr
     while(node)
     {
         hdr = (vm_slot_hdr_t*)node;
-        empty_ext = NULL;
 
-        /* Do not do compaction on empty/full headers */
-        if((hdr->avail == 0) || (hdr->avail == ext_per_slot))
+        status = vm_extent_compact_hdr(hdr, ext_per_slot);
+
+        if(status == VM_OK)
         {
-            node = linked_list_next(node);
-            continue;
-        }
-
-        for(uint32_t i = 0; i < ext_per_slot; i++)
-        {
-            cursor = &hdr->extents[i];
-
-            if(empty_ext == NULL)
-            {
-                if(cursor->length == 0)
-                {
-                    empty_ext = cursor;
-                }
-            }
-            else
-            {
-                memcpy(empty_ext, cursor, sizeof(vm_extent_t));
-                memset(cursor, 0, sizeof(vm_extent_t));
-                empty_ext = cursor;
-                status = VM_OK;
-            }
+            ret = VM_OK;
         }
 
         node = linked_list_next(node);
     }
 
-    return(status);
+    return(ret);
 }
 
 /* Compact extents inside a header */
 
-int vm_extent_compact_hdr
+static int vm_extent_compact_hdr
 (
     vm_slot_hdr_t *hdr,
     uint32_t ext_per_slot
@@ -1152,19 +1151,23 @@ int vm_extent_compact_hdr
     vm_extent_t   *empty_ext = NULL;
     vm_extent_t   *cursor    = NULL;
     int           status     = VM_FAIL;
+    uint32_t      used       = 0;
+    uint32_t      processed  = 0;
 
-    if(hdr == NULL || ext_per_slot == 0)
+    if((hdr          == NULL)   || 
+       (hdr->avail   == 0)      || 
+       (ext_per_slot == 0)      || 
+       (hdr->avail   == ext_per_slot))
     {
         return(VM_FAIL);
     }    
- 
 
-    if((hdr->avail == 0) || (hdr->avail == ext_per_slot))
-    {
-        return(VM_FAIL);
-    }
+    /* calculate how many extents are used so we
+     * can stop early
+     */
+    used = ext_per_slot - hdr->avail;
 
-    for(uint32_t i = 0; i < ext_per_slot; i++)
+    for(uint32_t i = 0; (i < ext_per_slot) && (used != processed); i++)
     {
         cursor = &hdr->extents[i];
 
@@ -1174,23 +1177,23 @@ int vm_extent_compact_hdr
             {
                 empty_ext = cursor;
             }
+            else
+            {
+                processed++;
+            }
         }
         else if(cursor->length > 0)
         {
             memcpy(empty_ext, cursor, sizeof(vm_extent_t));
             memset(cursor, 0, sizeof(vm_extent_t));
             empty_ext = cursor;
-            
-            /* try to update the next free extent */
-            if(cursor - hdr->extents < hdr->next_free)
-            {
-                hdr->next_free = cursor - hdr->extents;
-            }
-
+            processed++;
             status = VM_OK;
-            
-        }
+        }  
     }
+
+    /* update the next free extent */
+    hdr->next_free = processed;
 
     return(status);
 }
