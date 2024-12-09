@@ -727,7 +727,9 @@ AcpiOsAllocate (
     void                    *Mem = NULL;
 
     if(mem_mgr_ready)
+    {
         Mem = (void *) kmalloc ((size_t) size);
+    }
 
     return (Mem);
 }
@@ -776,7 +778,9 @@ AcpiOsFree (
     void                    *mem)
 {
     if(mem_mgr_ready)
+    {
         kfree (mem);
+    }
 }
 
 
