@@ -869,6 +869,7 @@ static int pcpu_drv_init(driver_t *drv)
         */ 
        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
        kthread_create_static(&init_th, 
+                             "system_init",
                             kmain_sys_init,
                             NULL, 
                             KMAIN_SYS_INIT_STACK_SIZE, 

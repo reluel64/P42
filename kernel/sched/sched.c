@@ -173,6 +173,32 @@ int32_t sched_untrack_thread
     return(0);
 }
 
+void sched_show_threads
+(
+    void
+)
+{
+    uint8_t int_sts = 0;
+    list_node_t *ln = NULL;
+    sched_thread_t *th = NULL;
+
+    spinlock_read_lock_int(&threads_lock, &int_sts);
+
+    ln = linked_list_first(&threads);
+
+    while(ln)
+    {
+        th = SYSTEM_NODE_TO_THREAD(ln);
+
+        kprintf("THREAD %x\n", th);
+
+        ln = linked_list_next(ln);
+        
+    }
+
+    spinlock_read_unlock_int(&threads_lock, int_sts);
+}
+
 int32_t sched_pin_task_to_unit
 (
     sched_exec_unit_t *unit,
@@ -547,7 +573,6 @@ int sched_unit_init
     timer_api_t       *funcs       = NULL;
     sched_policy_t    *policy      = NULL;
 
-
     kprintf("================================================\n");
     kprintf("Initializing Scheduler for CPU %d Interrupts %d\n",
             cpu->cpu_id, cpu_int_check());
@@ -612,7 +637,8 @@ int sched_unit_init
      * as we will switch to it when we finish 
      * intializing the scheduler unit
      */ 
-    kthread_create_static(&unit->idle, 
+    kthread_create_static(&unit->idle,
+                          "idle_thread",
                          sched_idle_thread, 
                          unit, 
                          SCHED_IDLE_THREAD_STACK_SIZE, 

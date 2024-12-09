@@ -4,6 +4,7 @@
 #include <cpu.h>
 #include <timer.h>
 
+#define THREAD_NAME_LENGTH      (64)
 
 #define THREAD_READY            (1 << 0)
 #define THREAD_RUNNING          (1 << 1)
@@ -21,9 +22,14 @@
 
 #define SCHED_MAX_PRIORITY 255
 
+#define SYSTEM_NODE_TO_THREAD(x) (sched_thread_t*) (((uint8_t*)(x)) -  \
+                                 offsetof(sched_thread_t, system_node))
 
 #define SCHED_NODE_TO_THREAD(x) (sched_thread_t*) (((uint8_t*)(x)) -  \
                                  offsetof(sched_thread_t, sched_node))
+
+#define UNIT_NODE_TO_THREAD(x) (sched_thread_t*) (((uint8_t*)(x)) -  \
+                                   offsetof(sched_thread_t, unit_node))
 
 #define PEND_NODE_TO_THREAD(x) ((sched_thread_t*) ((uint8_t*)(x) -  \
                                 offsetof(sched_thread_t, pend_node)))
@@ -117,6 +123,7 @@ typedef struct sched_thread_t
     void              *rval;         /* return value                                  */
     cpu_aff_t         affinity;
     sched_policy_t    *policy;
+    uint8_t           name[THREAD_NAME_LENGTH];
 }sched_thread_t;
 
 typedef struct sched_exec_unit_t
@@ -223,6 +230,11 @@ void schedule
 int32_t  sched_policy_register
 (
     sched_policy_t *p
+);
+
+void sched_show_threads
+(
+    void
 );
 
 #endif

@@ -8,6 +8,7 @@ typedef void *(*th_entry_point_t)(void *);
 
 void *thread_create
 (
+    char          *name,
     th_entry_point_t entry_pt,
     void      *arg,
     size_t    stack_sz,
@@ -19,6 +20,7 @@ void *thread_create
 int thread_create_static
 (
     void *out_th,
+    char          *name,
     th_entry_point_t entry_pt,
     void *arg,
     size_t stack_sz,
@@ -34,6 +36,7 @@ int thread_start
 
 void *kthread_create
 (
+    char          *name,
     th_entry_point_t entry_pt,
     void *arg,
     size_t    stack_sz,
@@ -44,6 +47,7 @@ void *kthread_create
 int kthread_create_static
 (
     void *out_th,
+    char          *name,
     th_entry_point_t entry_pt,
     void *arg,
     size_t    stack_sz,
