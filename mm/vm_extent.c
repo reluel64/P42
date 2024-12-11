@@ -10,12 +10,13 @@
 #include <platform.h>
 #include <pfmgr.h>
 #include <vm_extent.h>
-
+ 
 extern vm_ctx_t vm_kernel_ctx;
 
 static uint32_t vm_extent_avail
 (
-    list_head_t *lh
+    list_head_t *lh,
+    uint32_t  min_avail
 );
 
 static uint8_t vm_extent_joinable
@@ -96,7 +97,8 @@ static int vm_extent_alloc_tracking
     if(lh != &vm_kernel_ctx.alloc_mem)
     { 
         /* first check for available slots as it's less expensive */
-        alloc_track_avail = vm_extent_avail(&vm_kernel_ctx.alloc_mem);
+
+        alloc_track_avail = vm_extent_avail(&vm_kernel_ctx.alloc_mem, 1);
 
         if(alloc_track_avail < 1)
         {
@@ -250,7 +252,7 @@ static int vm_extent_release_tracking
     free_extent.prot  = 0;
 
     /* check if we have where to place the extent */
-    free_track_avail = vm_extent_avail(lh);
+    free_track_avail = vm_extent_avail(lh, 1);
 
     if(free_track_avail < 1)
     {
@@ -286,7 +288,7 @@ static int vm_extent_release_tracking
      */
     if(status)
     {
-        alloc_track_avail = vm_extent_avail(&vm_kernel_ctx.alloc_mem);
+        alloc_track_avail = vm_extent_avail(&vm_kernel_ctx.alloc_mem, 2);
 
         if(alloc_track_avail < 2)
         {
@@ -665,14 +667,11 @@ int vm_extent_extract
 )
 {
     list_node_t      *hdr_ln      = NULL;
-    list_node_t      *next_hdr_ln = NULL;
     list_node_t      *ext_ln      = NULL;
     vm_extent_hdr_t *hdr     = NULL;
-
     vm_extent_t   *best    = NULL;
     vm_extent_t   *cext    = NULL;
     int           found    = 0;
-    uint32_t      ext_pos  = 0;
 
     /* no length? no entry */
     if((ext == NULL) || (ext->length == 0))
@@ -921,8 +920,9 @@ int vm_extent_merge
         return(VM_FAIL);
     }    
 
-    /* do compaction of all headers */
-    vm_extent_compact_all_hdr(lh, ext_per_slot);
+
+
+
 #if 0
     do
     {
@@ -1036,104 +1036,10 @@ int vm_extent_merge
     return(status);
 }
 
-/* Compact extents inside all headers */
-
-int vm_extent_compact_all_hdr
-(
-    list_head_t *lh,
-    uint32_t ext_per_slot
-)
-{
-    vm_extent_hdr_t *hdr       = NULL;
-    list_node_t   *node      = NULL;
-    int           status     = VM_FAIL;
-    int           ret        = VM_FAIL;
-
-    if(lh == NULL || ext_per_slot == 0)
-    {
-        return(VM_FAIL);
-    }    
-  
-    node = linked_list_first(lh);
-
-    while(node)
-    {
-        hdr = (vm_extent_hdr_t*)node;
-
-        status = vm_extent_compact_hdr(hdr, ext_per_slot);
-
-        if(status == VM_OK)
-        {
-            ret = VM_OK;
-        }
-
-        node = linked_list_next(node);
-    }
-
-    return(ret);
-}
-
-/* Compact extents inside a header */
-
-static int vm_extent_compact_hdr
-(
-    vm_extent_hdr_t *hdr,
-    uint32_t ext_per_slot
-)
-{
-    vm_extent_t   *empty_ext = NULL;
-    vm_extent_t   *cursor    = NULL;
-    int           status     = VM_FAIL;
-    uint32_t      used       = 0;
-    uint32_t      processed  = 0;
-#if 0
-    if((hdr          == NULL)   || 
-       (hdr->avail   == 0)      || 
-       (ext_per_slot == 0)      || 
-       (hdr->avail   == ext_per_slot))
-    {
-        return(VM_FAIL);
-    }    
-
-    /* calculate how many extents are used so we
-     * can stop early
-     */
-    used = ext_per_slot - hdr->avail;
-
-    for(uint32_t i = 0; (i < ext_per_slot) && (used != processed); i++)
-    {
-        cursor = &hdr->extents[i];
-
-        if(empty_ext == NULL)
-        {
-            if(cursor->length == 0)
-            {
-                empty_ext = cursor;
-            }
-            else
-            {
-                processed++;
-            }
-        }
-        else if(cursor->length > 0)
-        {
-            memcpy(empty_ext, cursor, sizeof(vm_extent_t));
-            memset(cursor, 0, sizeof(vm_extent_t));
-            empty_ext = cursor;
-            processed++;
-            status = VM_OK;
-        }  
-    }
-
-    /* update the next free extent */
-    hdr->next_free = processed;
-#endif
-    return(status);
-}
-
 static uint32_t vm_extent_avail
 (
-    list_head_t *lh
+    list_head_t *lh,
+    uint32_t  min_avail
 )
 {
     vm_extent_hdr_t *hdr = NULL;
@@ -1147,6 +1053,14 @@ static uint32_t vm_extent_avail
         hdr = (vm_extent_hdr_t*)node;
 
         free_slots += linked_list_count(&hdr->avail_ext);
+
+        if(min_avail != 0)
+        {
+            if(min_avail <= free_slots)
+            {
+                break;
+            }
+        }
 
         node = linked_list_next(node);
     }
