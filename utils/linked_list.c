@@ -248,7 +248,16 @@ list_node_t * linked_list_get_first
     if(lh->list.next != NULL)
     {
         ln = lh->list.next;
-        ln->prev = NULL;
+
+        if(ln->next != NULL)
+        {
+            ln->next->prev = NULL;
+        }
+        else
+        {
+            lh->list.prev = NULL;
+        }
+
         lh->list.next = ln->next;
         lh->count--;
     }
@@ -266,8 +275,18 @@ list_node_t * linked_list_get_last
     if(lh->list.prev != NULL)
     {
         ln = lh->list.prev;
-        ln->prev->next = NULL;
+        
+        if(ln->prev != NULL)
+        {
+            ln->prev->next = NULL;        
+        }
+        else
+        {
+            lh->list.next = NULL;
+        }
+
         lh->list.prev = ln->prev;
+
         lh->count--;
     }
 
