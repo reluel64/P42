@@ -13,16 +13,18 @@ void vm_ctx_show
 )
 {
     list_node_t *node = NULL;
-    list_node_t *next_node = NULL;
+    list_node_t *en = NULL;
     vm_extent_hdr_t *hdr = NULL;
     vm_extent_t *e = NULL;
     virt_size_t alloc_len = 0;
     virt_size_t free_len = 0;
+    uint32_t ix = 0;
 
     if(ctx == NULL)
     {
         ctx = &vm_kernel_ctx;
     }
+
     kprintf("ALLOC HEADERS %d | FREE HEADERS %d\n",
                         linked_list_count(&ctx->alloc_mem),
                         linked_list_count(&ctx->free_mem));
@@ -37,60 +39,55 @@ void vm_ctx_show
     {
         hdr = (vm_extent_hdr_t*)node;
 
-        next_node = linked_list_next(node);
         kprintf("============================================\n");
-        //kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
+        kprintf("HDR 0x%x AVAIL %d\n",hdr, linked_list_count(&hdr->busy_ext));
         kprintf("============================================\n");
-        for(uint16_t i = 0; i < ctx->free_per_slot; i++)
+        en = linked_list_first(&hdr->busy_ext);
+        while(en)
         {
-            #if 0
-            e  = &hdr->extents[i];
-
-            if(e->length != 0)
-            {
-                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",i, 
+            e = (vm_extent_t*)en;
+            kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",ix, 
                         e->base,
                         e->length, 
                         e->flags, 
                         e->prot);
-                        
-                free_len += e->length; 
-            }
-            #endif
+
+            free_len += e->length;
+            en = linked_list_next(en);
+            ix++;
         }
 
-        node = next_node;
+        node = linked_list_next(node);
     }
 
     node = linked_list_first(&ctx->alloc_mem);
-
+    ix = 0;
     kprintf("----LISTING ALLOCATED RANGES----\n");
 
     while(node)
     {
-        next_node = linked_list_next(node);
         hdr = (vm_extent_hdr_t*)node;
         kprintf("============================================\n");
-       // kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
+        kprintf("HDR 0x%x AVAIL %d\n",hdr, linked_list_count(&hdr->busy_ext));
         kprintf("============================================\n");
-        for(uint16_t i = 0; i < ctx->alloc_per_slot; i++)
+
+        en = linked_list_first(&hdr->busy_ext);
+
+        while(en)
         {
-            #if 0
-            e  = &hdr->extents[i];
-            if(e->length != 0)
-            {
-                kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",i, 
+            e = (vm_extent_t*)en;
+            kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",ix, 
                         e->base,
                         e->length, 
                         e->flags, 
                         e->prot);
 
-                alloc_len += e->length;
-            }
-            #endif
+            alloc_len += e->length;
+            en = linked_list_next(en);
+            ix++;
         }
 
-        node = next_node;
+        node = linked_list_next(node);
     }
 
     kprintf("ALLOCATED: 0x%x bytes\nFREE: 0x%x bytes\n", alloc_len, free_len);
