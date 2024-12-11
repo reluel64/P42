@@ -10,8 +10,6 @@ static int vm_space_undo
 (
     list_head_t *undo_from,
     list_head_t *undo_to,
-    uint32_t    undo_from_ext_cnt,
-    uint32_t    undo_to_ext_cnt,
     vm_extent_t *ext_left,
     vm_extent_t *ext_mid,
     vm_extent_t *ext_right
@@ -218,8 +216,6 @@ virt_addr_t vm_space_alloc
                      */
                     vm_space_undo(&ctx->alloc_mem, 
                             &ctx->free_mem,
-                            ctx->alloc_per_slot,
-                            ctx->free_per_slot,
                             &req_ext,
                             &alloc_ext,
                             &rem_ext);
@@ -263,8 +259,6 @@ virt_addr_t vm_space_alloc
 
                 vm_space_undo(&ctx->alloc_mem, 
                         &ctx->free_mem,
-                        ctx->alloc_per_slot,
-                        ctx->free_per_slot,
                         &req_ext,
                         &alloc_ext,
                         &rem_ext);
@@ -287,8 +281,6 @@ virt_addr_t vm_space_alloc
         kprintf("FAILED\n");
         vm_space_undo(&ctx->alloc_mem, 
                        &ctx->free_mem,
-                       ctx->alloc_per_slot,
-                       ctx->free_per_slot,
                        &req_ext,
                        &alloc_ext,
                        &rem_ext);
@@ -416,8 +408,6 @@ int vm_space_free
 
                     status = vm_space_undo(&ctx->free_mem, 
                                  &ctx->alloc_mem,
-                                 ctx->free_per_slot,
-                                 ctx->alloc_per_slot,
                                  &req_ext,
                                  &free_ext,
                                  &rem_ext);
@@ -457,8 +447,6 @@ int vm_space_free
             {
                 status = vm_space_undo(&ctx->free_mem, 
                                  &ctx->alloc_mem,
-                                 ctx->free_per_slot,
-                                 ctx->alloc_per_slot,
                                  &req_ext,
                                  &free_ext,
                                  &rem_ext);
@@ -496,8 +484,6 @@ static int vm_space_undo
 (
     list_head_t *undo_from,
     list_head_t *undo_to,
-    uint32_t    undo_from_ext_cnt,
-    uint32_t    undo_to_ext_cnt,
     vm_extent_t *ext_left,
     vm_extent_t *ext_mid,
     vm_extent_t *ext_right
