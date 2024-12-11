@@ -21,20 +21,19 @@ static uint32_t vm_extent_avail
 static uint8_t vm_extent_joinable
 (
     list_head_t *lh,
-    uint32_t ext_per_slot,
     vm_extent_t *ext
 );
 
 static uint8_t vm_extent_merge_in_hdr
 (
-    vm_slot_hdr_t *slot,
+    vm_extent_hdr_t *slot,
     uint32_t      extent_per_slot,
     uint32_t      max_loops
 );
 
 static int vm_extent_compact_hdr
 (
-    vm_slot_hdr_t *hdr,
+    vm_extent_hdr_t *hdr,
     uint32_t ext_per_slot
 );
 
@@ -58,7 +57,7 @@ static int vm_extent_alloc_tracking
     int           status            = 0;
     uint32_t      alloc_track_avail = 0;
     uint8_t       joinable          = 0;
-    vm_slot_hdr_t *slot             = NULL;
+    vm_extent_hdr_t *slot             = NULL;
     vm_extent_t   rem_ext           = VM_EXTENT_INIT;
     vm_extent_t   alloc_ext         = VM_EXTENT_INIT;
     vm_extent_t   orig_ext           = 
@@ -70,7 +69,6 @@ static int vm_extent_alloc_tracking
 
     /* extract a free extent */
     status = vm_extent_extract(&vm_kernel_ctx.free_mem,
-                               ext_per_slot,
                                &orig_ext);
 
     if(status != VM_OK)
@@ -103,13 +101,11 @@ static int vm_extent_alloc_tracking
         if(alloc_track_avail < 1)
         {
             joinable = vm_extent_joinable(&vm_kernel_ctx.alloc_mem,
-                                          vm_kernel_ctx.alloc_per_slot,
                                           &alloc_ext);
 
             if(!joinable)
             {
                 status = vm_extent_insert(&vm_kernel_ctx.free_mem,
-                                          vm_kernel_ctx.alloc_per_slot,
                                           &orig_ext);
                 if(status != VM_OK)
                 {
@@ -169,21 +165,16 @@ static int vm_extent_alloc_tracking
     /* if all went fine so far, try to insert the new slot */
     if(status == 0)
     {
-        slot        = (vm_slot_hdr_t*)alloc_ext.base;
-        
-        /* wipe out the memory */
-        memset(slot, 0, VM_SLOT_SIZE);
-        
-        slot->avail = ext_per_slot;
+        slot        = (vm_extent_hdr_t*)alloc_ext.base;
 
-        
+        /* init tracking slot */
+        vm_extent_header_init(slot, ext_per_slot);
 
         /* add the slot to the list where it is required */
         linked_list_add_tail(lh, &slot->node);
 
         /* add memory to the tracking list */
         status = vm_extent_insert(&vm_kernel_ctx.alloc_mem,
-                                  vm_kernel_ctx.alloc_per_slot,
                                   &alloc_ext);
 
         if(status != VM_OK)
@@ -197,7 +188,6 @@ static int vm_extent_alloc_tracking
     if(status != VM_OK) 
     {
         status = vm_extent_insert(&vm_kernel_ctx.free_mem,
-                                  vm_kernel_ctx.alloc_per_slot,
                                   &orig_ext);
 
         return(VM_FAIL);
@@ -208,7 +198,6 @@ static int vm_extent_alloc_tracking
     {
         /* No failure, so we can put back the remaining extent */
         status = vm_extent_insert(&vm_kernel_ctx.free_mem,
-                                  vm_kernel_ctx.alloc_per_slot,
                                   &rem_ext);
     }
 
@@ -220,7 +209,7 @@ static int vm_extent_release_tracking
 (
     list_head_t *lh,
     uint32_t ext_per_slot,
-    vm_slot_hdr_t *hdr
+    vm_extent_hdr_t *hdr
 )
 {
     int         status           = 0;
@@ -237,7 +226,7 @@ static int vm_extent_release_tracking
     src_extent.length = VM_SLOT_SIZE;
 
     /* extract the extent from the list */
-    status = vm_extent_extract(lh, ext_per_slot, &src_extent);
+    status = vm_extent_extract(lh, &src_extent);
 
     if(status != VM_OK)
     {
@@ -246,7 +235,7 @@ static int vm_extent_release_tracking
 
     /* if there is anything in the header, do not free it */
 
-    if(hdr->avail < ext_per_slot)
+    if(linked_list_count(&hdr->busy_ext) > 0)
     {
         return(VM_EXTENT_NOT_EMPTY);
     }
@@ -267,14 +256,13 @@ static int vm_extent_release_tracking
     {
         /* check if it is at least joinable */
         joinable = vm_extent_joinable(&vm_kernel_ctx.free_mem,
-                                      ext_per_slot,
                                       &free_extent);
 
         /* not joinable either? - roll back and return */
         if(joinable == 0)
         {
             linked_list_add_head(lh, &hdr->node);
-            status = vm_extent_insert(lh, ext_per_slot, &orig_extent);
+            status = vm_extent_insert(lh, &orig_extent);
 
             if(status != VM_OK)
             {
@@ -304,7 +292,6 @@ static int vm_extent_release_tracking
         {
             /* check if we can join the left extent */
             joinable = vm_extent_joinable(&vm_kernel_ctx.alloc_mem,
-                                          ext_per_slot,
                                           &src_extent);
             
             if(joinable == 0)
@@ -313,7 +300,6 @@ static int vm_extent_release_tracking
                  * if we can join the right extent
                  */
                 joinable = vm_extent_joinable(&vm_kernel_ctx.alloc_mem,
-                                              ext_per_slot,
                                               &rem_extent);
 
                 /* we have nothing available and not joinable - roll back */
@@ -322,7 +308,6 @@ static int vm_extent_release_tracking
                     linked_list_add_tail(lh, &hdr->node);
 
                     status = vm_extent_insert(&vm_kernel_ctx.alloc_mem,
-                                              ext_per_slot,
                                               &orig_extent);
                     
                     if(status != VM_OK)
@@ -360,7 +345,6 @@ static int vm_extent_release_tracking
         linked_list_add_tail(lh, &hdr->node);
 
         status = vm_extent_insert(&vm_kernel_ctx.alloc_mem,
-                                  ext_per_slot,
                                   &orig_extent);
 
         if(status != VM_OK)
@@ -397,9 +381,9 @@ static int vm_extent_release_tracking
 
         if(status == 0)
         {
-            hdr->avail = ext_per_slot;
+            vm_extent_header_init(hdr, ext_per_slot);
             linked_list_add_head(lh, &hdr->node);
-            status = vm_extent_insert(lh, ext_per_slot, &orig_extent);
+            status = vm_extent_insert(lh, &orig_extent);
 
             if(status != 0)
             {
@@ -425,7 +409,6 @@ static int vm_extent_release_tracking
 
     /* Insert the free memory*/
     status = vm_extent_insert(&vm_kernel_ctx.free_mem,
-                              vm_kernel_ctx.free_per_slot,
                               &free_extent);
     
     if(status != VM_OK && status != VM_NOENT)
@@ -437,7 +420,6 @@ static int vm_extent_release_tracking
     if(src_extent.length > 0)
     {
         status = vm_extent_insert(&vm_kernel_ctx.alloc_mem,
-                                  vm_kernel_ctx.alloc_per_slot,
                                   &src_extent);
 
         if(status != VM_OK && status != VM_NOENT)
@@ -450,7 +432,6 @@ static int vm_extent_release_tracking
     if(rem_extent.length > 0)
     {
         status = vm_extent_insert(&vm_kernel_ctx.alloc_mem,
-                                  vm_kernel_ctx.alloc_per_slot,
                                   &rem_extent);
 
         if(status != VM_OK && status != VM_NOENT)
@@ -492,7 +473,7 @@ int vm_extent_release_slot
 (
     list_head_t   *lh,
     uint32_t      ext_per_slot,
-    vm_slot_hdr_t *slot
+    vm_extent_hdr_t *slot
 )
 {
     int status = 0;
@@ -597,16 +578,15 @@ static inline int vm_is_in_range
 int vm_extent_insert
 (
     list_head_t *lh,
-    uint32_t ext_per_slot,
     const vm_extent_t *ext
 )
 {
-    list_node_t     *en         = NULL;
-    list_node_t     *next_en    = NULL;
-    vm_slot_hdr_t   *hdr        = NULL;
-    vm_slot_hdr_t   *f_hdr      = NULL;
-    vm_extent_t     *c_ext      = NULL;
-    uint32_t        least_avail = -1;
+    list_node_t      *hdr_ln      = NULL;
+    list_node_t      *next_hdr_ln = NULL;
+    list_node_t      *ext_ln      = NULL;
+    vm_extent_hdr_t  *hdr         = NULL;
+    vm_extent_hdr_t  *f_hdr       = NULL;
+    vm_extent_t      *c_ext       = NULL;
 
     if((ext->flags & VM_REGION_MASK) == VM_REGION_MASK ||
        (ext->flags & VM_REGION_MASK) == 0)
@@ -615,43 +595,46 @@ int vm_extent_insert
         return(VM_FAIL);
     }
 
-    //kprintf("INSERTING %x %x\n",ext->base, ext->length);
+   // kprintf("INSERTING %x %x\n",ext->base, ext->length);
     if(ext->length == 0)
     {
         return(VM_NOENT);
     }
 
-    en = linked_list_first(lh);
-
+    hdr_ln = linked_list_first(lh);
+    f_hdr = (vm_extent_hdr_t*)hdr_ln;
+    
     /* Start finding a free slot */
-    while(en)
+    while(hdr_ln)
     {
-        next_en = linked_list_next(en);
-        hdr = (vm_slot_hdr_t*)en;
+        next_hdr_ln = linked_list_next(hdr_ln);
+        hdr = (vm_extent_hdr_t*)hdr_ln;
 
-        if(least_avail > hdr->avail && hdr->avail > 0)
+        if(linked_list_count(&hdr->avail_ext) < 
+           linked_list_count(&f_hdr->avail_ext)
+           && linked_list_count(&hdr->avail_ext) > 0)
         {
-            least_avail = hdr->avail;
             f_hdr = hdr;
         }
 
         /* if hdr->avail == ext_per_slot, then do not enter
          * as we don't have anything to join
          */
-        if(hdr->avail < ext_per_slot)
-        {
-            for(uint32_t i = 0; i < ext_per_slot; i++)
-            {
-                c_ext = &hdr->extents[i];    
+        ext_ln = linked_list_first(&hdr->busy_ext);
 
-                /* Try to join the extents */
-                if(vm_extent_join(ext, c_ext) == VM_OK)
-                {
-                    return(VM_OK);
-                }
+        while(ext_ln)
+        {
+            c_ext = (vm_extent_t*)ext_ln;
+            
+            if(vm_extent_join(ext, c_ext) == VM_OK)
+            {
+                return(VM_OK);
             }
+
+            ext_ln = linked_list_next(ext_ln);
         }
-        en = next_en;
+
+        hdr_ln = next_hdr_ln;
     }
 
     /* If we were unable to merge, just add the information 
@@ -659,43 +642,15 @@ int vm_extent_insert
      */
     if(f_hdr != NULL)
     {
-        /* try to go a faster way in a first instance*/
-        if(hdr->next_free < ext_per_slot)
+        /* remove the extent from the free extents */
+        c_ext = (vm_extent_t*)linked_list_get_last(&f_hdr->avail_ext);
+
+        if(c_ext != NULL)
         {
-            c_ext = f_hdr->extents + hdr->next_free;
-
-            if(c_ext->length == 0)
-            {
-                memcpy(c_ext, ext, sizeof(vm_extent_t));
-                f_hdr->avail--;
-                f_hdr->next_free++;
-
-                while(f_hdr->next_free < ext_per_slot)
-                {
-                    c_ext = f_hdr->extents + hdr->next_free;
-
-                    if(c_ext->length == 0)
-                    {
-                        break;
-                    }
-
-                    f_hdr->next_free++;
-                }
-                return(VM_OK);
-            }
-        }
-
-        for(uint32_t i = 0; i < ext_per_slot; i++)
-        {
-            c_ext = &f_hdr->extents[i];
-
-            if(c_ext->length == 0)
-            {
-                memcpy(c_ext, ext, sizeof(vm_extent_t));
-                f_hdr->avail--;
-                return(VM_OK);
-            }
-        }
+            linked_list_add_tail(&f_hdr->busy_ext, &c_ext->node);
+            vm_extent_copy(c_ext, ext);
+            return(VM_OK);
+        }    
     }
 
     return(VM_NOMEM);
@@ -706,13 +661,14 @@ int vm_extent_insert
 int vm_extent_extract
 (
     list_head_t *lh,
-    uint32_t    ext_per_slot,
     vm_extent_t *ext
 )
 {
-    list_node_t   *hn      = NULL;
-    list_node_t   *next_hn = NULL;
-    vm_slot_hdr_t *hdr     = NULL;
+    list_node_t      *hdr_ln      = NULL;
+    list_node_t      *next_hdr_ln = NULL;
+    list_node_t      *ext_ln      = NULL;
+    vm_extent_hdr_t *hdr     = NULL;
+
     vm_extent_t   *best    = NULL;
     vm_extent_t   *cext    = NULL;
     int           found    = 0;
@@ -725,31 +681,19 @@ int vm_extent_extract
         return(VM_FAIL);
     }
     
-    hn = linked_list_first(lh);
+    hdr_ln = linked_list_first(lh);
 
-    while(hn)
+    while(hdr_ln)
     {
-        next_hn = linked_list_next(hn);
 
-        hdr = (vm_slot_hdr_t*)hn;
 
-        /* if hdr->avail == ext_per_slot, we don't have
-         * anything useful here
-         */ 
-        if(hdr->avail == ext_per_slot)
+        hdr = (vm_extent_hdr_t*)hdr_ln;
+
+        ext_ln = linked_list_first(&hdr->busy_ext);
+
+        while(ext_ln)
         {
-            hn = next_hn;
-            continue;
-        } 
-
-        for(uint32_t i = 0; i < ext_per_slot; i++)
-        {
-            cext = &hdr->extents[i];
-
-            if(cext->length == 0)
-            {
-                continue;
-            }
+            cext = (vm_extent_t*)ext_ln;
 
             if(ext->base != VM_BASE_AUTO)
             {
@@ -784,6 +728,7 @@ int vm_extent_extract
                     }
                 }
             }
+            ext_ln = linked_list_next(ext_ln);
         }
 
         if(found)
@@ -791,7 +736,7 @@ int vm_extent_extract
             break;
         }
 
-        hn = next_hn;
+        hdr_ln = linked_list_next(hdr_ln);
     }
 
     /* verify if we have at least something to return */
@@ -802,23 +747,11 @@ int vm_extent_extract
 
     hdr = VM_EXTENT_TO_HEADER(best);
 
-    if(hdr->avail < ext_per_slot)
-    {
-        hdr->avail++;
-    }
-
-    ext_pos = best - &hdr->extents[0];
-
-    if(hdr->next_free > ext_pos)
-    {
-        hdr->next_free = ext_pos;
-    }
+    linked_list_remove(&hdr->busy_ext, &best->node);
+    linked_list_add_tail(&hdr->avail_ext, &best->node);
 
     /* export the slot */ 
-    memcpy(ext, best, sizeof(vm_extent_t));
-
-    /* clear the slot that we've acquired */
-    memset(best, 0, sizeof(vm_extent_t));
+    vm_extent_copy(ext, best);
 
     /* shift the header to be the first in list 
      * so that an immediate insert will not require
@@ -971,8 +904,8 @@ int vm_extent_merge
     uint32_t ext_per_slot
 )
 {
-    vm_slot_hdr_t *src_hdr = NULL;
-    vm_slot_hdr_t *dst_hdr = NULL;
+    vm_extent_hdr_t *src_hdr = NULL;
+    vm_extent_hdr_t *dst_hdr = NULL;
     vm_extent_t   *src_ext = NULL;
     vm_extent_t   *dst_ext = NULL;
     list_node_t   *src_ln  = NULL;
@@ -990,7 +923,7 @@ int vm_extent_merge
 
     /* do compaction of all headers */
     vm_extent_compact_all_hdr(lh, ext_per_slot);
-
+#if 0
     do
     {
         merged = 0;
@@ -998,7 +931,7 @@ int vm_extent_merge
         
         while(dst_ln)
         {   
-            dst_hdr = (vm_slot_hdr_t*)dst_ln;
+            dst_hdr = (vm_extent_hdr_t*)dst_ln;
             
             /* if there are no extents, skip the header entirely */
             if(dst_hdr->avail == ext_per_slot)
@@ -1025,7 +958,7 @@ int vm_extent_merge
                 /* cycle throught extents that might be merged */
                 while(src_ln)
                 {
-                    src_hdr = (vm_slot_hdr_t*)src_ln;
+                    src_hdr = (vm_extent_hdr_t*)src_ln;
                     compact_after_merge = 0;
                     /* Skip empty headers */
                     if(src_hdr->avail == ext_per_slot)
@@ -1099,7 +1032,7 @@ int vm_extent_merge
 
     }while(merged);
 
-   
+   #endif
     return(status);
 }
 
@@ -1111,7 +1044,7 @@ int vm_extent_compact_all_hdr
     uint32_t ext_per_slot
 )
 {
-    vm_slot_hdr_t *hdr       = NULL;
+    vm_extent_hdr_t *hdr       = NULL;
     list_node_t   *node      = NULL;
     int           status     = VM_FAIL;
     int           ret        = VM_FAIL;
@@ -1125,7 +1058,7 @@ int vm_extent_compact_all_hdr
 
     while(node)
     {
-        hdr = (vm_slot_hdr_t*)node;
+        hdr = (vm_extent_hdr_t*)node;
 
         status = vm_extent_compact_hdr(hdr, ext_per_slot);
 
@@ -1144,7 +1077,7 @@ int vm_extent_compact_all_hdr
 
 static int vm_extent_compact_hdr
 (
-    vm_slot_hdr_t *hdr,
+    vm_extent_hdr_t *hdr,
     uint32_t ext_per_slot
 )
 {
@@ -1153,7 +1086,7 @@ static int vm_extent_compact_hdr
     int           status     = VM_FAIL;
     uint32_t      used       = 0;
     uint32_t      processed  = 0;
-
+#if 0
     if((hdr          == NULL)   || 
        (hdr->avail   == 0)      || 
        (ext_per_slot == 0)      || 
@@ -1194,7 +1127,7 @@ static int vm_extent_compact_hdr
 
     /* update the next free extent */
     hdr->next_free = processed;
-
+#endif
     return(status);
 }
 
@@ -1203,7 +1136,7 @@ static uint32_t vm_extent_avail
     list_head_t *lh
 )
 {
-    vm_slot_hdr_t *hdr = NULL;
+    vm_extent_hdr_t *hdr = NULL;
     list_node_t   *node = NULL;
     uint32_t      free_slots = 0;
 
@@ -1211,9 +1144,9 @@ static uint32_t vm_extent_avail
 
     while(node)
     {
-        hdr = (vm_slot_hdr_t*)node;
+        hdr = (vm_extent_hdr_t*)node;
 
-        free_slots += hdr->avail; 
+        free_slots += linked_list_count(&hdr->avail_ext);
 
         node = linked_list_next(node);
     }
@@ -1224,36 +1157,33 @@ static uint32_t vm_extent_avail
 static uint8_t vm_extent_joinable
 (
     list_head_t *lh,
-    uint32_t ext_per_slot,
     vm_extent_t *ext
 )
 {
     uint8_t joinable = 0;
-    vm_slot_hdr_t *hdr = NULL;
+    vm_extent_hdr_t *hdr = NULL;
     vm_extent_t   *pext = NULL;
     list_node_t *ln = NULL;
+    list_node_t *en = NULL;
 
     ln = linked_list_first(lh);
 
     while(ln)
     {
-        hdr = (vm_slot_hdr_t*) ln;
+        hdr = (vm_extent_hdr_t*) ln;
 
-        if(hdr->avail == ext_per_slot)
+        en = linked_list_first(&hdr->busy_ext);
+
+        while(en)
         {
-            ln = linked_list_next(ln);
-            continue;
-        }
-
-        for(uint32_t i = 0; i < ext_per_slot; i++)
-        {
-            pext = &hdr->extents[i];
-
+            pext = (vm_extent_t*)en;
+            
             if(vm_extent_can_join(ext, pext) > 0)
             {
                 joinable = 1;
                 break;
             }
+            en = linked_list_next(en);
         }
 
         ln = linked_list_next(ln);
@@ -1265,17 +1195,18 @@ static uint8_t vm_extent_joinable
 
 static uint8_t vm_extent_merge_in_hdr
 (
-    vm_slot_hdr_t *slot,
+    vm_extent_hdr_t *slot,
     uint32_t      extent_per_slot,
     uint32_t      max_loops
 )
 {
+
     vm_extent_t *src_ext      = NULL;
     vm_extent_t *dst_ext      = NULL;
     uint8_t     joined        = 0;
     uint32_t    loops         = 0;
     uint8_t     result        = VM_FAIL;
-    
+#if 0  
     /* if the slot is empty, we don't have what to join in the header */
     if(slot->avail == extent_per_slot)
     {
@@ -1339,6 +1270,40 @@ static uint8_t vm_extent_merge_in_hdr
         }
         loops ++; 
     } while(joined && (loops < max_loops));
-
+#endif
     return(result);
+   
+}
+
+void vm_extent_header_init
+(
+    vm_extent_hdr_t *hdr,
+    uint32_t extent_count
+)
+{
+    kprintf("Header init %d\n",extent_count);
+    if(hdr != NULL)
+    {
+        memset(hdr, 0, sizeof(vm_extent_hdr_t) + 
+                       (extent_count * sizeof(vm_extent_t)));
+
+        hdr->extent_count = extent_count;
+
+        for(uint32_t i = 0; i < extent_count; i++)
+        {
+            linked_list_add_tail(&hdr->avail_ext, &hdr->ext_area[i].node);
+        }
+    }
+}
+
+void vm_extent_copy
+(
+    vm_extent_t *dst,
+    const vm_extent_t *src
+)
+{
+    dst->base = src->base;
+    dst->flags = src->flags;
+    dst->length = src->length;
+    dst->prot = src->prot;
 }

@@ -79,7 +79,6 @@ virt_addr_t vm_space_alloc
 
     /* acquire the extent */
     status = vm_extent_extract(&ctx->free_mem,
-                               ctx->free_per_slot,
                                &req_ext);
 
     if(status != VM_OK)
@@ -93,7 +92,6 @@ virt_addr_t vm_space_alloc
         if(status == VM_OK)
         {
             status = vm_extent_extract(&ctx->free_mem,
-                           ctx->free_per_slot,
                            &req_ext);
                
         }        
@@ -156,7 +154,6 @@ virt_addr_t vm_space_alloc
     {
         kprintf("Could not perform split\n");
         status = vm_extent_insert(&ctx->free_mem,
-                        ctx->free_per_slot,
                         &req_ext);
 
         if(status == VM_NOMEM)
@@ -173,7 +170,6 @@ virt_addr_t vm_space_alloc
      */
 
     status = vm_extent_insert(&ctx->free_mem,
-                             ctx->free_per_slot,
                             &req_ext);
 
     if(status == VM_NOMEM)
@@ -200,7 +196,6 @@ virt_addr_t vm_space_alloc
     if(split_status > 0)
     {
         status = vm_extent_insert(&ctx->free_mem,
-                                  ctx->free_per_slot,
                                   &rem_ext);
 
         /* Hehe... no slots?...try to allocate */
@@ -234,7 +229,6 @@ virt_addr_t vm_space_alloc
 
                 /* Ok, let's do this again, shall we? */
                 status = vm_extent_insert(&ctx->free_mem,
-                                          ctx->free_per_slot,
                                           &req_ext);
 
                 if(status != VM_OK)
@@ -246,14 +240,11 @@ virt_addr_t vm_space_alloc
     }
 
     status = vm_extent_insert(&ctx->alloc_mem, 
-                               ctx->alloc_per_slot, 
                               &alloc_ext);
 
      /* Hehe... no slots?....again?...try to allocate */
     if(status == VM_NOMEM)
     {
-       // kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
-
         status = vm_extent_alloc_slot(&ctx->alloc_mem, 
                                      ctx->alloc_per_slot);
 
@@ -284,7 +275,6 @@ virt_addr_t vm_space_alloc
 
         /* Ok, let's do this again, shall we? */
         status = vm_extent_insert(&ctx->alloc_mem,
-                                   ctx->alloc_per_slot,
                                    &alloc_ext);
     }
 
@@ -347,7 +337,6 @@ int vm_space_free
     req_ext.length = len;
     
     status = vm_extent_extract(&ctx->alloc_mem, 
-                                ctx->alloc_per_slot,
                                 &req_ext);
 
     /* If the extent does not exist, then there is no memory allocated 
@@ -365,7 +354,6 @@ int vm_space_free
     {
         
         vm_extent_insert(&ctx->alloc_mem,
-                         ctx->alloc_per_slot,
                          &req_ext);
         kprintf("MEMORY %x - %x is locked\n", addr, len);
         return(VM_FAIL);
@@ -384,7 +372,6 @@ int vm_space_free
     if(split_status < 0)
     {
         status = vm_extent_insert(&ctx->alloc_mem,
-                    ctx->alloc_per_slot,
                     &req_ext);
 
         if(status == VM_NOMEM)
@@ -397,7 +384,6 @@ int vm_space_free
     }
 
     status = vm_extent_insert(&ctx->alloc_mem,
-                             ctx->alloc_per_slot,
                              &req_ext);
 
     /* This should not happen but if it does, suspend everything */
@@ -412,12 +398,10 @@ int vm_space_free
     {
         /* We have a remainder - insert it */
         status = vm_extent_insert(&ctx->alloc_mem,
-                                  ctx->alloc_per_slot,
                                   &rem_ext);
 
         if(status == VM_NOMEM)
         {
-            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
             status = vm_extent_alloc_slot(&ctx->alloc_mem,
                                       ctx->alloc_per_slot);
             
@@ -443,7 +427,6 @@ int vm_space_free
             }
             /* Do the insertion again */
             status = vm_extent_insert(&ctx->alloc_mem,
-                                  ctx->alloc_per_slot,
                                   &rem_ext);
 
              if(status != VM_OK)
@@ -454,8 +437,7 @@ int vm_space_free
         }
     }
 
-    status = vm_extent_insert(&ctx->free_mem, 
-                               ctx->free_per_slot, 
+    status = vm_extent_insert(&ctx->free_mem,
                                &free_ext);
 
     if(status == VM_NOMEM)
@@ -486,7 +468,6 @@ int vm_space_free
 
         /* Do the insertion again */
         status = vm_extent_insert(&ctx->free_mem,
-                                  ctx->free_per_slot,
                                   &free_ext);
     }
     
@@ -541,7 +522,6 @@ static int vm_space_undo
     }
     
     status = vm_extent_extract(undo_to, 
-                               undo_to_ext_cnt,
                                ext_left);
 
     if(status < 0)
@@ -556,7 +536,6 @@ static int vm_space_undo
     if(ext_right->length > 0)
     {
         status = vm_extent_extract(undo_to,
-                                   undo_to_ext_cnt,
                                    ext_right);
 
         if(status < 0)
@@ -566,7 +545,6 @@ static int vm_space_undo
     }
 
     status = vm_extent_extract(undo_from,
-                               undo_from_ext_cnt,
                                ext_mid);
     
     if(status < 0)
@@ -578,7 +556,6 @@ static int vm_space_undo
                         ext_right->length;
 
     status = vm_extent_insert(undo_to,
-                              undo_to_ext_cnt,
                               ext_left);
     
     return(status);

@@ -91,22 +91,22 @@ typedef struct vm_ctx_t
 /* Virtual memory extent */
 typedef struct vm_extent_t
 {
+    list_node_t node;
     virt_addr_t base;
     virt_size_t length;
     uint32_t    flags; /* memory flags     */
     uint32_t    prot;  /* protection flags */
-
 }vm_extent_t;
 
 /* Virtual memory extent header */
-typedef struct vm_slot_hdr_t
+typedef struct vm_extent_hdr_t
 {
     list_node_t node;
-    uint32_t avail;
-    uint32_t next_free;
-  //  uint8_t  type;
-    vm_extent_t extents[];
-}vm_slot_hdr_t;
+    list_head_t avail_ext;
+    list_head_t busy_ext;
+    uint32_t    extent_count;
+    vm_extent_t ext_area[];
+}vm_extent_hdr_t;
 
 
 virt_addr_t vm_map

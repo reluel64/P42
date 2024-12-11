@@ -238,7 +238,7 @@ size_t linked_list_count
     return(lh->count);
 }
 
-list_node_t * list_get_first
+list_node_t * linked_list_get_first
 (
     list_head_t *lh
 )
@@ -256,7 +256,7 @@ list_node_t * list_get_first
     return(ln);
 }
 
-list_node_t * list_get_last
+list_node_t * linked_list_get_last
 (
     list_head_t *lh
 )

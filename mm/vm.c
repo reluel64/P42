@@ -14,7 +14,7 @@ void vm_ctx_show
 {
     list_node_t *node = NULL;
     list_node_t *next_node = NULL;
-    vm_slot_hdr_t *hdr = NULL;
+    vm_extent_hdr_t *hdr = NULL;
     vm_extent_t *e = NULL;
     virt_size_t alloc_len = 0;
     virt_size_t free_len = 0;
@@ -35,14 +35,15 @@ void vm_ctx_show
 
     while(node)
     {
-        hdr = (vm_slot_hdr_t*)node;
+        hdr = (vm_extent_hdr_t*)node;
 
         next_node = linked_list_next(node);
         kprintf("============================================\n");
-        kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
+        //kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
         kprintf("============================================\n");
         for(uint16_t i = 0; i < ctx->free_per_slot; i++)
         {
+            #if 0
             e  = &hdr->extents[i];
 
             if(e->length != 0)
@@ -55,6 +56,7 @@ void vm_ctx_show
                         
                 free_len += e->length; 
             }
+            #endif
         }
 
         node = next_node;
@@ -67,12 +69,13 @@ void vm_ctx_show
     while(node)
     {
         next_node = linked_list_next(node);
-        hdr = (vm_slot_hdr_t*)node;
+        hdr = (vm_extent_hdr_t*)node;
         kprintf("============================================\n");
-        kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
+       // kprintf("HDR 0x%x AVAIL %d\n",hdr, hdr->avail);
         kprintf("============================================\n");
         for(uint16_t i = 0; i < ctx->alloc_per_slot; i++)
         {
+            #if 0
             e  = &hdr->extents[i];
             if(e->length != 0)
             {
@@ -84,6 +87,7 @@ void vm_ctx_show
 
                 alloc_len += e->length;
             }
+            #endif
         }
 
         node = next_node;
@@ -182,7 +186,7 @@ static int vm_ctx_init
 {
     virt_addr_t   vm_base = 0;
     virt_addr_t   vm_max  = 0;
-    vm_slot_hdr_t *hdr    = NULL;
+    vm_extent_hdr_t *hdr    = NULL;
     vm_extent_t   ext     = VM_EXTENT_INIT;
 
     vm_max = cpu_virt_max();
@@ -225,10 +229,7 @@ static int vm_ctx_init
     spinlock_init(&ctx->lock);
 
     /* Prepare initializing free memory tracking */
-    hdr = (vm_slot_hdr_t*) free_mem_track;
-    
-    /* Clear the memory */
-    memset(hdr,    0, free_track_size);
+    hdr = (vm_extent_hdr_t*) free_mem_track;
     
     linked_list_add_head(&ctx->free_mem,  &hdr->node);
     
@@ -236,43 +237,43 @@ static int vm_ctx_init
     ctx->free_track_size = free_track_size;
 
     /* How many free entries can we store per slot */
-    ctx->free_per_slot = (free_track_size - sizeof(vm_slot_hdr_t)) /
+    ctx->free_per_slot = (free_track_size - sizeof(vm_extent_hdr_t)) /
                                             sizeof(vm_extent_t);
 
     /* How many allocated entries can we store per slot */
-    ctx->alloc_per_slot = (alloc_track_size - sizeof(vm_slot_hdr_t)) /
+    ctx->alloc_per_slot = (alloc_track_size - sizeof(vm_extent_hdr_t)) /
                                               sizeof(vm_extent_t);
 
-    hdr->avail = ctx->free_per_slot;
-
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    /* Clear the memory */
+    vm_extent_header_init(hdr, ctx->free_per_slot);
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     memset(&ext, 0, sizeof(vm_extent_t));
  
     /* Insert higher memory */
     ext.base   = vm_base;
     ext.length = (((uintptr_t)-1) - vm_base) + 1;
     ext.flags  = VM_HIGH_MEM;
-
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     vm_extent_insert(&ctx->free_mem, 
-                     ctx->free_per_slot, 
                      &ext);
- 
+ kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     /* Insert lower memory */
     ext.base   = 0;
     ext.length = ((vm_max >> 1) - ext.base) + 1;
     ext.flags  = VM_LOW_MEM;
-
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     vm_extent_insert(&ctx->free_mem, 
-                     ctx->free_per_slot, 
                      &ext);
-
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     /* Setup tracking for allocated memory */
-    hdr = (vm_slot_hdr_t*)alloc_mem_track;
-
-    memset(hdr,    0, alloc_track_size);
-
+    hdr = (vm_extent_hdr_t*)alloc_mem_track;
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    /* Clear the memory */
+    vm_extent_header_init(hdr, ctx->alloc_per_slot);
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     linked_list_add_head(&ctx->alloc_mem, &hdr->node);
-    hdr->avail = ctx->alloc_per_slot;
-
+kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     return(VM_OK);
 }
 
