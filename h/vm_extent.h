@@ -35,8 +35,7 @@ int vm_extent_alloc_slot
 
 int vm_extent_merge
 (
-    list_head_t *lh,
-    uint32_t ext_per_slot
+    list_head_t *lh
 );
 
 
