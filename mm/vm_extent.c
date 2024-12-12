@@ -25,6 +25,11 @@ static uint8_t vm_extent_joinable
     vm_extent_t *ext
 );
 
+int32_t vm_extent_merge_in_hdr
+(
+    vm_extent_hdr_t *hdr
+);
+
 #define VM_SLOT_ALLOC_FLAGS  (VM_ALLOCATED | VM_PERMANENT | \
                               VM_HIGH_MEM  | VM_LOCKED)
 
@@ -524,9 +529,12 @@ int vm_extent_insert
     list_node_t      *hdr_ln      = NULL;
     list_node_t      *next_hdr_ln = NULL;
     list_node_t      *ext_ln      = NULL;
+    list_node_t      *m_ext_ln    = NULL;
     vm_extent_hdr_t  *hdr         = NULL;
     vm_extent_hdr_t  *f_hdr       = NULL;
     vm_extent_t      *c_ext       = NULL;
+    vm_extent_t      *m_ext       = NULL;
+
 
     if((ext->flags & VM_REGION_MASK) == VM_REGION_MASK ||
        (ext->flags & VM_REGION_MASK) == 0)
@@ -568,6 +576,24 @@ int vm_extent_insert
 
             if(vm_extent_join(ext, c_ext) == VM_OK)
             {
+                /*  if we did join, try to see if there are some 
+                 *  additional extents that can be merged after this one
+                 */
+                m_ext_ln = linked_list_next(ext_ln);
+
+                while(m_ext_ln)
+                {
+                    m_ext = (vm_extent_t*)m_ext_ln;
+
+                    if(vm_extent_join(m_ext, c_ext) == VM_OK)
+                    {
+                        linked_list_remove(&hdr->busy_ext, &m_ext->node);
+                        linked_list_add_tail(&hdr->avail_ext, &m_ext->node);
+                    }
+
+                    m_ext_ln = linked_list_next(m_ext_ln);
+                }
+
                 return(VM_OK);
             }
 
@@ -974,6 +1000,42 @@ static uint8_t vm_extent_joinable
     }
 
     return(joinable);
+}
+
+int32_t vm_extent_merge_in_hdr
+(
+    vm_extent_hdr_t *hdr
+)
+{
+    list_node_t *src_ln = NULL;
+    list_node_t *dst_ln = NULL;
+    vm_extent_t *dext = NULL;
+    vm_extent_t *sext = NULL;
+
+    dst_ln = linked_list_first(&hdr->busy_ext);
+
+    while(dst_ln)
+    {
+        dext = (vm_extent_t*)dst_ln;
+        src_ln = linked_list_next(dst_ln);
+
+        while(src_ln)
+        {
+            sext = (vm_extent_t*)src_ln;
+
+            if(vm_extent_join(sext, dext) == VM_OK)
+            {
+                linked_list_remove(&hdr->busy_ext, &sext->node);
+                linked_list_add_tail(&hdr->avail_ext, &sext->node);
+                break;
+            }
+
+            src_ln = linked_list_next(src_ln);
+        }
+
+        dst_ln = linked_list_next(dst_ln);
+    }
+    return(0);
 }
 
 void vm_extent_header_init
