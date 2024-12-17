@@ -20,7 +20,7 @@ typedef struct isr_list_t
 
 
 
-static isr_list_t handlers[MAX_HANDLERS];
+static isr_list_t handlers[MAX_ISR_HANDLERS];
 static isr_list_t eoi;
 static spinlock_t serial_lock;
 
@@ -31,7 +31,7 @@ int isr_init(void)
     spinlock_rw_init(&eoi.lock);
     spinlock_init(&serial_lock);
 
-    for(int i = 0; i < MAX_HANDLERS; i++)
+    for(int i = 0; i < MAX_ISR_HANDLERS; i++)
     {
         spinlock_rw_init(&handlers[i].lock);
     }
@@ -52,7 +52,7 @@ isr_t *isr_install
     uint8_t    int_status = 0;
     isr_list_t *isr_list  = NULL;
 
-    if((index >= MAX_HANDLERS) && (is_eoi == 0))
+    if((index >= MAX_ISR_HANDLERS) && (is_eoi == 0))
     {
         return(NULL);
     }
@@ -122,7 +122,7 @@ int isr_uninstall
     }
     else
     {
-        max_index = MAX_HANDLERS;
+        max_index = MAX_ISR_HANDLERS;
         isr_lst = handlers;
     }
 
@@ -170,7 +170,7 @@ void isr_dispatcher
     cpu_t             *cpu       = NULL;
     isr_info_t        inf = {.cpu_id = 0, .iframe = 0};
   
-    if(index < MAX_HANDLERS)
+    if(index < MAX_ISR_HANDLERS)
     {
         
         int_lst = &handlers[index];

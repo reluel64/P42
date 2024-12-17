@@ -21,7 +21,7 @@ extern virt_addr_t kstack_top;
 #define ISR_EC_MASK (0x27D00)
 #define RESERVED_ISR_BEGIN (21)
 #define RESERVED_ISR_END   (31)
-#define MAX_HANDLERS       IDT_TABLE_COUNT
+#define MAX_ISR_HANDLERS       IDT_TABLE_COUNT
 
 #define PLATFORM_AP_RETRIES       (1)
 #define PLATFORM_AP_START_TIMEOUT (5000)

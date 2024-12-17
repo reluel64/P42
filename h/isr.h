@@ -18,7 +18,7 @@ typedef struct isr_info_t
     uint32_t    cpu_id;
 }isr_info_t;
 
-typedef  int(*interrupt_handler_t)(void *pv, isr_info_t *inf);
+typedef  int32_t (*interrupt_handler_t)(void *pv, isr_info_t *inf);
 
 typedef struct isr_t
 {
