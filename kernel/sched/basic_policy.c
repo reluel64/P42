@@ -133,15 +133,25 @@ static int32_t basic_put_prev_thread
 
     if((bpu != NULL) && (th != NULL))
     {
-        if(linked_list_find_node(&bpu->threads, &th->sched_node) == 0)
+        /* if the thread is sleeping, it is already removed from the queue 
+         * by the scheduler code so we will not try to change the queue
+         */
+        if(~th->flags & THREAD_SLEEPING)
         {
+           // kprintf("Adding the thread to queue\n");
             /* remove thread from current position */
             linked_list_remove(&bpu->threads, &th->sched_node);
 
             /* put thread at the head of the queue */
             linked_list_add_head(&bpu->threads, &th->sched_node);
+
             result = 0;
         }
+        else
+        {
+            kprintf("Thread is blocked\n");
+        }
+        
     }
 
     return(result);

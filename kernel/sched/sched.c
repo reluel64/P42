@@ -765,7 +765,8 @@ void sched_sleep
         timer_enqeue_static(NULL, 
                             &timeout, 
                             sched_timer_wake_thread, 
-                            self, 
+                            self,
+                            TIMER_ONESHOT, 
                             &tm);
     }
 
@@ -963,10 +964,9 @@ static int32_t sched_put_prev
     sched_thread_t *th
 )
 {
-    if(th->flags & THREAD_READY)
-    {
-        th->policy->put_prev(unit, th);
-    }
+
+    th->policy->put_prev(unit, th);
+
 
     return(0);
 }
@@ -1079,12 +1079,8 @@ static void  sched_block_thread
     sched_thread_t *th
 )
 {
-    if(~th->flags & THREAD_SLEEPING)
-    {
-        //kprintf("Blocking thread %x sttus %d\n",th, th->flags);
-        sched_deq(unit, th);
-        th->flags |= THREAD_SLEEPING;
-    }
+    th->flags |= THREAD_SLEEPING;
+    sched_deq(unit, th);   
 }
 
 static void sched_main(void)

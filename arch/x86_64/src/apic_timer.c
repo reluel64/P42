@@ -137,7 +137,8 @@ static int apic_timer_init(device_t *dev)
     timer_enqeue_static(NULL, 
                         &req_res, 
                         apic_timer_loop, 
-                        &timer_done, 
+                        &timer_done,
+                        TIMER_ONESHOT, 
                         &calib_timer);
 
     while(!timer_done)

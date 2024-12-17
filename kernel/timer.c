@@ -13,7 +13,7 @@ static timer_dev_t system_timer = {0};
 
 static uint8_t timer_increment
 (
-    time_spec_t       *timer,
+    time_spec_t       *cursor,
     const time_spec_t *step
 )
 {
@@ -21,18 +21,18 @@ static uint8_t timer_increment
      * if we do, increase the seconds and calculate the difference
      * of the nanoseconds
      */
-    if(step->nanosec + timer->nanosec >= 1000000000ull)
+    if(step->nanosec + cursor->nanosec >= 1000000000ull)
     {
-        timer->seconds++;
-        timer->nanosec = (timer->nanosec + step->nanosec) - 1000000000ull;
+        cursor->seconds++;
+        cursor->nanosec = (cursor->nanosec + step->nanosec) - 1000000000ull;
     }
     else
     {
-        timer->nanosec += step->nanosec;
+        cursor->nanosec += step->nanosec;
     }
 
     /* increment seconds */
-    timer->seconds += step->seconds;
+    cursor->seconds += step->seconds;
 
     return(0);
 }
@@ -43,17 +43,38 @@ static uint8_t timer_expired
     time_spec_t *current
 )
 {
+    uint8_t expired = 0;
+
     /* Check if we went past the required seconds */
     if(target->seconds <= current->seconds)
     {
-        /* If we reached the target seconds, then check the nanoseconds */
-        if(target->nanosec <= current->nanosec)
+        if(target->seconds == current->seconds)
         {
-            return(1);
+            /* If we reached the target seconds, then check the nanoseconds */
+            if(target->nanosec <= current->nanosec)
+            {
+                expired = 1;
+            }
+        }
+        else
+        {
+            expired = 1;
         }
     }
 
-    return(0);
+    return(expired);
+}
+
+static void timer_compute_earliest_deadline
+(
+    time_spec_t *ed,
+    const time_spec_t *deadline,
+    const time_spec_t *cursor
+)
+{
+    
+    ed->seconds = deadline->seconds - cursor->seconds;
+    ed->nanosec = deadline->nanosec - cursor->nanosec;
 }
 
 static uint32_t timer_queue_callback
@@ -79,14 +100,6 @@ static uint32_t timer_queue_callback
     {
         prev_sec = tm_dev->current_increment.seconds;
     }
-#if 0
-    /* if the smallest timer did not expire, just bail out */
-    if(!timer_expired(&tm_dev->next_increment, &tm_dev->current_increment))
-    {
-        spinlock_unlock_int(&tm_dev->lock_q, int_flag);
-        return(0);
-    }
-#endif
 
 
     c = (timer_t*)linked_list_first(&tm_dev->active_q);
@@ -102,10 +115,19 @@ static uint32_t timer_queue_callback
         /* Do stuff */
 
         if(status)
-        {            
-            linked_list_remove(&tm_dev->active_q, &c->node);
+        {    
+
             c->callback(c, c->arg, isr_inf);
-            c->flags |= TIMER_PROCESSED;
+            /* if the timer was one-shot, then remove it from the list */
+            if(c->flags & TIMER_ONESHOT)
+            {
+                linked_list_remove(&tm_dev->active_q, &c->node);
+                c->flags |= TIMER_PROCESSED;
+            }
+            else
+            {
+                memset(&c->cursor, 0, sizeof(time_spec_t));
+            }
         }
 
         c = n;
@@ -168,7 +190,8 @@ int timer_enqeue
     timer_dev_t     *timer_dev,
     time_spec_t     *ts,
     timer_handler_t func,
-    void            *arg
+    void            *arg,
+    uint8_t         flags
 )
 {
     uint8_t int_sts = 0;
@@ -194,7 +217,7 @@ int timer_enqeue
     tm->arg = arg;
     tm->callback = func;
     tm->to_sleep = *ts;
-    
+    tm->flags = flags;
     spinlock_lock_int(&tmd->lock_pend_q, &int_sts);
 
     linked_list_add_tail(&tmd->pend_q, &tm->node);
@@ -210,6 +233,7 @@ int timer_enqeue_static
     time_spec_t     *ts,
     timer_handler_t func,
     void            *arg,
+    uint8_t         flags,
     timer_t         *tm
 )
 {
@@ -236,7 +260,7 @@ int timer_enqeue_static
     tm->arg = arg;
     tm->callback = func;
     tm->to_sleep = *ts;
-    tm->flags    = 0;
+    tm->flags = flags;
     spinlock_lock_int(&tmd->lock_pend_q, &int_sts);   
 
     linked_list_add_tail(&tmd->pend_q, &tm->node);
@@ -275,6 +299,7 @@ int timer_dequeue
     {
         return(0);
     }
+    
     int_sts = cpu_int_check();
 
     if(int_sts)

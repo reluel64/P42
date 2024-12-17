@@ -81,7 +81,8 @@ int timer_enqeue
     timer_dev_t     *timer_dev,
     time_spec_t     *ts,
     timer_handler_t func,
-    void            *arg
+    void            *arg,
+    uint8_t         flags
 );
 
 int timer_enqeue_static
@@ -90,6 +91,7 @@ int timer_enqeue_static
     time_spec_t     *ts,
     timer_handler_t func,
     void            *arg,
+    uint8_t         flags,
     timer_t         *tm
 );
 
