@@ -19,17 +19,22 @@ void vm_ctx_show
     virt_size_t alloc_len = 0;
     virt_size_t free_len = 0;
     uint32_t ix = 0;
+    uint32_t free_ext_total = 0;
+    uint32_t alloc_ext_total = 0;
 
     if(ctx == NULL)
     {
         ctx = &vm_kernel_ctx;
     }
 
-    kprintf("ALLOC HEADERS %d | FREE HEADERS %d\n",
-                        linked_list_count(&ctx->alloc_mem),
-                        linked_list_count(&ctx->free_mem));
-    kprintf("FREE_DESC_PER_PAGE  %d\n",ctx->free_per_slot);
-    kprintf("ALLOC_DESC_PER_PAGE %d\n",ctx->alloc_per_slot);
+    kprintf("ALLOC MEM TRACKING HEADER COUNT: %d\n", 
+                                linked_list_count(&ctx->alloc_mem));
+
+    kprintf("FREE  MEM TRACKING HEADER COUNT: %d\n", 
+                                linked_list_count(&ctx->free_mem));
+
+
+
 
     node = linked_list_first(&ctx->free_mem);
 
@@ -38,9 +43,12 @@ void vm_ctx_show
     while(node)
     {
         hdr = (vm_extent_hdr_t*)node;
+        ix = 0;
 
         kprintf("============================================\n");
-        kprintf("HDR 0x%x AVAIL %d\n",hdr, linked_list_count(&hdr->busy_ext));
+        kprintf("HDR 0x%x USED EXTENTS %d AVAIL EXTENTS %d\n",hdr, 
+                           linked_list_count(&hdr->busy_ext),
+                           linked_list_count(&hdr->avail_ext));
         kprintf("============================================\n");
         en = linked_list_first(&hdr->busy_ext);
         while(en)
@@ -55,20 +63,25 @@ void vm_ctx_show
             free_len += e->length;
             en = linked_list_next(en);
             ix++;
+            
         }
-
+        free_ext_total+=ix;
         node = linked_list_next(node);
     }
 
     node = linked_list_first(&ctx->alloc_mem);
-    ix = 0;
+    
     kprintf("----LISTING ALLOCATED RANGES----\n");
 
     while(node)
     {
         hdr = (vm_extent_hdr_t*)node;
+        ix = 0;
+
         kprintf("============================================\n");
-        kprintf("HDR 0x%x AVAIL %d\n",hdr, linked_list_count(&hdr->busy_ext));
+        kprintf("HDR 0x%x USED EXTENTS %d AVAIL EXTENTS %d\n",hdr, 
+                           linked_list_count(&hdr->busy_ext),
+                           linked_list_count(&hdr->avail_ext));
         kprintf("============================================\n");
 
         en = linked_list_first(&hdr->busy_ext);
@@ -86,11 +99,16 @@ void vm_ctx_show
             en = linked_list_next(en);
             ix++;
         }
-
+        alloc_ext_total+=ix;
         node = linked_list_next(node);
     }
 
+    kprintf("FREE MEM TRACKING EXTENTS %d | ALLOC MEM TRACKING EXTENTS %d\n",
+                                        free_ext_total, 
+                                        alloc_ext_total);
+                                        
     kprintf("ALLOCATED: 0x%x bytes\nFREE: 0x%x bytes\n", alloc_len, free_len);
+    
 
 }
 
@@ -982,4 +1000,11 @@ int vm_fault_handler
     }
 
     return(status);
+}
+
+int vm_merge(void)
+{
+ //   vm_extent_merge(&vm_kernel_ctx.alloc_mem);
+    vm_extent_merge(&vm_kernel_ctx.free_mem);
+    return(0);
 }
