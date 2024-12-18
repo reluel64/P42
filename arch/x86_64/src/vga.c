@@ -133,8 +133,10 @@ static size_t vga_write
             vga->row--;
         }
 
-        line = vga->base + (vga->row * VGA_MAX_COL) + vga->col;
+        line = vga->base + (vga->row * VGA_MAX_COL);
         character = (uint16_t)in_buf[i]  | (0x7 << 8);
+
+
         line[vga->col] = character;
 
         vga->col++;
@@ -143,6 +145,21 @@ static size_t vga_write
     return(0);
 }
 
+static int32_t vga_ioctl
+(
+    
+)
+{
+    return(0);
+}
+
+static int32_t vga_close
+(
+    
+)
+{
+    return(0);
+}
 
 
 static io_entry_t vga_entry = 
@@ -151,7 +168,8 @@ static io_entry_t vga_entry =
     .open_func  = vga_open,
     .write_func = vga_write,
     .read_func  = NULL,
-    .close_func = NULL
+    .close_func = vga_close,
+    .ioctl_func = vga_ioctl
 };
 
 
