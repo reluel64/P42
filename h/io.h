@@ -18,11 +18,12 @@ typedef struct io_entry_t
 
 typedef struct
 {
+    list_node_t node;
     void *fd_data;
     io_entry_t *ent;
     char *path;
     size_t path_len;
-}io_open_fd_t;
+}io_fd_desc_t;
 
 int io_init
 (
@@ -58,4 +59,11 @@ size_t write
 int close
 (
     int fd
+);
+
+int ioctl
+(
+    int fd,
+    int arg,
+    void *arg_data
 );
