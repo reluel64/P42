@@ -10,7 +10,6 @@
 
 
 #define TIMER_DEVICE_TYPE "timer"
-#define TIMER_NOT_INIT    (1 << 0)
 #define TIMER_PERIODIC    (1 << 0)
 #define TIMER_ONESHOT     (1 << 1)
 #define TIMER_PROCESSED   (1 << 2)

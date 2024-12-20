@@ -93,7 +93,7 @@ static sched_policy_t idle_task_policy =
     .select_thread    = idle_task_select_thread,
     .put_prev         = idle_task_put_prev_thread,
     .policy_name      = "idle_task",
-    .id      = sched_idle_task_policy,
+    .id               = sched_idle_task_policy,
     .pv               = NULL
 };
 
