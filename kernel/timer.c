@@ -119,14 +119,14 @@ static uint32_t timer_queue_callback
 
             c->callback(c, c->arg, isr_inf);
             /* if the timer was one-shot, then remove it from the list */
-            if(c->flags & TIMER_ONESHOT)
+            if(c->flags & TIMER_PERIODIC)
             {
-                linked_list_remove(&tm_dev->active_q, &c->node);
-                c->flags |= TIMER_PROCESSED;
+                memset(&c->cursor, 0, sizeof(time_spec_t));
             }
             else
             {
-                memset(&c->cursor, 0, sizeof(time_spec_t));
+                linked_list_remove(&tm_dev->active_q, &c->node);
+                c->flags |= TIMER_PROCESSED;
             }
         }
 
