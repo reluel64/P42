@@ -705,8 +705,6 @@ void sched_wake_thread
         spinlock_lock_int(&th->lock, &int_flag);
 
         th->flags |= THREAD_READY;
-        th->flags &= ~THREAD_SLEEPING;
-
        
         /* put the thread back to the policy */
         sched_enq(th->unit, th);
@@ -750,12 +748,10 @@ void sched_sleep
     }
     
     self = sched_thread_self();
-
     spinlock_lock_int(&self->lock, &int_status);
-
     /* mark thread as sleeping if we have any delay specified*/
     if(delay != 0)
-    {
+    {    
         self->flags &= ~THREAD_READY;
     }
 
@@ -771,6 +767,7 @@ void sched_sleep
     }
 
     spinlock_unlock_int(&self->lock, int_status);
+    
     /* ask the scheduler to put the thread to sleep */
     schedule();
     
@@ -911,6 +908,7 @@ int sched_need_resched
         th = unit->current;
         need_resched = (th->flags & THREAD_NEED_RESCHEDULE) == 
                                     THREAD_NEED_RESCHEDULE;
+                                    
     }
 
     preemption = sched_preemption_enabled(unit);
@@ -919,7 +917,7 @@ int sched_need_resched
     {
         need_resched = 0;
     }
-    
+
     return(need_resched);
 }
 
@@ -949,7 +947,8 @@ static int32_t sched_select_thread
 {
     int32_t result = -1;
     
-    if(th->policy != NULL)
+    if(th->policy != NULL && 
+      (th->policy->select_thread != NULL))
     {
         result = th->policy->select_thread(unit, th);
     }
@@ -964,11 +963,16 @@ static int32_t sched_put_prev
     sched_thread_t *th
 )
 {
+    int32_t status = -1;
 
-    th->policy->put_prev(unit, th);
+    if((th->policy != NULL) && 
+       (th->policy->put_prev != NULL))
+    {
+        status = th->policy->put_prev(unit, th);
+    }
 
 
-    return(0);
+    return(status);
 }
 
 /* enqueue a thread on the policy */
@@ -979,11 +983,15 @@ static int32_t sched_enq
     sched_thread_t *th
 )
 {
-    if(th->policy != NULL)
+    int32_t status = -1;
+
+    if((th->policy != NULL) && 
+       (th->policy->enqueue != NULL))
     {
-        th->policy->enqueue(unit, th);
+        status = th->policy->enqueue(unit, th);
     }
-    return(0);
+
+    return(status);
 }
 
 /* Dequeue a thread from the policy */
@@ -994,11 +1002,15 @@ static int32_t sched_deq
     sched_thread_t    *th
 )
 {
-    if(th->policy->dequeue != NULL)
+    int32_t status = -1;
+
+    if((th->policy != NULL) && 
+       (th->policy->dequeue != NULL))
     {
-        th->policy->dequeue(unit, th);
+        status = th->policy->dequeue(unit, th);
     }
-    return(0);
+
+    return(status);
 }
 
 static int32_t sched_pick_next
@@ -1015,17 +1027,21 @@ static int32_t sched_pick_next
 
     spinlock_read_lock_int(&policies_lock, &int_sts);
 
+    /* find a policy that has something ready t run */
     pn = linked_list_first(&policies);
 
     while(pn != NULL)
     {
-
         policy = (sched_policy_t*)pn;
 
-        if(policy->pick_next(unit, &next) == 0)
+        if(policy->pick_next != NULL)
         {
-            status = 0;
-            break;
+            status = policy->pick_next(unit, &next);
+
+            if( status == 0)
+           {
+                break;
+            }
         }
 
         pn = linked_list_next(pn);
@@ -1079,7 +1095,6 @@ static void  sched_block_thread
     sched_thread_t *th
 )
 {
-    th->flags |= THREAD_SLEEPING;
     sched_deq(unit, th);   
 }
 
@@ -1112,8 +1127,6 @@ static void sched_main(void)
         sched_next_thread(unit, prev_th, &next_th);
     
         unit->current = next_th;
-
- 
 
         /* Switch context */
         sched_context_switch(prev_th, next_th);

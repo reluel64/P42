@@ -136,7 +136,7 @@ static int32_t basic_put_prev_thread
         /* if the thread is sleeping, it is already removed from the queue 
          * by the scheduler code so we will not try to change the queue
          */
-        if(~th->flags & THREAD_SLEEPING)
+        if(th->flags & THREAD_READY)
         {
            // kprintf("Adding the thread to queue\n");
             /* remove thread from current position */
@@ -146,10 +146,6 @@ static int32_t basic_put_prev_thread
             linked_list_add_head(&bpu->threads, &th->sched_node);
 
             result = 0;
-        }
-        else
-        {
-            kprintf("Thread is blocked\n");
         }
         
     }
