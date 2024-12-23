@@ -7,7 +7,7 @@
 #define IPI_INVLPG               (0x1)
 #define IPI_INIT                 (0x2)
 #define IPI_START_AP             (0x3)
-#define IPI_RESCHED              (0x4)
+#define IPI_SCHED                (0x4)
 
 /* Destination shorthand */
 #define IPI_DEST_NO_SHORTHAND (0x0)

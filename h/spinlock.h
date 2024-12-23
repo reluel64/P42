@@ -29,6 +29,11 @@ void spinlock_lock
     spinlock_t *s
 );
 
+int8_t spinlock_trylock
+(
+    spinlock_t *s
+);
+
 void spinlock_unlock
 (
     spinlock_t *s
@@ -46,6 +51,12 @@ void spinlock_lock_int
     uint8_t *flag
 );
 
+int8_t spinlock_trylock_int
+(
+    spinlock_t *s, 
+    uint8_t *flag
+)
+;
 void spinlock_write_unlock_int
 (
     spinlock_rw_t *s,

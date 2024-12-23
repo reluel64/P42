@@ -50,7 +50,7 @@ extern virt_addr_t isr_ec_sz_end;
 extern void *kmain_sys_init(void *arg);
 
 static spinlock_t lock;
-static volatile int cpu_on = 0;
+static volatile uint32_t cpu_on = 0;
 static void cpu_ap_entry_point(void);
 
 uint32_t cpu_id_get(void)
@@ -387,8 +387,8 @@ int cpu_issue_ipi
 
     switch(vector)
     {
-        case IPI_RESCHED:
-            vector = PLATFORM_RESCHED_VECTOR;
+        case IPI_SCHED:
+            vector = PLATFORM_SCHED_VECTOR;
             break;
 
         case IPI_INVLPG:

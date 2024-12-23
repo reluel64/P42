@@ -16,7 +16,6 @@
 #include <platform.h>
 #include <owner.h>
 
-#define THREAD_NOT_RUNNABLE(x) (((x) & (THREAD_SLEEPING | THREAD_BLOCKED)))
 #define SCHED_IDLE_THREAD_STACK_SIZE    (PAGE_SIZE)
 
 static list_head_t    threads       = LINKED_LIST_INIT;
@@ -25,6 +24,7 @@ static list_head_t    policies      = LINKED_LIST_INIT;
 static spinlock_rw_t  units_lock    = SPINLOCK_RW_INIT;
 static spinlock_rw_t  threads_lock  = SPINLOCK_RW_INIT;
 static spinlock_rw_t  policies_lock = SPINLOCK_RW_INIT;
+
 
 static void *sched_idle_thread
 (
@@ -282,7 +282,7 @@ int sched_start_thread
 {
     sched_exec_unit_t *unit = NULL;
     uint8_t int_status = 0;
-    
+
     spinlock_lock_int(&th->lock, &int_status);
     
     /* get the most available unit */
@@ -891,6 +891,11 @@ static void sched_context_switch
     sched_thread_t *next
 )
 {
+    if(prev != NULL)
+    {
+        prev->context_switches++;
+    }
+
     context_switch(prev, next);
 }
 

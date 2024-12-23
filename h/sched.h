@@ -35,7 +35,7 @@
 typedef struct sched_exec_unit_t sched_exec_unit_t;
 typedef struct sched_thread_t    sched_thread_t;
 typedef unsigned char cpu_aff_t[CPU_AFFINITY_VECTOR] ;
-
+typedef struct sched_owner_t sched_owner_t;
 
 typedef enum sched_policy_id
 {
@@ -106,19 +106,23 @@ typedef struct sched_thread_t
     virt_addr_t        stack_origin; /* start of memory allocated for the stack       */
     virt_size_t        stack_sz;     /* stack size                                    */  
     uint32_t           flags;        /* thread flags                                  */
-    void              *owner;        /* owner of the thread - if kernel, owner = null */
-    virt_addr_t        context;      /* thread context                                */
     uint32_t           id;           /* thread id                                     */
+    uint32_t           cpu_left;     /* reamining time before task switch             */
+    sched_owner_t      *owner;        /* owner of the thread - if kernel, owner = null */
+    virt_addr_t        context;      /* thread context                                */
+
     uint16_t           prio;         /* priority                                      */
     void              *entry_point;  /* entry point of the thread                     */
     void              *arg;          /* parameter for the entry point of the thread   */
     sched_exec_unit_t *unit;         /* execution unit on which the thread is running */
     spinlock_t        lock;          /* lock to protect the structure members         */
-    uint32_t          cpu_left;      /* reamining time before task switch             */
+
     void              *rval;         /* return value                                  */
     cpu_aff_t         affinity;
     sched_policy_t    *policy;
     uint8_t           name[THREAD_NAME_LENGTH];
+
+    uint64_t           context_switches;
 }sched_thread_t;
 
 typedef struct sched_exec_unit_t
@@ -136,6 +140,7 @@ typedef struct sched_exec_unit_t
     spinlock_t      wake_q_lock; /* lock for the wake queue */
     list_head_t     wake_q;    /* queue of threads that wait to be woken up  */
     list_head_t     unit_threads;
+    isr_t           sched_isr;
 }sched_exec_unit_t;
 
 typedef struct sched_owner_t
@@ -156,15 +161,9 @@ int sched_unit_init
     sched_thread_t *post_unit_init
 );
 
-int sched_init(void);
-
-int sched_init_thread
+int sched_init
 (
-    sched_thread_t    *th,
-    void        *entry_pt,
-    virt_size_t stack_sz,
-    uint32_t    prio,
-    void *pv
+    void
 );
 
 int sched_start_thread

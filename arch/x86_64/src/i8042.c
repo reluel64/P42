@@ -31,7 +31,7 @@ extern sem_t *kb_sem;
 static int i8042_kbd_irq(void *pv, isr_info_t *isr_inf)
 {
     __inb(I8042_DATA_PORT);
-    sem_release(kb_sem);
+    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     return(0);
 }
 
@@ -39,7 +39,6 @@ static int i8042_mse_irq(void *pv, isr_info_t *isr_inf)
 {
     __inb(I8042_DATA_PORT);
     kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
-
     return(0);
 }
 
