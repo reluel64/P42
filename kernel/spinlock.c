@@ -40,6 +40,26 @@ void spinlock_lock
     }
 }
 
+int8_t spinlock_trylock
+(
+    spinlock_t *s
+)
+{  
+    int expected = 0;    
+    int8_t rc = 0;
+    if(!__atomic_compare_exchange_n(&s->lock, 
+                                      &expected, 1, 0, 
+                                      __ATOMIC_SEQ_CST, 
+                                      __ATOMIC_SEQ_CST)
+         )
+    {
+        expected = 0;
+        rc = -1;
+    }
+
+    return(rc);
+}
+
 void spinlock_unlock
 (
     spinlock_t *s
@@ -76,6 +96,33 @@ void spinlock_lock_int
         cpu_pause();
     }
 
+}
+
+int8_t spinlock_trylock_int
+(
+    spinlock_t *s, 
+    uint8_t *flag
+)
+{
+    int expected = 0;
+    int8_t rc = 0;
+
+    *flag = cpu_int_check();
+
+    cpu_int_lock();
+
+    if(!__atomic_compare_exchange_n(&s->lock, 
+                                      &expected, 1, 0, 
+                                      __ATOMIC_SEQ_CST, 
+                                      __ATOMIC_SEQ_CST)
+         )
+    {
+        expected = 0;
+        rc = 0xff;
+        cpu_int_unlock();
+    }
+
+    return(rc);
 }
 
 void spinlock_unlock_int
