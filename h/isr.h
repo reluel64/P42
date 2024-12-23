@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <defs.h>
 #include <isr.h>
+#include <cpu.h>
 
 #define ZERO_ISR_INIT {.node.prev = NULL, \
                        .node.next = NULL, \
@@ -16,6 +17,7 @@ typedef struct isr_info_t
 {
     virt_addr_t iframe;
     uint32_t    cpu_id;
+    cpu_t *cpu;
 }isr_info_t;
 
 typedef  int32_t (*interrupt_handler_t)(void *pv, isr_info_t *inf);

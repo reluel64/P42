@@ -167,9 +167,9 @@ void isr_dispatcher
     isr_list_t        *int_lst   = NULL;
     isr_t             *intr      = NULL;
     list_node_t       *node      = NULL;
-    cpu_t             *cpu       = NULL;
-    isr_info_t        inf = {.cpu_id = 0, .iframe = 0};
-  
+    isr_info_t        inf = {.cpu_id = 0, .iframe = 0, .cpu = NULL};
+    int32_t            st = 0;
+
     if(index < MAX_ISR_HANDLERS)
     {
         
@@ -177,7 +177,7 @@ void isr_dispatcher
 
         inf.iframe = iframe;
         inf.cpu_id = cpu_id_get();
-        cpu        = cpu_current_get();
+        inf.cpu    = cpu_current_get();
 
         /* gain exclusive access to the list */
         spinlock_read_lock(&int_lst->lock);
@@ -190,7 +190,12 @@ void isr_dispatcher
 
             if(intr->ih)
             {
-                intr->ih(intr->pv, &inf);
+                st = intr->ih(intr->pv, &inf);
+
+                if(st == 0)
+                {
+                    break;
+                }
             }
 
             node = linked_list_next(node);
@@ -209,7 +214,12 @@ void isr_dispatcher
 
             if(intr->ih)
             {
-                intr->ih(intr->pv, &inf);
+                st = intr->ih(intr->pv, &inf);
+                
+                if(st == 0)
+                {
+                    break;
+                }
             }
             node = linked_list_next(node);
         }
@@ -217,9 +227,9 @@ void isr_dispatcher
         spinlock_read_unlock(&eoi.lock);
 
         /* check if we need to reschedule */
-        if(cpu && cpu->sched)
+        if(inf.cpu && inf.cpu->sched)
         {
-            if(sched_need_resched(cpu->sched))
+            if(sched_need_resched(inf.cpu->sched))
             {
                 schedule();
             }
