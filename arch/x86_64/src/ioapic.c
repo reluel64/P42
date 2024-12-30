@@ -15,14 +15,14 @@
 #define IOAPIC_TRIGGER_EDGE       (0x0)
 #define IOAPIC_TRIGGER_LEVEL      (0x1)
 
-typedef struct ioapic_iter_cb_data_t
+struct ioapic_iter_cb_data
 {
     uint32_t ioapic_id;
     phys_addr_t addr;
     phys_size_t irq_base;
-}ioapic_iter_cb_data_t;
+};
 
-typedef int (*ioapic_iter_cb)(ioapic_iter_cb_data_t *cb, void *pv);
+typedef int (*ioapic_iter_cb)(struct ioapic_iter_cb_data *cb, void *pv);
 
 static int ioapic_iterate
 (
@@ -38,7 +38,7 @@ static int ioapic_iterate
     ACPI_SUBTABLE_HEADER   *iosapic_subhdr = NULL;
     ACPI_MADT_IO_APIC      *ioapic         = NULL;
     ACPI_MADT_IO_SAPIC     *iosapic        = NULL;
-    ioapic_iter_cb_data_t  cb_data;
+    struct ioapic_iter_cb_data  cb_data;
     int                    stop            = 0;
 
     if(cb == NULL)
@@ -163,13 +163,13 @@ static int ioapic_iterate
 
 static int ioapic_write
 (
-    device_t *dev, 
+    struct device_node *dev, 
     uint32_t reg,
     void *data, 
     size_t length
 )
 {
-    ioapic_t *ioapic = NULL;
+    struct ioapic *ioapic = NULL;
     uint32_t *iowin_data = NULL;
     
     ioapic = devmgr_dev_data_get(dev);
@@ -197,13 +197,13 @@ static int ioapic_write
 
 static int ioapic_read
 (
-    device_t *dev, 
+    struct device_node *dev, 
     uint32_t reg,
     void *data, 
     size_t length
 )
 {
-    ioapic_t *ioapic = NULL;
+    struct ioapic *ioapic = NULL;
     uint32_t *iowin_data = NULL;
     
     ioapic = devmgr_dev_data_get(dev);
@@ -230,7 +230,7 @@ static int ioapic_read
 
 static int ioapic_count
 (
-    ioapic_iter_cb_data_t *entry,
+    struct ioapic_iter_cb_data *entry,
     void *pv
 )
 {
@@ -288,26 +288,26 @@ static int ioapic_redirect_vector
 
 static int ioapic_device_init
 (
-    ioapic_iter_cb_data_t *entry,
+    struct ioapic_iter_cb_data *entry,
     void *pv
 )
 {
     void      **cb_data  = NULL;
-    device_t      *dev      = NULL;
+    struct device_node      *dev      = NULL;
     uint32_t   *index    = NULL;
-    ioapic_t   *ioapic   = NULL;
+    struct ioapic   *ioapic   = NULL;
     uint32_t   dev_index = 0;
     uint32_t   vector    = 0;
     uint16_t   int_flags = 0;
     uint8_t    polarity  = 0;
     uint8_t    trigger    = 0;
-    ioredtbl_t *tbl = NULL;
-    ioredtbl_t temp_tbl;
-    ioapic_ver_t version;
+    struct ioredtbl *tbl = NULL;
+    struct ioredtbl temp_tbl;
+    struct ioapic_version version;
     uint32_t   redir_vector     = 0;
 
     cb_data = (void**)pv;
-    dev     = (device_t*)cb_data[0];
+    dev     = (struct device_node*)cb_data[0];
     index   = (uint32_t*)cb_data[1];
 
     dev_index = devmgr_dev_index_get(dev);
@@ -320,7 +320,7 @@ static int ioapic_device_init
     }
 
     /* Allocate memory for per-device data */
-    ioapic = kcalloc(sizeof(ioapic_t), 1);
+    ioapic = kcalloc(sizeof(struct ioapic), 1);
 
     if(ioapic == NULL)
     {
@@ -348,20 +348,20 @@ static int ioapic_device_init
     }
     
     /* save pointers of IOREGSEL and IOWIN */
-    ioapic->ioregsel = (volatile ioregsel_t*)ioapic->virt_base;
-    ioapic->iowin = (volatile iowin_t*)(ioapic->virt_base + 0x10);
+    ioapic->ioregsel = (volatile struct ioregsel*)ioapic->virt_base;
+    ioapic->iowin = (volatile struct iowin*)(ioapic->virt_base + 0x10);
     
     /* Save per device structure */
     devmgr_dev_data_set(dev, ioapic);
 
-    memset(&version, 0, sizeof(ioapic_ver_t));
+    memset(&version, 0, sizeof(struct ioapic_version));
 
-    ioapic_read(dev, 0x1, &version, sizeof(ioapic_ver_t));
+    ioapic_read(dev, 0x1, &version, sizeof(struct ioapic_version));
 
     ioapic->redir_tbl_count = version.max_redir;
     kprintf("IRQ BASE %d\n",ioapic->irq_base);
   
-    tbl = kcalloc(sizeof(ioredtbl_t), ioapic->redir_tbl_count);
+    tbl = kcalloc(sizeof(struct ioredtbl), ioapic->redir_tbl_count);
 
     if(tbl == NULL)
     {
@@ -430,7 +430,7 @@ static int ioapic_device_init
     for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
     {
         tbl[i].intvec += IRQ(0);
-        ioapic_write(dev, 0x10 + i * 2, tbl + i, sizeof(ioredtbl_t));
+        ioapic_write(dev, 0x10 + i * 2, tbl + i, sizeof(struct ioredtbl));
     }
 
     ioapic->redir_tbl = tbl;
@@ -440,13 +440,13 @@ static int ioapic_device_init
 
 static int ioapic_toggle_mask
 (
-    device_t *dev,
+    struct device_node *dev,
     int irq,
     uint8_t mask
 )
 {
-    ioredtbl_t *redir = NULL;
-    ioapic_t *ioapic = NULL;
+    struct ioredtbl *redir = NULL;
+    struct ioapic *ioapic = NULL;
 
     ioapic = devmgr_dev_data_get(dev);
 
@@ -469,7 +469,7 @@ static int ioapic_toggle_mask
             ioapic_write(dev, 
                         0x10 + i * 2, 
                         &redir[i], 
-                        sizeof(ioredtbl_t));
+                        sizeof(struct ioredtbl));
             break;
         }
     }
@@ -479,7 +479,7 @@ static int ioapic_toggle_mask
 
 static int ioapic_mask
 (
-    device_t *dev,
+    struct device_node *dev,
     int irq
 )
 {
@@ -488,14 +488,14 @@ static int ioapic_mask
 
 static int ioapic_unmask
 (
-    device_t *dev,
+    struct device_node *dev,
     int irq
 )
 {
     return(ioapic_toggle_mask(dev, irq, 0));
 }
 
-static int ioapic_probe(device_t *dev)
+static int ioapic_probe(struct device_node *dev)
 {
     uint32_t count = 0;
    
@@ -513,7 +513,7 @@ static int ioapic_probe(device_t *dev)
     return(0);
 }
 
-static int ioapic_init(device_t *dev)
+static int ioapic_init(struct device_node *dev)
 {
     int     status         = 0;
     void    *cb_data[2]    = {NULL, NULL};
@@ -530,12 +530,12 @@ static int ioapic_init(device_t *dev)
 
 static int ioapic_drv_init
 (
-    driver_t *drv
+    struct driver_node *drv
 )
 {
     uint32_t   ioapic_cnt = 0;
-    device_t   *dev       = NULL;
-    intc_api_t *funcs      = NULL;
+    struct device_node   *dev       = NULL;
+    struct intc_api *funcs      = NULL;
 
     ioapic_iterate(ioapic_count, &ioapic_cnt);
     
@@ -569,7 +569,7 @@ static int ioapic_drv_init
     return(0);
 }
 
-static intc_api_t api = 
+static struct intc_api api = 
 {
     .enable = NULL,
     .disable = NULL,
@@ -578,7 +578,7 @@ static intc_api_t api =
     .unmask   = ioapic_unmask
 };
 
-static driver_t ioapic_drv = 
+static struct driver_node ioapic_drv = 
 {
     .dev_probe  = ioapic_probe,
     .dev_init   = ioapic_init,

@@ -14,60 +14,59 @@
 #define TIMER_ONESHOT     (1 << 1)
 #define TIMER_PROCESSED   (1 << 2)
 #define TIMER_RESOLUTION_NS  (1000000000ull) // nanosecond
-#define NODE_TO_TIMER (node)    ((uint8_t*)(node) - offsetof((node), timer_t))
+#define NODE_TO_TIMER (node)    ((uint8_t*)(node) - offsetof((node), struct timer))
 
-typedef struct timer_t timer_t;
-
-typedef struct time_spec_t
+struct time_spec
 {
     uint32_t nanosec;
     uint32_t seconds;
-}time_spec_t;
+};
 
+struct timer;
 
 typedef uint32_t (*timer_tick_handler_t) \
-                 (void *arg, const time_spec_t *step, const void *isr_inf);
+                 (void *arg, const struct time_spec *step, const void *isr_inf);
 
 typedef uint32_t (*timer_handler_t) \
-                 (timer_t *tm, void *arg, const void *isr_inf);
+                 (struct timer *tm, void *arg, const void *isr_inf);
 
 
-typedef struct timer_dev_t
+struct timer_device
 {
-    device_t    *backing_dev;  /* backing timer device      */
-    list_head_t active_q;      /* timer queue               */
-    list_head_t pend_q;
-    spinlock_t  lock_active_q;       /* lock to ptorect the queue */
-    spinlock_t  lock_pend_q; 
-    time_spec_t step;
-    time_spec_t next_increment;
-    time_spec_t current_increment;
-}timer_dev_t;
+    struct device_node    *backing_dev;  /* backing timer device      */
+    struct list_head active_q;      /* timer queue               */
+    struct list_head pend_q;
+    struct spinlock  lock_active_q;       /* lock to ptorect the queue */
+    struct spinlock  lock_pend_q; 
+    struct time_spec step;
+    struct time_spec next_increment;
+    struct time_spec current_increment;
+};
 
-typedef struct timer_t
+struct timer
 {
-    list_node_t       node;
+    struct list_node       node;
     timer_handler_t   callback;
     void              *arg;
-    time_spec_t       to_sleep;
-    time_spec_t       cursor;
+    struct time_spec       to_sleep;
+    struct time_spec       cursor;
     uint8_t           flags;
-}timer_t;
+};
 
-typedef struct timer_api_t
+struct timer_api
 {
-    int (*enable)      (device_t *dev);
-    int (*disable)     (device_t *dev);
-    int (*reset)       (device_t *dev);
-    int (*set_handler) (device_t *dev, timer_tick_handler_t th, void *arg);
-    int (*get_handler) (device_t *dev, timer_tick_handler_t *th, void **arg);
-    int (*set_timer)   (device_t *dev, time_spec_t *tm);
-    int (*set_mode)    (device_t *dev, uint8_t mode); 
-}timer_api_t; 
+    int (*enable)      (struct device_node *dev);
+    int (*disable)     (struct device_node *dev);
+    int (*reset)       (struct device_node *dev);
+    int (*set_handler) (struct device_node *dev, timer_tick_handler_t th, void *arg);
+    int (*get_handler) (struct device_node *dev, timer_tick_handler_t *th, void **arg);
+    int (*set_timer)   (struct device_node *dev, struct time_spec *tm);
+    int (*set_mode)    (struct device_node *dev, uint8_t mode); 
+}; 
 
 int timer_set_system_timer
 (
-    device_t *dev
+    struct device_node *dev
 );
 
 int timer_system_init
@@ -77,8 +76,8 @@ int timer_system_init
 
 int timer_enqeue
 (
-    timer_dev_t     *timer_dev,
-    time_spec_t     *ts,
+    struct timer_device     *timer_dev,
+    struct time_spec     *ts,
     timer_handler_t func,
     void            *arg,
     uint8_t         flags
@@ -86,18 +85,18 @@ int timer_enqeue
 
 int timer_enqeue_static
 (
-    timer_dev_t     *timer_dev,
-    time_spec_t     *ts,
+    struct timer_device     *timer_dev,
+    struct time_spec     *ts,
     timer_handler_t func,
     void            *arg,
     uint8_t         flags,
-    timer_t         *tm
+    struct timer         *tm
 );
 
 int timer_dequeue
 (
-    timer_dev_t *timer_dev,
-    timer_t *tm
+    struct timer_device *timer_dev,
+    struct timer *tm
 );
 
 #endif

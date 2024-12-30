@@ -49,9 +49,14 @@ extern virt_addr_t isr_ec_sz_end;
 
 extern void *kmain_sys_init(void *arg);
 
-static spinlock_t lock;
+static struct spinlock lock;
 static volatile uint32_t cpu_on = 0;
 static void cpu_ap_entry_point(void);
+int32_t cpu_process_call_list
+(
+    void *pv,
+    struct isr_info *inf
+);
 
 uint32_t cpu_id_get(void)
 {
@@ -157,7 +162,7 @@ static int cpu_idt_entry_encode
     uint8_t type_attr,
     uint8_t ist,
     uint16_t selector,
-    idt64_entry_t *idt_entry
+    struct idt64_entry *idt_entry
 )
 {
 
@@ -180,10 +185,10 @@ static int cpu_idt_entry_encode
 
 static int cpu_idt_setup
 (
-    cpu_platform_driver_t *cpu_drv
+    struct cpu_platfrom_driver *cpu_drv
 )
 {
-    idt64_entry_t      *idt = NULL;
+    struct idt64_entry      *idt = NULL;
     uint32_t            isr_size = 0;
     uint16_t            no_ec_ix = 0;
     uint16_t            ec_ix    = 0;
@@ -296,17 +301,17 @@ static void cpu_prepare_trampoline
 
 static int cpu_bring_ap_up
 (
-    device_t *issuer,
+    struct device_node *issuer,
     uint32_t cpu,
     uint32_t timeout
 )
 {
-    ipi_packet_t ipi;
+    struct ipi_packet ipi;
     uint32_t expected = 0;
-    intc_api_t *api = NULL;
+    struct intc_api *api = NULL;
 
     /* wipe the ipi garbage */
-    memset(&ipi, 0, sizeof(ipi_packet_t));
+    memset(&ipi, 0, sizeof(struct ipi_packet));
 
     /* wipe the temporary stack */
     memset((void*)_BSP_STACK_TOP, 0, _BSP_STACK_BASE - _BSP_STACK_TOP);
@@ -377,13 +382,13 @@ int cpu_issue_ipi
     uint32_t vector
 )
 {
-    ipi_packet_t ipi;
-    device_t     *dev   = NULL;
+    struct ipi_packet ipi;
+    struct device_node     *dev   = NULL;
     uint32_t     cpu_id = 0;
-    intc_api_t   *api   = NULL;
+    struct intc_api   *api   = NULL;
     int          status = -1;
 
-    memset(&ipi, 0, sizeof(ipi_packet_t));
+    memset(&ipi, 0, sizeof(struct ipi_packet));
 
     switch(vector)
     {
@@ -426,7 +431,7 @@ int cpu_ap_start
     int                    status          = 0;
     virt_addr_t            trampoline      = 0;
     virt_size_t            tramp_size      = 0;
-    device_t               *dev            = NULL;
+    struct device_node               *dev            = NULL;
     uint32_t               cpu_id          = 0;
     ACPI_TABLE_MADT        *madt           = NULL;
     ACPI_MADT_LOCAL_APIC   *lapic          = NULL;
@@ -434,7 +439,7 @@ int cpu_ap_start
     ACPI_SUBTABLE_HEADER   *subhdr         = NULL;
     uint32_t               started_cpu     = 1;
     uint32_t               start_cpu_id    = 0;
-    device_t               *target_cpu_dev = NULL;
+    struct device_node               *target_cpu_dev = NULL;
 
     cpu_id = cpu_id_get();
     dev = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
@@ -551,9 +556,9 @@ int cpu_ap_start
 static void cpu_ap_entry_point(void)
 {
     uint32_t cpu_id = 0;
-    device_t *timer = NULL;
-    device_t *cpu_dev = NULL;
-    cpu_t *cpu = NULL;
+    struct device_node *timer = NULL;
+    struct device_node *cpu_dev = NULL;
+    struct cpu *cpu = NULL;
     uint8_t int_status = 0;
 
     int_status = cpu_int_check();
@@ -653,14 +658,14 @@ static uint32_t cpu_get_domain
 }
 
 
-static int pcpu_dev_init(device_t *dev)
+static int pcpu_dev_init(struct device_node *dev)
 {
-    cpu_t                 *cpu            = NULL;
-    device_t              *apic_dev       = NULL;
-    device_t              *apic_timer_dev = NULL;
-    driver_t              *drv            = NULL;
-    cpu_platform_t        *pcpu           = NULL;
-    cpu_platform_driver_t *pdrv           = NULL;
+    struct cpu                 *cpu            = NULL;
+    struct device_node              *apic_dev       = NULL;
+    struct device_node              *apic_timer_dev = NULL;
+    struct driver_node              *drv            = NULL;
+    struct cpu_platform        *pcpu           = NULL;
+    struct cpu_platfrom_driver *pdrv           = NULL;
     uint32_t               cpu_id         = 0;
     int                    no_apic        = 0;
     int                    status         = 0;
@@ -681,7 +686,7 @@ static int pcpu_dev_init(device_t *dev)
     pdrv   = devmgr_drv_data_get(drv);
     cpu_id = cpu_id_get();
 
-    cpu = kcalloc(sizeof(cpu_t), 1);
+    cpu = kcalloc(sizeof(struct cpu), 1);
 
     if(cpu == NULL)
     {
@@ -693,7 +698,7 @@ static int pcpu_dev_init(device_t *dev)
         return(-1);
     }
 
-    pcpu = kcalloc(sizeof(cpu_platform_t), 1);
+    pcpu = kcalloc(sizeof(struct cpu_platform), 1);
     
     if(pcpu == NULL)
     {
@@ -706,6 +711,7 @@ static int pcpu_dev_init(device_t *dev)
         return(-1);
     }
 
+    cpu = &pcpu->hdr;
     cpu->dev = dev;
 
     devmgr_dev_data_set(dev, cpu);
@@ -718,6 +724,13 @@ static int pcpu_dev_init(device_t *dev)
 
     /* store per cpu private data */
     cpu->cpu_pv = pcpu;
+
+    memset(&cpu->exec_nodes, 0, sizeof(cpu->exec_nodes));
+
+    for(uint32_t i = 0; i < CPU_IPI_EXEC_NODE_COUNT; i++)
+    {
+        linked_list_add_tail(&cpu->avail_ipi_cb, &cpu->exec_nodes[i].node);
+    }
 
     /* Prepare the GDT */
     gdt_per_cpu_init(cpu->cpu_pv);
@@ -766,7 +779,7 @@ static int pcpu_dev_init(device_t *dev)
     return(status);
 }
 
-static int pcpu_dev_probe(device_t *dev)
+static int pcpu_dev_probe(struct device_node *dev)
 {
     if(devmgr_dev_name_match(dev, PLATFORM_CPU_NAME) &&
        devmgr_dev_type_match(dev, CPU_DEVICE_TYPE))
@@ -783,14 +796,14 @@ static int pcpu_dev_probe(device_t *dev)
  */
 
 
-static int pcpu_drv_init(driver_t *drv)
+static int pcpu_drv_init(struct driver_node *drv)
 {
-    device_t              *cpu_bsp   = NULL;
+    struct device_node              *cpu_bsp   = NULL;
     uint32_t               cpu_id    = 0;
-    cpu_platform_driver_t *cpu_drv   = NULL;
-    device_t              *timer     = NULL;
-    cpu_t                 *cpu       = NULL;
-    static sched_thread_t init_th    = {0};
+    struct cpu_platfrom_driver *cpu_drv   = NULL;
+    struct device_node              *timer     = NULL;
+    struct cpu                 *cpu       = NULL;
+    static struct sched_thread init_th    = {0};
     uint8_t               int_status = 0;
 
     int_status = cpu_int_check();
@@ -802,14 +815,14 @@ static int pcpu_drv_init(driver_t *drv)
 
     spinlock_init(&lock);
 
-    cpu_drv = kcalloc(1, sizeof(cpu_platform_driver_t));
+    cpu_drv = kcalloc(1, sizeof(struct cpu_platfrom_driver));
 
-    cpu_drv->idt = (idt64_entry_t*)vm_alloc(NULL, VM_BASE_AUTO,
+    cpu_drv->idt = (struct idt64_entry*)vm_alloc(NULL, VM_BASE_AUTO,
                                                   IDT_ALLOC_SIZE,
                                                   VM_HIGH_MEM,
                                                   VM_ATTR_WRITABLE);
 
-    if(cpu_drv->idt == (idt64_entry_t*)VM_INVALID_ADDRESS)
+    if(cpu_drv->idt == (struct idt64_entry*)VM_INVALID_ADDRESS)
     {
         if(int_status)
         {
@@ -875,7 +888,7 @@ static int pcpu_drv_init(driver_t *drv)
                             KMAIN_SYS_INIT_STACK_SIZE, 
                             0,
                             NULL);
-        
+        isr_install(cpu_process_call_list, NULL, PLATFORM_SCHED_VECTOR, 0, &cpu_drv->ipi_isr);
         if(sched_unit_init(timer, cpu, &init_th))
         {
             if(int_status)
@@ -894,11 +907,11 @@ static int pcpu_drv_init(driver_t *drv)
     return(0);
 }
 
-cpu_t *cpu_current_get(void)
+struct cpu *cpu_current_get(void)
 {
-    device_t *dev = NULL;
+    struct device_node *dev = NULL;
     uint32_t cpu_id = 0;
-    cpu_t    *cpu = NULL;
+    struct cpu    *cpu = NULL;
     int int_state = 0;
 
     int_state = cpu_int_check();
@@ -921,7 +934,92 @@ cpu_t *cpu_current_get(void)
     return(cpu);
 }
 
-static driver_t x86_cpu =
+
+int32_t cpu_enqueue_call
+(
+    uint32_t cpu_id,
+    int32_t (*ipi_handler)(void *pv),
+    void *pv
+)
+{
+    struct device_node *dev = NULL;
+    struct cpu *cpu = NULL;
+    uint8_t int_status = 0;
+    struct ipi_exec_node *ipi_node = NULL;
+    int32_t st = -1;
+
+    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, cpu_id);
+    cpu = devmgr_dev_data_get(dev);
+
+    if(cpu != NULL)
+    {
+        spinlock_lock_int(&cpu->ipi_cb_lock, &int_status);
+
+        ipi_node = (struct ipi_exec_node*)linked_list_get_first(&cpu->avail_ipi_cb);
+
+        if(ipi_node != NULL)
+        {
+            ipi_node->ipi_handler = ipi_handler;
+            ipi_node->pv = pv;
+
+            linked_list_add_tail(&cpu->ipi_cb, &ipi_node->node);
+            st = 0;
+        }
+
+        spinlock_unlock_int(&cpu->ipi_cb_lock, int_status);
+
+        cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, cpu_id, PLATFORM_SCHED_VECTOR);
+    }
+
+    return(st);
+}
+
+int32_t cpu_process_call_list
+(
+    void *pv,
+    struct isr_info *inf
+)
+{
+    struct cpu *cpu = inf->cpu;
+    uint8_t int_status = 0;
+    struct ipi_exec_node *ipi_node = NULL;
+    int32_t (*ipi_handler)(void *pv) = NULL;
+    void *ipi_pv = NULL;
+    
+
+    if(cpu != NULL)
+    {        
+        while(1)
+        {
+            spinlock_lock_int(&cpu->ipi_cb_lock, &int_status);
+            ipi_node = (struct ipi_exec_node*)linked_list_get_first(&cpu->ipi_cb);
+            spinlock_unlock_int(&cpu->ipi_cb_lock, int_status);
+            
+            if(ipi_node == NULL)
+            {
+                break;
+            }
+
+            ipi_handler = ipi_node->ipi_handler;
+            ipi_pv = ipi_node->pv;
+
+            if(ipi_handler != NULL)
+            {
+                ipi_handler(ipi_pv);
+            }
+
+            spinlock_lock_int(&cpu->ipi_cb_lock, &int_status);
+            linked_list_add_tail(&cpu->avail_ipi_cb, &ipi_node->node);
+            spinlock_unlock_int(&cpu->ipi_cb_lock, int_status);
+        }        
+    }
+
+    return(0);
+}
+
+
+
+static struct driver_node x86_cpu =
 {
     .drv_name   = PLATFORM_CPU_NAME,
     .drv_type   = CPU_DEVICE_TYPE,

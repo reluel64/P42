@@ -87,23 +87,28 @@
 
 #define PGMGR_MAX_TABLE_INDEX       (0x1FF)
 
-typedef struct pgmgr_ctx_t
+struct pgmgr_ctx
 {
-     phys_addr_t pg_phys; /* physical location of the first
+    phys_addr_t pg_phys; /* physical location of the first
                            * level of paging
                            */ 
-    spinlock_t  lock;
+    struct spinlock  lock;
     uint8_t max_level;     /* paging level */
-}pgmgr_ctx_t;
+};
 
-
-/* forward declarations */
-typedef struct pgmgr_iter_callback_data_t pgmgr_iter_callback_data_t;
-typedef struct pgmgr_level_data_t         pgmgr_level_data_t;
-
-typedef struct pgmgr_level_data_t
+struct pgmgr_iter_callback_data
 {
-    pgmgr_ctx_t *ctx;
+    /* Status for the iter callback */
+    virt_addr_t         vaddr;
+    uint16_t            entry;
+    uint8_t             shift;
+    virt_addr_t         next_vaddr;
+    virt_size_t         step;
+};
+
+struct pgmgr_level_data
+{
+    struct pgmgr_ctx *ctx;
     virt_addr_t base;
     virt_addr_t *level;
     virt_size_t length;
@@ -117,22 +122,13 @@ typedef struct pgmgr_level_data_t
     uint32_t    cb_status;
     void        (*iter_cb)
     (
-        pgmgr_iter_callback_data_t *ic, 
-        pgmgr_level_data_t *ld,
-        pfmgr_cb_data_t *pfmgr_dat,
+        struct pgmgr_iter_callback_data *ic, 
+        struct pgmgr_level_data *ld,
+        struct pfmgr_cb_data *pfmgr_dat,
         uint32_t op
     );
-}pgmgr_level_data_t;
+};
 
-typedef struct pgmgr_iter_callback_data_t
-{
-    /* Status for the iter callback */
-    virt_addr_t         vaddr;
-    uint16_t            entry;
-    uint8_t             shift;
-    virt_addr_t         next_vaddr;
-    virt_size_t         step;
-}pgmgr_iter_callback_data_t;
 
 
 
@@ -156,7 +152,7 @@ virt_addr_t pgmgr_temp_map
 
 int pgmgr_change_attrib
 (
-    pgmgr_ctx_t *ctx, 
+    struct pgmgr_ctx *ctx, 
     virt_addr_t vaddr, 
     virt_size_t len, 
     uint32_t attr
@@ -164,7 +160,7 @@ int pgmgr_change_attrib
 
 int pgmgr_allocate_backend
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len
@@ -172,7 +168,7 @@ int pgmgr_allocate_backend
 
 int pgmgr_release_backend
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t      *out_len
@@ -180,7 +176,7 @@ int pgmgr_release_backend
 
 int pgmgr_allocate_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len,
@@ -190,7 +186,7 @@ int pgmgr_allocate_pages
 
 int pgmgr_release_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t      *out_len
@@ -198,7 +194,7 @@ int pgmgr_release_pages
 
 int pgmgr_map_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t      *out_len,
@@ -208,7 +204,7 @@ int pgmgr_map_pages
 
 int pgmgr_unmap_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len
@@ -216,19 +212,19 @@ int pgmgr_unmap_pages
 
 void pgmgr_invalidate
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t len
 );
 
 int pgmgr_kernel_ctx_init
 (
-    pgmgr_ctx_t *ctx
+    struct pgmgr_ctx *ctx
 );
 
 int pgmgr_ctx_init
 (
-    pgmgr_ctx_t *ctx
+    struct pgmgr_ctx *ctx
 );
 
 #endif

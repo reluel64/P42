@@ -68,50 +68,50 @@
                        }
 
 /* Virtual memory context */
-typedef struct vm_ctx_t
+struct vm_ctx
 {
-    list_head_t free_mem;  /* free memory ranges*/
-    list_head_t alloc_mem; /* allocated memory */
+    struct list_head free_mem;  /* free memory ranges*/
+    struct list_head alloc_mem; /* allocated memory */
     uint16_t    free_per_slot;
     uint16_t    alloc_per_slot;
     virt_addr_t vm_base; /* base address where 
                           * we will keep the structures for the current context
                           * This must be available only in kernel context
                           */
-    pgmgr_ctx_t pgmgr;    /* backing page manager */
+    struct pgmgr_ctx pgmgr;    /* backing page manager */
     
-    spinlock_t   lock;
+    struct spinlock   lock;
     uint32_t     flags;
     uint8_t      guard_pages;
     virt_size_t  alloc_track_size;
     virt_size_t  free_track_size;
 
-}vm_ctx_t;
+};
 
 /* Virtual memory extent */
-typedef struct vm_extent_t
+struct vm_extent
 {
-    list_node_t node;
+    struct list_node node;
     virt_addr_t base;
     virt_size_t length;
     uint32_t    flags; /* memory flags     */
     uint32_t    prot;  /* protection flags */
-}vm_extent_t;
+};
 
 /* Virtual memory extent header */
-typedef struct vm_extent_hdr_t
+struct vm_extent_hdr
 {
-    list_node_t node;
-    list_head_t avail_ext;
-    list_head_t busy_ext;
+    struct list_node node;
+    struct list_head avail_ext;
+    struct list_head busy_ext;
     uint32_t    extent_count;
-    vm_extent_t ext_area[];
-}vm_extent_hdr_t;
+    struct vm_extent ext_area[];
+};
 
 
 virt_addr_t vm_map
 (
-    vm_ctx_t *ctx, 
+    struct vm_ctx *ctx, 
     virt_addr_t virt, 
     virt_size_t len, 
     phys_addr_t phys, 
@@ -121,7 +121,7 @@ virt_addr_t vm_map
 
 virt_addr_t vm_alloc
 (
-    vm_ctx_t *ctx, 
+    struct vm_ctx *ctx, 
     virt_addr_t virt, 
     virt_size_t len, 
     uint32_t alloc_flags,
@@ -130,7 +130,7 @@ virt_addr_t vm_alloc
 
 int vm_change_attr
 (
-    vm_ctx_t *ctx,
+    struct vm_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t len,
     uint32_t  set_mem_flags,
@@ -140,21 +140,21 @@ int vm_change_attr
 
 int vm_unmap
 (
-    vm_ctx_t *ctx, 
+    struct vm_ctx *ctx, 
     virt_addr_t vaddr, 
     virt_size_t len
 );
 
 int vm_free
 (
-    vm_ctx_t *ctx, 
+    struct vm_ctx *ctx, 
     virt_addr_t vaddr, 
     virt_size_t len
 );
 
 int vm_fault_handler
 (
-    vm_ctx_t    *ctx,
+    struct vm_ctx    *ctx,
     virt_addr_t vaddr,
     uint32_t    reason
 );
@@ -166,12 +166,12 @@ int vm_init
 
 void vm_ctx_show
 (
-    vm_ctx_t *ctx
+    struct vm_ctx *ctx
 );
 
 int vm_user_ctx_init
 (
-    vm_ctx_t *ctx
+    struct vm_ctx *ctx
 );
 
 #endif

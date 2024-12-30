@@ -16,9 +16,9 @@
 #define SPURIOUS_VECTOR  (255)
 #define TIMER_VECTOR      (32)
 
-static isr_t error_isr = ZERO_ISR_INIT;
-static isr_t spur_isr  = ZERO_ISR_INIT;
-static isr_t eoi_isr   = ZERO_ISR_INIT;
+static struct isr error_isr = ZERO_ISR_INIT;
+static struct isr spur_isr  = ZERO_ISR_INIT;
+static struct isr eoi_isr   = ZERO_ISR_INIT;
 
 static int xapic_write
 (
@@ -55,7 +55,7 @@ static int x2apic_read
 
 static int apic_nmi_fill
 (
-    apic_device_t *apic
+    struct apic_device *apic
 )
 {
     ACPI_STATUS                 status  = AE_OK;
@@ -174,14 +174,14 @@ static int apic_nmi_fill
     return(found ? 0 : -1);
 }
 
-static int apic_spurious_handler(void *pv, isr_info_t *inf)
+static int apic_spurious_handler(void *pv, struct isr_info *inf)
 {
     return(0);
 }
 
-static int apic_lvt_error_handler(void *pv, isr_info_t *inf)
+static int apic_lvt_error_handler(void *pv, struct isr_info *inf)
 {
-    apic_drv_private_t *apic_drv = NULL;
+    struct apic_drv_private *apic_drv = NULL;
     uint32_t            data = 0;
 
     kprintf("APIC_ERROR_HANDLER\n");
@@ -194,9 +194,9 @@ static int apic_lvt_error_handler(void *pv, isr_info_t *inf)
     return(0);
 }
 
-static int apic_eoi_handler(void *pv, isr_info_t *inf)
+static int apic_eoi_handler(void *pv, struct isr_info *inf)
 {
-    apic_drv_private_t *apic_drv = NULL;
+    struct apic_drv_private  *apic_drv = NULL;
     uint32_t            data     = 0;
     
     apic_drv = devmgr_drv_data_get(pv);
@@ -251,12 +251,12 @@ static uint8_t apic_has_x2(void)
 
 static int apic_send_ipi
 (
-    device_t *dev,
-    ipi_packet_t *ipi
+    struct device_node *dev,
+    struct ipi_packet *ipi
 )
 {
-    driver_t           *drv      = NULL;
-    apic_drv_private_t *apic_drv = NULL;
+    struct driver_node           *drv      = NULL;
+    struct apic_drv_private  *apic_drv = NULL;
 
     uint32_t reg_low = 0;
     uint32_t reg_hi  = 0;
@@ -342,7 +342,7 @@ static int apic_send_ipi
     return(0);
 }
 
-static int apic_probe(device_t *dev)
+static int apic_probe(struct device_node *dev)
 {
     ACPI_STATUS            status   = AE_OK;
     ACPI_TABLE_MADT        *madt    = NULL;
@@ -364,11 +364,11 @@ static int apic_probe(device_t *dev)
     return(0);
 }
 
-static int apic_dev_init(device_t *dev)
+static int apic_dev_init(struct device_node *dev)
 {
-    apic_device_t       *apic     = NULL;
-    driver_t            *drv      = NULL;
-    apic_drv_private_t  *apic_drv = NULL;
+    struct apic_device       *apic     = NULL;
+    struct driver_node            *drv      = NULL;
+    struct apic_drv_private   *apic_drv = NULL;
     uint32_t            data      = 0;
     int                 int_status = 0;
 
@@ -384,7 +384,7 @@ static int apic_dev_init(device_t *dev)
     drv = devmgr_dev_drv_get(dev);
     apic_drv = devmgr_drv_data_get(drv);
 
-    apic = kcalloc(sizeof(apic_device_t), 1);
+    apic = kcalloc(sizeof(struct apic_device), 1);
 
     if(apic == NULL)
     {
@@ -490,13 +490,13 @@ static int apic_dev_init(device_t *dev)
     return(0);
 }
 
-static int apic_drv_init(driver_t *drv)
+static int apic_drv_init(struct driver_node *drv)
 {
-    apic_drv_private_t  *apic_drv = NULL;
+    struct apic_drv_private  *apic_drv = NULL;
 
     __write_cr8(0);
     
-    apic_drv = kcalloc(sizeof(apic_drv_private_t), 1);
+    apic_drv = kcalloc(sizeof(struct apic_drv_private), 1);
     
     if(apic_drv == NULL)
         return(-1);
@@ -824,7 +824,7 @@ static int x2apic_read
     return(0);
 }
 
-static intc_api_t apic_api = 
+static struct intc_api apic_api = 
 {
     .enable   = NULL,
     .disable  = NULL,
@@ -833,7 +833,7 @@ static intc_api_t apic_api =
     .unmask   = NULL
 };
 
-static driver_t apic_drv = 
+static struct driver_node apic_drv = 
 {
     .drv_name   = APIC_DRIVER_NAME,
     .dev_probe  = apic_probe,

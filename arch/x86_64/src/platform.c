@@ -210,7 +210,7 @@ extern int i8042_register(void);
 
 int platform_early_init(void)
 {
-    device_t *sys_timer = NULL;
+    struct device_node *sys_timer = NULL;
 
     /* Tell ACPI code that now the memory manager is up and running */
     acpi_mem_mgr_on();
@@ -257,9 +257,9 @@ int platform_early_init(void)
 int platform_init(void)
 {
 #if 0
-    device_t   *ioapic = NULL;
-    device_t   *apic_timer = NULL;
-    intc_api_t *funcs = NULL;
+    struct device_node   *ioapic = NULL;
+    struct device_node   *apic_timer = NULL;
+    struct intc_api *funcs = NULL;
 #endif
     cpu_ap_start(PLATFORM_AP_ALL_CPUS, PLATFORM_AP_START_TIMEOUT);
 #if 0

@@ -20,7 +20,7 @@ int owner_remove_thread
     void *thread
 );
 
-sched_owner_t *owner_kernel_get
+struct sched_owner *owner_kernel_get
 (
     void
 );

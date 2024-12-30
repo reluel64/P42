@@ -6,9 +6,9 @@
 #include <utils.h>
 
 
-mutex_t *mtx_init
+struct mutex *mtx_init
 (
-    mutex_t *mtx, 
+    struct mutex *mtx, 
     int options
 )
 {
@@ -29,15 +29,15 @@ mutex_t *mtx_init
     return(mtx);
 }
 
-mutex_t *mtx_create
+struct mutex *mtx_create
 (
     int options
 )
 {
-    mutex_t *mtx = NULL;
-    mutex_t *ret_mtx = NULL;
+    struct mutex *mtx = NULL;
+    struct mutex *ret_mtx = NULL;
 
-    mtx = kcalloc(1, sizeof(mutex_t));
+    mtx = kcalloc(1, sizeof(struct mutex));
 
     if(mtx == NULL)
     {
@@ -56,16 +56,16 @@ mutex_t *mtx_create
 
 int mtx_acquire
 (
-    mutex_t *mtx, 
+    struct mutex *mtx, 
     uint32_t wait_ms
 )
 {
     uint8_t         int_state    = 0;
     void           *expected     = NULL;
-    sched_thread_t *thread       = NULL;
+    struct sched_thread *thread       = NULL;
     uint8_t         looped       = 0;
-    list_node_t     *iter_node   = NULL;
-    sched_thread_t  *iter_thread = NULL;
+    struct list_node     *iter_node   = NULL;
+    struct sched_thread  *iter_thread = NULL;
 
     if(mtx == NULL)
     {
@@ -194,13 +194,13 @@ int mtx_acquire
 
 int mtx_release
 (
-    mutex_t *mtx
+    struct mutex *mtx
 )
 {
     uint8_t           int_state  = 0;
-    sched_thread_t    *self      = NULL;
-    sched_thread_t    *thread    = NULL;
-    list_node_t       *pend_node = NULL;
+    struct sched_thread    *self      = NULL;
+    struct sched_thread    *thread    = NULL;
+    struct list_node       *pend_node = NULL;
     void              *expected  = NULL;
 
     if(mtx == NULL)

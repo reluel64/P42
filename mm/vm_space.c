@@ -8,25 +8,25 @@
 
 static int vm_space_undo
 (
-    list_head_t *undo_from,
-    list_head_t *undo_to,
-    vm_extent_t *ext_left,
-    vm_extent_t *ext_mid,
-    vm_extent_t *ext_right
+    struct list_head *undo_from,
+    struct list_head *undo_to,
+    struct vm_extent *ext_left,
+    struct vm_extent *ext_mid,
+    struct vm_extent *ext_right
 );
 
 virt_addr_t vm_space_alloc
 (
-    vm_ctx_t    *ctx,
+    struct vm_ctx    *ctx,
     virt_addr_t addr,
     virt_size_t len,
     uint32_t    flags,
     uint32_t    prot
 )
 {
-    vm_extent_t req_ext       = VM_EXTENT_INIT;
-    vm_extent_t rem_ext       = VM_EXTENT_INIT;
-    vm_extent_t alloc_ext     = VM_EXTENT_INIT;
+    struct vm_extent req_ext       = VM_EXTENT_INIT;
+    struct vm_extent rem_ext       = VM_EXTENT_INIT;
+    struct vm_extent alloc_ext     = VM_EXTENT_INIT;
     int         split_status  = 0;
     int         status        = 0;
 
@@ -55,7 +55,7 @@ virt_addr_t vm_space_alloc
     }
 
     /* clear the extent */
-    memset(&req_ext, 0, sizeof(vm_extent_t));
+    memset(&req_ext, 0, sizeof(struct vm_extent));
 
     if(len % PAGE_SIZE)
     {
@@ -126,7 +126,7 @@ virt_addr_t vm_space_alloc
         return(VM_INVALID_ADDRESS);
     }
     
-    memset(&rem_ext, 0, sizeof(vm_extent_t));
+    memset(&rem_ext, 0, sizeof(struct vm_extent));
     
     /* split the extent if needed */
     /* in case we don't have the  preferred address,
@@ -289,16 +289,16 @@ virt_addr_t vm_space_alloc
 
 int vm_space_free
 (
-    vm_ctx_t *ctx,
+    struct vm_ctx *ctx,
     virt_addr_t addr,
     virt_size_t len,
     uint32_t    *old_flags,
     uint32_t    *old_prot
 )
 {
-    vm_extent_t req_ext  = VM_EXTENT_INIT;
-    vm_extent_t rem_ext  = VM_EXTENT_INIT;
-    vm_extent_t free_ext = VM_EXTENT_INIT;
+    struct vm_extent req_ext  = VM_EXTENT_INIT;
+    struct vm_extent rem_ext  = VM_EXTENT_INIT;
+    struct vm_extent free_ext = VM_EXTENT_INIT;
     int         split_status = 0;
     int         status = 0;
 
@@ -318,7 +318,7 @@ int vm_space_free
         addr = ALIGN_DOWN(addr, PAGE_SIZE);
     }
 
-    memset(&req_ext, 0, sizeof(vm_extent_t));
+    memset(&req_ext, 0, sizeof(struct vm_extent));
 
     /* set up the request */
     req_ext.base = addr;
@@ -476,11 +476,11 @@ int vm_space_free
 
 static int vm_space_undo
 (
-    list_head_t *undo_from,
-    list_head_t *undo_to,
-    vm_extent_t *ext_left,
-    vm_extent_t *ext_mid,
-    vm_extent_t *ext_right
+    struct list_head *undo_from,
+    struct list_head *undo_to,
+    struct vm_extent *ext_left,
+    struct vm_extent *ext_mid,
+    struct vm_extent *ext_right
 )
 {
     int status = 0;

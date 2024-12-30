@@ -2,7 +2,7 @@
 #define apich
 
 #include <stddef.h>
-
+#include <stdint.h>
 #define APIC_DRIVER_NAME "APIC"
 #define APIC_BASE_MSR (0x1B)
 
@@ -77,7 +77,7 @@
 #define SELF_IPI_REGISTER                   (0x83F)
 #define APIC_REGISTER_END                   (0x8FF)
 
-typedef struct apic_device_t
+struct apic_device
 {
     phys_addr_t paddr;
     virt_addr_t vaddr;
@@ -85,9 +85,9 @@ typedef struct apic_device_t
     uint8_t polarity;
     uint8_t trigger;
     uint8_t lint;
-}apic_device_t ;
+};
 
-typedef struct apic_drv_private_t
+struct apic_drv_private
 {
     uint8_t     x2;
     phys_addr_t paddr;
@@ -108,7 +108,7 @@ typedef struct apic_drv_private_t
         uint32_t    *data,
         uint32_t    cnt
     );
-}apic_drv_private_t;
+};
 
 
 

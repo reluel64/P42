@@ -5,8 +5,8 @@
 
 static int32_t idle_task_enqueue
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     return(-1);
@@ -14,8 +14,8 @@ static int32_t idle_task_enqueue
 
 static int32_t idle_task_dequeue
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     return(-1);
@@ -23,8 +23,8 @@ static int32_t idle_task_dequeue
 
 static int32_t idle_task_pick_next_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t **th
+    struct sched_exec_unit *unit,
+    struct sched_thread **th
 )
 {
     *th = &unit->idle;
@@ -33,8 +33,8 @@ static int32_t idle_task_pick_next_thread
 
 static int32_t idle_task_select_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     th->cpu_left = 0;
@@ -44,8 +44,8 @@ static int32_t idle_task_select_thread
 
 static int32_t idle_task_put_prev_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     return(0);
@@ -53,10 +53,10 @@ static int32_t idle_task_put_prev_thread
 
 static int32_t idle_task_tick
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 )
 {
-    sched_thread_t *th          = NULL;
+    struct sched_thread *th          = NULL;
     int32_t status = 0;
     th = unit->current;
 
@@ -74,7 +74,7 @@ static int32_t idle_task_tick
 
 static int idle_task_unit_init
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 )
 {
     return(0);
@@ -82,7 +82,7 @@ static int idle_task_unit_init
 
 
 
-static sched_policy_t idle_task_policy = 
+static struct sched_policy idle_task_policy = 
 {
     .node             = {.next = NULL, .prev = NULL},
     .dequeue          = idle_task_dequeue,

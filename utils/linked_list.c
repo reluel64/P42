@@ -9,7 +9,7 @@
 
 int32_t linked_list_init
 (
-    list_head_t *lh
+    struct list_head *lh
 )
 {
     if(lh == NULL)
@@ -26,8 +26,8 @@ int32_t linked_list_init
 
 int32_t linked_list_add_head
 (
-    list_head_t *lh, 
-    list_node_t *ln
+    struct list_head *lh, 
+    struct list_node *ln
 )
 {
    if(lh->list.prev == NULL && lh->list.next == NULL)
@@ -54,8 +54,8 @@ int32_t linked_list_add_head
 
 int32_t linked_list_add_tail
 (
-    list_head_t *lh, 
-    list_node_t *ln
+    struct list_head *lh, 
+    struct list_node *ln
 )
 {
     if(lh->list.next == NULL && lh->list.prev == NULL)
@@ -82,9 +82,9 @@ int32_t linked_list_add_tail
 
 int32_t linked_list_add_after
 (
-    list_head_t *lh, 
-    list_node_t *an, 
-    list_node_t *nn
+    struct list_head *lh, 
+    struct list_node *an, 
+    struct list_node *nn
 )
 {
     if(lh->list.prev == nn)
@@ -100,9 +100,9 @@ int32_t linked_list_add_after
 
 int32_t linked_list_add_before
 (
-    list_head_t *lh, 
-    list_node_t *bn, 
-    list_node_t *nn
+    struct list_head *lh, 
+    struct list_node *bn, 
+    struct list_node *nn
 )
 {
     if(lh->list.next == nn)
@@ -119,8 +119,8 @@ int32_t linked_list_add_before
 
 int32_t linked_list_remove
 (
-    list_head_t *lh, 
-    list_node_t *ln
+    struct list_head *lh, 
+    struct list_node *ln
 )
 {
     /* if this is the first node,
@@ -154,11 +154,11 @@ int32_t linked_list_remove
 
 int32_t linked_list_find_node
 (
-    list_head_t *lh, 
-    list_node_t *ln
+    struct list_head *lh, 
+    struct list_node *ln
 )
 {
-    list_node_t *work_ln = NULL;
+    struct list_node *work_ln = NULL;
 
     work_ln = linked_list_first(lh);
 
@@ -172,8 +172,8 @@ int32_t linked_list_find_node
 
 int32_t linked_list_concat
 (
-    list_head_t *src,
-    list_head_t *dst
+    struct list_head *src,
+    struct list_head *dst
 )
 {
     if(src->count == 0)
@@ -198,33 +198,33 @@ int32_t linked_list_concat
     return(0);
 }
 
-list_node_t *linked_list_first
+struct list_node *linked_list_first
 (
-    list_head_t *lh
+    struct list_head *lh
 )
 {
     return(lh->list.next);
 }
 
-list_node_t *linked_list_next
+struct list_node *linked_list_next
 (
-    list_node_t *ln
+    struct list_node *ln
 )
 {
     return(ln->next);
 }
 
-list_node_t *linked_list_last
+struct list_node *linked_list_last
 (
-    list_head_t *lh
+    struct list_head *lh
 )
 {
     return(lh->list.prev);
 }
 
-list_node_t *linked_list_prev
+struct list_node *linked_list_prev
 (
-    list_node_t *ln
+    struct list_node *ln
 )
 {
     return(ln->prev);
@@ -232,18 +232,18 @@ list_node_t *linked_list_prev
 
 size_t linked_list_count
 (
-    list_head_t *lh
+    struct list_head *lh
 )
 {
     return(lh->count);
 }
 
-list_node_t * linked_list_get_first
+struct list_node * linked_list_get_first
 (
-    list_head_t *lh
+    struct list_head *lh
 )
 {
-    list_node_t *ln = NULL;
+    struct list_node *ln = NULL;
 
     if(lh->list.next != NULL)
     {
@@ -265,12 +265,12 @@ list_node_t * linked_list_get_first
     return(ln);
 }
 
-list_node_t * linked_list_get_last
+struct list_node * linked_list_get_last
 (
-    list_head_t *lh
+    struct list_head *lh
 )
 {
-    list_node_t *ln = NULL;
+    struct list_node *ln = NULL;
     
     if(lh->list.prev != NULL)
     {

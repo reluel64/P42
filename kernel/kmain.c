@@ -25,7 +25,55 @@
 #include <i8254.h>
 #include <io.h>
 
-sem_t *kb_sem = NULL;
+struct sem *kb_sem = NULL;
+struct mutex mtx;
+struct sem sem;
+void *test_thread(void *arg)
+{
+    while(1)
+    {
+        sem_acquire(&sem, WAIT_FOREVER);
+        kprintf("TASK %d CPU %d\n",sched_thread_self()->context_switches, cpu_id_get());
+        
+        
+        
+    }
+}
+
+extern int vm_merge(void);
+void test_func(void)
+{
+   static  struct sched_thread th[1];
+
+
+  //  memset(all, 0,0x400000000 );
+    for(int i = 0; i < sizeof(th) / sizeof(th[0]); i++)
+    {
+
+   
+
+       kthread_create_static(&th[i], NULL, test_thread, NULL, 0x1000, 100, NULL);
+        
+       //
+        thread_start(&th[i]);       
+    }
+}
+
+extern int vm_extent_optimize(void);
+
+
+int32_t cpu_call(void *pv)
+{
+       kprintf("ISR CPU ID %d\n",cpu_id_get());
+       return(0);
+}
+
+int32_t cpu_enqueue_call
+(
+    uint32_t cpu_id,
+    int32_t (*ipi_handler)(void *pv),
+    void *pv
+);
 
 void *kmain_sys_init
 (
@@ -34,13 +82,33 @@ void *kmain_sys_init
 {
     kprintf("Performing platform initialization...\n");
     platform_init();    
+    
+    mtx_init(&mtx, MUTEX_RECUSRIVE | MUTEX_FIFO);
+    sem_init(&sem, 0, 1);
+   test_func();
     kprintf("Platform init complete\n");
-    pfmgr_show_free_memory();
-    vm_ctx_show(NULL);
+
+    int fd = open("vga",0,0);
+    char b[] = "HELLORORORORO\nRORORORORORORO";
+    if(fd != -1)
+    {
+       write(fd, b, strlen(b));
+    }
+    
+     
+  //  pci_enumerate();    
+    int i = 0;
     while(1)
     {
+        
+       // mtx_acquire(&mtx, WAIT_FOREVER);
         sched_sleep(1000);
-        kprintf("Testttt\n");
+        sem_release(&sem);
+        //kprintf("Testttt %d\n", i++);
+          //  pfmgr_show_free_memory();
+        
+        //vm_merge();
+       // mtx_release(&mtx);
     }
 
     return(NULL);
@@ -106,6 +174,7 @@ void kmain()
     platform_early_init();
 
     /* initialize the CPU driver and the BSP */
+
     if(cpu_init())
     {
         kprintf("FAILED TO PROPERLY SET UP BSP\n");

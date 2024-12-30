@@ -5,31 +5,31 @@
 
 #define IOAPIC_DRV_NAME "ioapic"
 
-typedef struct ioapic_id_t
+struct __attribute__((packed)) ioapic_id
 {
     uint32_t rsrvd: 24;
     uint32_t ioapic_id: 4;
     uint32_t rsrvd_2:4;
 
-}__attribute__((packed))ioapic_id_t;
+};
 
-typedef struct ioapic_ver_t
+struct __attribute__((packed)) ioapic_version
 {
     uint8_t apic_ver;
     uint8_t rsrvd;
     uint8_t max_redir;
     uint8_t rsrvd_2;
-}__attribute__((packed)) ioapic_ver_t;
+};
 
-typedef struct ioapic_arb_t
+struct __attribute__((packed)) ioapic_arb
 {
     uint32_t rsrvd: 24;
     uint32_t ioapic_id:4;
     uint32_t rsrvd_2:4;
 
-}__attribute__((packed)) ioapic_arb_t;
+};
 
-typedef struct ioredtbl_t
+struct __attribute__((packed))  ioredtbl
 {
     uint8_t intvec;
     uint8_t delmod:3;
@@ -42,31 +42,30 @@ typedef struct ioredtbl_t
     uint64_t rsrvd:39;
     uint8_t dest_field;
 
-}__attribute__((packed)) ioredtbl_t;
+};
 
-typedef struct ioregsel_t
+struct __attribute__((packed))  ioregsel
 {
     uint32_t reg_address : 8;
     uint32_t rsrvd: 24;
-    
-}__attribute__((packed)) ioregsel_t;
+};
 
-typedef struct iowin_t
+struct __attribute__((packed)) iowin
 {
     uint32_t  reg_data;
-}__attribute__((packed)) iowin_t;
+};
 
 
-typedef struct ioapic_t
+struct ioapic
 {
     uint32_t             irq_base;
     uint32_t             id;
     phys_addr_t          phys_base;
     virt_addr_t          virt_base;
-    ioredtbl_t           *redir_tbl;
+    struct ioredtbl           *redir_tbl;
     uint8_t              redir_tbl_count;
-    volatile ioregsel_t  *ioregsel;
-    volatile iowin_t     *iowin;
-}ioapic_t;
+    volatile struct ioregsel  *ioregsel;
+    volatile struct iowin     *iowin;
+};
 
 #endif

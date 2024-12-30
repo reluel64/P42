@@ -9,12 +9,12 @@
 
 
 /* local variables */
-static timer_dev_t system_timer = {0};
+static struct timer_device system_timer = {0};
 
 static uint8_t timer_increment
 (
-    time_spec_t       *cursor,
-    const time_spec_t *step
+    struct time_spec       *cursor,
+    const struct time_spec *step
 )
 {
     /* check if we are overflowing the nanoseconds
@@ -39,8 +39,8 @@ static uint8_t timer_increment
 
 static uint8_t timer_expired
 (
-    time_spec_t *target,
-    time_spec_t *current
+    struct time_spec *target,
+    struct time_spec *current
 )
 {
     uint8_t expired = 0;
@@ -67,9 +67,9 @@ static uint8_t timer_expired
 
 static void timer_compute_earliest_deadline
 (
-    time_spec_t *ed,
-    const time_spec_t *deadline,
-    const time_spec_t *cursor
+    struct time_spec *ed,
+    const struct time_spec *deadline,
+    const struct time_spec *cursor
 )
 {
     
@@ -80,13 +80,13 @@ static void timer_compute_earliest_deadline
 static uint32_t timer_queue_callback
 (
     void        *tm,
-    const time_spec_t *step,
+    const struct time_spec *step,
     const void        *isr_inf
 )
 { 
-    timer_dev_t *tm_dev  = NULL;
-    timer_t     *c       = NULL;
-    timer_t     *n       = NULL;
+    struct timer_device *tm_dev  = NULL;
+    struct timer     *c       = NULL;
+    struct timer     *n       = NULL;
     uint8_t     status   = 0;
 
     tm_dev = tm;
@@ -102,11 +102,11 @@ static uint32_t timer_queue_callback
     }
 
 
-    c = (timer_t*)linked_list_first(&tm_dev->active_q);
+    c = (struct timer*)linked_list_first(&tm_dev->active_q);
 
     while(c != NULL)
     {
-        n = (timer_t*)linked_list_next(&c->node);
+        n = (struct timer*)linked_list_next(&c->node);
 
         timer_increment(&c->cursor, step);
 
@@ -121,7 +121,7 @@ static uint32_t timer_queue_callback
             /* if the timer was one-shot, then remove it from the list */
             if(c->flags & TIMER_PERIODIC)
             {
-                memset(&c->cursor, 0, sizeof(time_spec_t));
+                memset(&c->cursor, 0, sizeof(struct time_spec));
             }
             else
             {
@@ -146,11 +146,11 @@ static uint32_t timer_queue_callback
 
 int timer_set_system_timer
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     uint8_t     int_flag = 0;
-    timer_api_t *func = NULL;
+    struct timer_api *func = NULL;
 
     if(dev == NULL)
     {
@@ -176,7 +176,7 @@ int timer_set_system_timer
 
 int timer_system_init(void)
 {
-    memset(&system_timer, 0, sizeof(timer_dev_t));
+    memset(&system_timer, 0, sizeof(struct timer_device));
     linked_list_init(&system_timer.active_q);
     linked_list_init(&system_timer.pend_q);
     spinlock_init(&system_timer.lock_active_q);
@@ -187,16 +187,16 @@ int timer_system_init(void)
 
 int timer_enqeue
 (
-    timer_dev_t     *timer_dev,
-    time_spec_t     *ts,
+    struct timer_device     *timer_dev,
+    struct time_spec     *ts,
     timer_handler_t func,
     void            *arg,
     uint8_t         flags
 )
 {
     uint8_t int_sts = 0;
-    timer_dev_t *tmd = NULL;
-    timer_t     *tm = NULL;
+    struct timer_device *tmd = NULL;
+    struct timer     *tm = NULL;
 
     if(timer_dev == NULL)
     {
@@ -212,7 +212,7 @@ int timer_enqeue
         return(-1);
     }
 
-    tm = (timer_t*)kcalloc(sizeof(timer_t), 1);
+    tm = (struct timer*)kcalloc(sizeof(struct timer), 1);
 
     tm->arg = arg;
     tm->callback = func;
@@ -229,16 +229,16 @@ int timer_enqeue
 
 int timer_enqeue_static
 (
-    timer_dev_t     *timer_dev,
-    time_spec_t     *ts,
+    struct timer_device     *timer_dev,
+    struct time_spec     *ts,
     timer_handler_t func,
     void            *arg,
     uint8_t         flags,
-    timer_t         *tm
+    struct timer         *tm
 )
 {
     uint8_t int_sts = 0;
-    timer_dev_t *tmd = NULL;
+    struct timer_device *tmd = NULL;
 
     if(timer_dev == NULL)
     {
@@ -255,7 +255,7 @@ int timer_enqeue_static
         return(-1);
     }
     
-    memset(tm, 0, sizeof(timer_t));
+    memset(tm, 0, sizeof(struct timer));
 
     tm->arg = arg;
     tm->callback = func;
@@ -273,12 +273,12 @@ int timer_enqeue_static
 
 int timer_dequeue
 (
-    timer_dev_t *timer_dev,
-    timer_t *tm
+    struct timer_device *timer_dev,
+    struct timer *tm
 )
 {
     uint8_t     int_sts = 0;
-    timer_dev_t *tmd = NULL;
+    struct timer_device *tmd = NULL;
     int found = 0;
     
     if(timer_dev == NULL)

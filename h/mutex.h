@@ -10,36 +10,35 @@
 #define MUTEX_TASK_ORDER (MUTEX_FIFO | MUTEX_PRIO)
 #define MUTEX_LOWEST_PRIO  SCHED_MAX_PRIORITY
 
-typedef struct mutex_t
+struct mutex
 {
-    list_head_t pendq;
-    spinlock_t lock;
+    struct list_head pendq;
+    struct spinlock lock;
     volatile void *owner;
     volatile uint32_t rlevel;
     volatile uint32_t owner_prio;
     int opts;
+};
 
-}mutex_t;
-
-mutex_t *mtx_init
+struct mutex *mtx_init
 (
-    mutex_t *mtx, 
+    struct mutex *mtx, 
     int options
 );
 
-mutex_t *mtx_create
+struct mutex *mtx_create
 (
     int options
 );
 
 int mtx_acquire
 (
-    mutex_t *mtx, 
+    struct mutex *mtx, 
     uint32_t wait_ms
 );
 
 int mtx_release
 (
-    mutex_t *mtx
+    struct mutex *mtx
 );
 #endif

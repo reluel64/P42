@@ -8,19 +8,19 @@
 
 #define MAX_FD_COUNT 128
 
-static list_head_t    io_entries;
-static spinlock_rw_t  io_entry_lock;
-static io_fd_desc_t  fd_array[MAX_FD_COUNT];
-static spinlock_t  opened_fd_lock;
-static spinlock_t  avail_fd_lock;
+static struct list_head    io_entries;
+static struct spinlock_rw  io_entry_lock;
+static struct io_file_descriptor  fd_array[MAX_FD_COUNT];
+static struct spinlock  opened_fd_lock;
+static struct spinlock  avail_fd_lock;
 
-static list_head_t opened_fd = LINKED_LIST_INIT;
-static list_head_t avail_fd = LINKED_LIST_INIT;
+static struct list_head opened_fd = LINKED_LIST_INIT;
+static struct list_head avail_fd = LINKED_LIST_INIT;
 
 
 int io_entry_register
 (
-    io_entry_t *entry
+    struct io_device_node *entry
 )
 {
     uint8_t int_status = 0;
@@ -48,14 +48,14 @@ int io_entry_register
     return(status);
 }
 
-static io_entry_t *io_find_entry
+static struct io_device_node *io_find_entry
 (
     char *entry_name
 )
 {
     uint8_t int_status = 0;
-    list_node_t *node = NULL;
-    io_entry_t *ent = NULL;
+    struct list_node *node = NULL;
+    struct io_device_node *ent = NULL;
 
     if(entry_name != NULL)
     {
@@ -65,7 +65,7 @@ static io_entry_t *io_find_entry
 
         while(node)
         {
-            ent = (io_entry_t *)node;
+            ent = (struct io_device_node *)node;
 
             if(ent->name != NULL)
             {
@@ -93,8 +93,8 @@ int open
     int mode
 )
 {
-    io_entry_t   *ie = NULL;
-    io_fd_desc_t *fd_desc = NULL;
+    struct io_device_node   *ie = NULL;
+    struct io_file_descriptor *fd_desc = NULL;
     int          fd = -1;
     int          open_status = 0;
     char         *path = NULL;
@@ -109,7 +109,7 @@ int open
     if(path != NULL)
     {
         spinlock_lock(&avail_fd_lock);
-        fd_desc = (io_fd_desc_t*)linked_list_get_first(&avail_fd);
+        fd_desc = (struct io_file_descriptor*)linked_list_get_first(&avail_fd);
         spinlock_unlock(&avail_fd_lock);        
     }
 
@@ -168,8 +168,8 @@ int close
     int fd
 )
 {
-    io_fd_desc_t *fd_desc = NULL;
-    io_entry_t   *fd_entry = NULL;
+    struct io_file_descriptor *fd_desc = NULL;
+    struct io_device_node   *fd_entry = NULL;
     int st = -1;
 
     /* validate the file descriptor number */
@@ -204,7 +204,7 @@ int close
 
         if(st == 0)
         {
-            memset(fd_desc, 0, sizeof(io_fd_desc_t));
+            memset(fd_desc, 0, sizeof(struct io_file_descriptor));
 
             spinlock_lock(&avail_fd_lock);
             linked_list_add_tail(&avail_fd, &fd_desc->node);
@@ -229,8 +229,8 @@ size_t write
     size_t      length
 )
 {
-    io_fd_desc_t *fd_desc = NULL;
-    io_entry_t   *fd_entry = NULL;
+    struct io_file_descriptor *fd_desc = NULL;
+    struct io_device_node   *fd_entry = NULL;
     size_t      bytes_written = -1;
 
     /* validate the file descriptor number */
@@ -267,8 +267,8 @@ size_t read
     size_t length
 )
 {
-    io_fd_desc_t *fd_desc = NULL;
-    io_entry_t   *fd_entry = NULL;
+    struct io_file_descriptor *fd_desc = NULL;
+    struct io_device_node   *fd_entry = NULL;
     size_t      bytes_read = -1;
 
     if(fd < MAX_FD_COUNT && fd >= 0)
@@ -303,8 +303,8 @@ int ioctl
     void      *arg_data
 )
 {
-    io_fd_desc_t *fd_desc = NULL;
-    io_entry_t   *fd_entry = NULL;
+    struct io_file_descriptor *fd_desc = NULL;
+    struct io_device_node   *fd_entry = NULL;
     int status = -1;
 
     /* validate the file descriptor number */

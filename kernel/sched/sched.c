@@ -18,12 +18,12 @@
 
 #define SCHED_IDLE_THREAD_STACK_SIZE    (PAGE_SIZE)
 
-static list_head_t    threads       = LINKED_LIST_INIT;
-static list_head_t    units         = LINKED_LIST_INIT;
-static list_head_t    policies      = LINKED_LIST_INIT;
-static spinlock_rw_t  units_lock    = SPINLOCK_RW_INIT;
-static spinlock_rw_t  threads_lock  = SPINLOCK_RW_INIT;
-static spinlock_rw_t  policies_lock = SPINLOCK_RW_INIT;
+static struct list_head    threads       = LINKED_LIST_INIT;
+static struct list_head    units         = LINKED_LIST_INIT;
+static struct list_head    policies      = LINKED_LIST_INIT;
+static struct spinlock_rw  units_lock    = SPINLOCK_RW_INIT;
+static struct spinlock_rw  threads_lock  = SPINLOCK_RW_INIT;
+static struct spinlock_rw  policies_lock = SPINLOCK_RW_INIT;
 
 
 static void *sched_idle_thread
@@ -39,50 +39,50 @@ static void sched_main
 static uint32_t sched_tick
 (
     void              *pv_unit,
-    const time_spec_t *step,
+    const struct time_spec *step,
     const void        *isr_inf
 );
 
 static void sched_context_switch
 (
-    sched_thread_t *prev,
-    sched_thread_t *next
+    struct sched_thread *prev,
+    struct sched_thread *next
 );
 
 static uint32_t sched_timer_wake_thread
 (
-    timer_t *tm,
+    struct timer *tm,
     void *thread,
     const void *isr
 );
 
 static int32_t sched_select_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 );
 
 static int32_t sched_put_prev
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 );
 
 static int32_t sched_enq
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 );
 
 static int32_t sched_deq
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t    *th
+    struct sched_exec_unit *unit,
+    struct sched_thread    *th
 );
 
 static uint8_t sched_preemption_enabled
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 );
 
 
@@ -96,14 +96,14 @@ int idle_task_register
     void
 );
 
-sched_policy_t *sched_get_policy_by_id
+struct sched_policy *sched_get_policy_by_id
 (
-    sched_policy_id_t id
+    enum sched_policy_id id
 );
 
 void sched_thread_entry_point
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
     th_entry_point_t entry_point = NULL;
@@ -144,7 +144,7 @@ void sched_thread_entry_point
 
 int32_t sched_track_thread
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
     uint8_t int_flag = 0;
@@ -160,7 +160,7 @@ int32_t sched_track_thread
 
 int32_t sched_untrack_thread
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
     uint8_t int_flag = 0;
@@ -179,8 +179,8 @@ void sched_show_threads
 )
 {
     uint8_t int_sts = 0;
-    list_node_t *ln = NULL;
-    sched_thread_t *th = NULL;
+    struct list_node *ln = NULL;
+    struct sched_thread *th = NULL;
 
     spinlock_read_lock_int(&threads_lock, &int_sts);
 
@@ -201,8 +201,8 @@ void sched_show_threads
 
 int32_t sched_pin_task_to_unit
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     int32_t status = 0;
@@ -220,8 +220,8 @@ int32_t sched_pin_task_to_unit
 
 int32_t sched_unpin_task_from_unit
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     int32_t status = 0;
@@ -239,20 +239,20 @@ int32_t sched_unpin_task_from_unit
 
 int32_t sched_find_least_used_unit
 (
-    sched_exec_unit_t **unit
+    struct sched_exec_unit **unit
 )
 {
     uint8_t int_status = 0;
-    list_node_t *ln = NULL;
-    sched_exec_unit_t *least_busy = NULL;
-    sched_exec_unit_t *cursor = NULL;
+    struct list_node *ln = NULL;
+    struct sched_exec_unit *least_busy = NULL;
+    struct sched_exec_unit *cursor = NULL;
     
     spinlock_read_lock_int(&units_lock, &int_status);
     ln = linked_list_first(&units);
 
     while(ln)
     {
-        cursor = (sched_exec_unit_t*)ln;
+        cursor = (struct sched_exec_unit*)ln;
 
         if(least_busy == NULL)
         {
@@ -277,10 +277,10 @@ int32_t sched_find_least_used_unit
 
 int sched_start_thread
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
-    sched_exec_unit_t *unit = NULL;
+    struct sched_exec_unit *unit = NULL;
     uint8_t int_status = 0;
 
     spinlock_lock_int(&th->lock, &int_status);
@@ -307,14 +307,14 @@ int sched_start_thread
     return(0);
 }
 
-sched_thread_t *sched_thread_self
+struct sched_thread *sched_thread_self
 (
     void
 )
 {
-    sched_exec_unit_t *unit = NULL;
-    cpu_t             *cpu  = NULL;
-    sched_thread_t    *self = NULL;
+    struct sched_exec_unit *unit = NULL;
+    struct cpu             *cpu  = NULL;
+    struct sched_thread    *self = NULL;
     uint8_t           iflag = 0;
 
     iflag = cpu_int_check();
@@ -367,7 +367,7 @@ sched_thread_t *sched_thread_self
 
 void sched_thread_mark_dead
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
     if(th != NULL)
@@ -381,7 +381,7 @@ void sched_thread_exit
     void *exit_val
 )
 {
-    sched_thread_t *self = NULL;
+    struct sched_thread *self = NULL;
 
     self = sched_thread_self();
 
@@ -403,8 +403,8 @@ void sched_thread_exit
 void sched_disable_preempt(void)
 {
     uint8_t int_status = 0;
-    sched_exec_unit_t *unit = NULL;
-    cpu_t *cpu = NULL;
+    struct sched_exec_unit *unit = NULL;
+    struct cpu *cpu = NULL;
 
     int_status = cpu_int_check();
 
@@ -437,8 +437,8 @@ void sched_disable_preempt(void)
 void sched_enable_preempt(void)
 {
     uint8_t int_status = 0;
-    sched_exec_unit_t *unit = NULL;
-    cpu_t *cpu = NULL;
+    struct sched_exec_unit *unit = NULL;
+    struct cpu *cpu = NULL;
 
     int_status = cpu_int_check();
 
@@ -470,7 +470,7 @@ void sched_enable_preempt(void)
 
 static uint8_t sched_preemption_enabled
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 )
 {
     return(__atomic_load_n(&unit->preempt_lock, __ATOMIC_SEQ_CST) == 0);
@@ -478,7 +478,7 @@ static uint8_t sched_preemption_enabled
 
 int32_t sched_policy_register
 (
-    sched_policy_t *p
+    struct sched_policy *p
 )
 {
     uint8_t int_status = 0;
@@ -501,19 +501,19 @@ int32_t sched_policy_register
 
 }
 
-sched_policy_t *sched_get_policy_by_id
+struct sched_policy *sched_get_policy_by_id
 (
-    sched_policy_id_t id
+    enum sched_policy_id id
 )
 {
-    list_node_t *ln = NULL;
-    sched_policy_t *policy = NULL;
+    struct list_node *ln = NULL;
+    struct sched_policy *policy = NULL;
 
     ln = linked_list_first(&policies);
 
     while(ln != NULL)
     {
-        policy = (sched_policy_t*)ln;
+        policy = (struct sched_policy*)ln;
 
         if(policy->id == id)
         {
@@ -561,17 +561,17 @@ int sched_init(void)
 
 int sched_unit_init
 (
-    device_t       *timer, 
-    cpu_t          *cpu,
-    sched_thread_t *post_unit_init
+    struct device_node       *timer, 
+    struct cpu          *cpu,
+    struct sched_thread *post_unit_init
 )
 {
-    sched_exec_unit_t *unit        = NULL;
-    list_node_t       *node        = NULL;
+    struct sched_exec_unit *unit        = NULL;
+    struct list_node       *node        = NULL;
     uint8_t           int_flag     = 0;
     uint8_t           use_tick_ipi = 0;
-    timer_api_t       *funcs       = NULL;
-    sched_policy_t    *policy      = NULL;
+    struct timer_api       *funcs       = NULL;
+    struct sched_policy    *policy      = NULL;
 
     kprintf("================================================\n");
     kprintf("Initializing Scheduler for CPU %d Interrupts %d\n",
@@ -599,7 +599,7 @@ int sched_unit_init
     }
 
     /* Allocate cleared memory for the unit */
-    unit = kcalloc(sizeof(sched_exec_unit_t), 1);
+    unit = kcalloc(sizeof(struct sched_exec_unit), 1);
 
     if(unit == NULL)
     {
@@ -622,7 +622,7 @@ int sched_unit_init
  
     while(node != NULL)
     {
-        policy = (sched_policy_t*)node;
+        policy = (struct sched_policy*)node;
     
         policy->unit_init(unit);
 
@@ -694,7 +694,7 @@ void sched_yield(void)
 
 void sched_wake_thread
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
     uint8_t int_flag = 0;
@@ -718,7 +718,7 @@ void sched_wake_thread
 
 static uint32_t sched_timer_wake_thread
 (
-    timer_t *timer,
+    struct timer *timer,
     void *thread,
     const void *isr
 )
@@ -734,12 +734,12 @@ void sched_sleep
 )
 {
     uint8_t int_status = 0;
-    timer_t tm;
-    time_spec_t timeout ={.seconds = delay / 1000ull,
+    struct timer tm;
+    struct time_spec timeout ={.seconds = delay / 1000ull,
                           .nanosec = delay % 1000000ull
                          };
                          
-    sched_thread_t *self = NULL;
+    struct sched_thread *self = NULL;
     
     if(delay == 0)
     {
@@ -789,12 +789,12 @@ void sched_sleep
 static uint32_t sched_tick
 (
     void              *pv_unit,
-    const time_spec_t *step,
+    const struct time_spec *step,
     const void        *isr_inf
 )
 {
-    sched_exec_unit_t *unit         = NULL;
-    sched_thread_t    *th           = NULL;
+    struct sched_exec_unit *unit         = NULL;
+    struct sched_thread    *th           = NULL;
     uint8_t resched = 0;
     uint8_t preempt = 0;
     unit = pv_unit;
@@ -834,7 +834,7 @@ static uint32_t sched_tick
 
 void sched_thread_set_priority
 (
-    sched_thread_t *th, 
+    struct sched_thread *th, 
     uint16_t prio
 )
 {
@@ -847,9 +847,9 @@ static void *sched_idle_thread
     void *pv
 )
 {
-    sched_exec_unit_t *unit       = NULL;
-    timer_api_t        *func      = NULL;
-    unit = (sched_exec_unit_t*)pv;
+    struct sched_exec_unit *unit       = NULL;
+    struct timer_api        *func      = NULL;
+    unit = (struct sched_exec_unit*)pv;
 
     kprintf("Entered idle loop on %d UNIT ID 0x%x\n", unit->cpu->cpu_id, unit);
 
@@ -887,8 +887,8 @@ static void *sched_idle_thread
 
 static void sched_context_switch
 (
-    sched_thread_t *prev,
-    sched_thread_t *next
+    struct sched_thread *prev,
+    struct sched_thread *next
 )
 {
     if(prev != NULL)
@@ -901,10 +901,10 @@ static void sched_context_switch
 
 int sched_need_resched
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 )
 {
-    sched_thread_t *th = NULL;
+    struct sched_thread *th = NULL;
     int need_resched  = 1;
     uint8_t preemption = 0;
     /* if we have a thread, check if we have to do rescheduling */
@@ -946,8 +946,8 @@ void schedule(void)
 
 static int32_t sched_select_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     int32_t result = -1;
@@ -964,8 +964,8 @@ static int32_t sched_select_thread
 
 static int32_t sched_put_prev
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     int32_t status = -1;
@@ -984,8 +984,8 @@ static int32_t sched_put_prev
 
 static int32_t sched_enq
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     int32_t status = -1;
@@ -1003,8 +1003,8 @@ static int32_t sched_enq
 
 static int32_t sched_deq
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t    *th
+    struct sched_exec_unit *unit,
+    struct sched_thread    *th
 )
 {
     int32_t status = -1;
@@ -1020,13 +1020,13 @@ static int32_t sched_deq
 
 static int32_t sched_pick_next
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t **th
+    struct sched_exec_unit *unit,
+    struct sched_thread **th
 )
 {
-    sched_thread_t *next = NULL;
-    list_node_t *pn = NULL;
-    sched_policy_t *policy = NULL;
+    struct sched_thread *next = NULL;
+    struct list_node *pn = NULL;
+    struct sched_policy *policy = NULL;
     uint8_t int_sts = 0;
     int32_t status = -1;
 
@@ -1037,7 +1037,7 @@ static int32_t sched_pick_next
 
     while(pn != NULL)
     {
-        policy = (sched_policy_t*)pn;
+        policy = (struct sched_policy*)pn;
 
         if(policy->pick_next != NULL)
         {
@@ -1070,9 +1070,9 @@ static int32_t sched_pick_next
 
 static int32_t sched_next_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *prev,
-    sched_thread_t **next
+    struct sched_exec_unit *unit,
+    struct sched_thread *prev,
+    struct sched_thread **next
 )
 {
     int32_t status = -1;
@@ -1096,8 +1096,8 @@ static int32_t sched_next_thread
 
 static void  sched_block_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     sched_deq(unit, th);   
@@ -1105,10 +1105,10 @@ static void  sched_block_thread
 
 static void sched_main(void)
 {
-    cpu_t             *cpu     = NULL;
-    sched_exec_unit_t *unit    = NULL;
-    sched_thread_t    *next_th = NULL;
-    sched_thread_t    *prev_th = NULL;
+    struct cpu             *cpu     = NULL;
+    struct sched_exec_unit *unit    = NULL;
+    struct sched_thread    *next_th = NULL;
+    struct sched_thread    *prev_th = NULL;
     uint8_t           int_flag = 0;
 
     cpu    = cpu_current_get();

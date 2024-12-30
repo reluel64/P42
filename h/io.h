@@ -4,9 +4,9 @@
 #include <spinlock.h>
 #include <utils.h>
 
-typedef struct io_entry_t
+struct io_device_node
 {
-    list_node_t node;
+    struct list_node node;
     char    *name;
     int     (*open_func)(void **fd_data, char *path, int flags,   int mode);
     size_t  (*read_func)(void *fd_data,  void *buf,        size_t length);
@@ -14,16 +14,16 @@ typedef struct io_entry_t
     int     (*ioctl_func) (void *fd_data, int arg, void *arg_data);
     int     (*close_func)(void *fd_data);
     
-}io_entry_t;
+};
 
-typedef struct
+struct io_file_descriptor
 {
-    list_node_t node;
+    struct list_node node;
     void *fd_data;
-    io_entry_t *ent;
+    struct io_device_node *ent;
     char *path;
     size_t path_len;
-}io_fd_desc_t;
+};
 
 int io_init
 (
@@ -32,7 +32,7 @@ int io_init
 
 int io_entry_register
 (
-    io_entry_t *entry
+    struct io_device_node *entry
 );
 
 int open

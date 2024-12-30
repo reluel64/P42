@@ -6,26 +6,26 @@
 
 #define BASIC_POLICY_MAX_UNITS 4096
 
-typedef struct basic_policy_unit_t
+struct basic_policy_unit
 {
-    sched_exec_unit_t *unit;
-    list_head_t threads;
-}basic_policy_unit_t;
+    struct sched_exec_unit *unit;
+    struct list_head threads;
+};
 
-typedef struct basic_policy_t
+struct basic_policy
 {
-    basic_policy_unit_t units[BASIC_POLICY_MAX_UNITS];
-}basic_policy_t;
+    struct basic_policy_unit units[BASIC_POLICY_MAX_UNITS];
+};
 
-static basic_policy_t policy = {0};
+static struct basic_policy policy = {0};
 
-static basic_policy_unit_t *basic_unit_get
+static struct basic_policy_unit *basic_unit_get
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 )
 {
-    cpu_t *cpu = NULL;
-    basic_policy_unit_t *bpu = NULL;
+    struct cpu *cpu = NULL;
+    struct basic_policy_unit *bpu = NULL;
 
     if(unit != NULL)
     {
@@ -45,11 +45,11 @@ static basic_policy_unit_t *basic_unit_get
 
 static int32_t basic_enqueue
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
-    basic_policy_unit_t *bpu = NULL;
+    struct basic_policy_unit *bpu = NULL;
     int32_t status = -1;
 
 
@@ -65,11 +65,11 @@ static int32_t basic_enqueue
 
 static int32_t basic_dequeue
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
-    basic_policy_unit_t *bpu = NULL;
+    struct basic_policy_unit *bpu = NULL;
     int32_t status = -1;
 
 
@@ -86,12 +86,12 @@ static int32_t basic_dequeue
 
 static int32_t basic_pick_next_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t **th
+    struct sched_exec_unit *unit,
+    struct sched_thread **th
 )
 {
-    list_node_t *n = NULL;
-    basic_policy_unit_t *bpu = NULL;
+    struct list_node *n = NULL;
+    struct basic_policy_unit *bpu = NULL;
     int32_t result = -1;
 
     bpu = basic_unit_get(unit);
@@ -112,8 +112,8 @@ static int32_t basic_pick_next_thread
 
 static int32_t basic_select_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
     th->cpu_left = th->prio;
@@ -122,11 +122,11 @@ static int32_t basic_select_thread
 
 static int32_t basic_put_prev_thread
 (
-    sched_exec_unit_t *unit,
-    sched_thread_t *th
+    struct sched_exec_unit *unit,
+    struct sched_thread *th
 )
 {
-    basic_policy_unit_t *bpu = NULL;
+    struct basic_policy_unit *bpu = NULL;
     int32_t result = -1;
 
     bpu = basic_unit_get(unit);
@@ -155,10 +155,10 @@ static int32_t basic_put_prev_thread
 
 static int32_t basic_tick
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 )
 {
-    sched_thread_t *th          = NULL;
+    struct sched_thread *th          = NULL;
     int32_t status = 0;
     th = unit->current;
 
@@ -176,10 +176,10 @@ static int32_t basic_tick
 
 static int basic_unit_init
 (
-    sched_exec_unit_t *unit
+    struct sched_exec_unit *unit
 )
 {
-    basic_policy_unit_t *bpu = NULL;
+    struct basic_policy_unit *bpu = NULL;
 
     if(unit != NULL && unit->cpu != NULL)
     {
@@ -193,7 +193,7 @@ static int basic_unit_init
 
 
 
-static sched_policy_t basic_policy = 
+static struct sched_policy basic_policy = 
 {
     .node             = {.next = NULL, .prev = NULL},
     .dequeue          = basic_dequeue,

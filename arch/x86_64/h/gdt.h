@@ -46,7 +46,7 @@
 #define GDT_TYPE_SET(x)          ((x) << 0)
 
 /* Global Descriptor */
-typedef struct _gdt_entry
+struct __attribute__((packed)) gdt_entry
 {
     uint16_t limit_low     ;
     uint16_t base_low      ;
@@ -62,10 +62,10 @@ typedef struct _gdt_entry
     uint8_t  granularity:1 ;
     uint8_t  base_high     ;
 
-}__attribute__((packed)) gdt_entry_t; 
+};
 
 /* Task State Segment */
-typedef struct tss64
+struct __attribute__((packed))  tss64_entry
 {
     uint32_t reserved0;
     uint32_t rsp0_low;
@@ -95,14 +95,14 @@ typedef struct tss64
     uint16_t reserved115;
     uint16_t io_map;
     
-}__attribute__((packed))  tss64_entry_t;
+};
 
-typedef struct gdt_ptr
+struct __attribute__((packed)) gdt_ptr
 {
     uint16_t limit;
     virt_addr_t addr;
 
-}__attribute__((packed)) gdt_ptr_t;
+};
 
 int gdt_per_cpu_init(void *cpu_pv);
 void gdt_update_tss

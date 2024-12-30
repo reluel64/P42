@@ -17,12 +17,12 @@
 #define ICW1_LTIM (1 << 3)
 #define ICW1_PIC_INIT (1 << 4)
 
-static isr_t pic8259_eoi = {0};
+static struct isr pic8259_eoi = {0};
 
 static int pic8259_eoi_isr
 (
     void *dev, 
-    isr_info_t *inf
+    struct isr_info *inf
 )
 {
     //kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
@@ -33,7 +33,7 @@ static int pic8259_eoi_isr
 
 static int pic8259_probe
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     int has_pic             = 0;
@@ -61,10 +61,10 @@ static int pic8259_probe
 
 static int pic8259_drv_init
 (
-    driver_t *drv
+    struct driver_node *drv
 )
 {
-    device_t *dev = NULL;
+    struct device_node *dev = NULL;
 
     if(!devmgr_dev_create(&dev))
     {
@@ -92,7 +92,7 @@ static int pic8259_drv_init
 
 static int pic8259_dev_init
 (
-    device_t *drv
+    struct device_node *drv
 )
 {
 
@@ -113,7 +113,7 @@ static int pic8259_dev_init
 
 static int pic8259_disable
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     __outb(0xa1, 0xff);
@@ -123,7 +123,7 @@ static int pic8259_disable
 
 static int pic8259_enable
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
   
@@ -132,7 +132,7 @@ static int pic8259_enable
     return(0);
 }
 
-static intc_api_t pic_8259_api = 
+static struct intc_api pic_8259_api = 
 {
     .enable   = pic8259_enable,
     .disable  = pic8259_disable,
@@ -141,7 +141,7 @@ static intc_api_t pic_8259_api =
     .mask     = NULL
 };
 
-static driver_t pic8259 = 
+static struct driver_node pic8259 = 
 {
     .drv_name   = PIC8259_DRIVER_NAME,
     .dev_probe  = pic8259_probe,

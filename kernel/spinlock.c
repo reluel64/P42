@@ -8,7 +8,7 @@
 
 void spinlock_init
 (
-    spinlock_t *s
+    struct spinlock *s
 )
 {
     s->lock       = 0;
@@ -16,7 +16,7 @@ void spinlock_init
 
 void spinlock_rw_init
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 )
 {
     s->lock = UINT32_MAX;
@@ -24,7 +24,7 @@ void spinlock_rw_init
 
 void spinlock_lock
 (
-    spinlock_t *s
+    struct spinlock *s
 )
 {  
     int expected = 0;    
@@ -40,9 +40,9 @@ void spinlock_lock
     }
 }
 
-int8_t spinlock_trylock
+int8_t spinlock_try_lock
 (
-    spinlock_t *s
+    struct spinlock *s
 )
 {  
     int expected = 0;    
@@ -62,7 +62,7 @@ int8_t spinlock_trylock
 
 void spinlock_unlock
 (
-    spinlock_t *s
+    struct spinlock *s
 )
 {
     int expected = 1;
@@ -76,7 +76,7 @@ void spinlock_unlock
 
 void spinlock_lock_int
 (
-    spinlock_t *s, 
+    struct spinlock *s, 
     uint8_t *flag
 )
 {
@@ -98,9 +98,9 @@ void spinlock_lock_int
 
 }
 
-int8_t spinlock_trylock_int
+int8_t spinlock_try_lock_int
 (
-    spinlock_t *s, 
+    struct spinlock *s, 
     uint8_t *flag
 )
 {
@@ -127,7 +127,7 @@ int8_t spinlock_trylock_int
 
 void spinlock_unlock_int
 (
-    spinlock_t *s, 
+    struct spinlock *s, 
     uint8_t flag
 )
 {
@@ -146,7 +146,7 @@ void spinlock_unlock_int
 
 void spinlock_read_lock_int
 (
-    spinlock_rw_t *s, 
+    struct spinlock_rw *s, 
     uint8_t *flag
 )
 {
@@ -163,7 +163,7 @@ void spinlock_read_lock_int
 
 void spinlock_read_unlock_int
 (
-    spinlock_rw_t *s, 
+    struct spinlock_rw *s, 
     uint8_t flag
 )
 {
@@ -181,7 +181,7 @@ void spinlock_read_unlock_int
 
 void spinlock_write_lock_int
 (
-    spinlock_rw_t *s, 
+    struct spinlock_rw *s, 
     uint8_t *flag
 )
 {
@@ -203,7 +203,7 @@ void spinlock_write_lock_int
 
 void spinlock_write_unlock_int
 (
-    spinlock_rw_t *s, 
+    struct spinlock_rw *s, 
     uint8_t flag
 )
 {
@@ -222,7 +222,7 @@ void spinlock_write_unlock_int
 
 void spinlock_read_lock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 )
 {
 
@@ -237,7 +237,7 @@ void spinlock_read_lock
 
 void spinlock_read_unlock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 )
 {
 
@@ -248,7 +248,7 @@ void spinlock_read_unlock
 
 void spinlock_write_lock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 )
 {
     uint32_t expected = UINT32_MAX;
@@ -266,7 +266,7 @@ void spinlock_write_lock
 
 void spinlock_write_unlock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 )
 {
     uint32_t expected = 0;

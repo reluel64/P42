@@ -3,35 +3,35 @@
 #include <linked_list.h>
 #include <spinlock.h>
 
-typedef struct sem_t
+struct sem
 {
-    list_head_t       pendq;
-    spinlock_t        lock;
+    struct list_head       pendq;
+    struct spinlock        lock;
     volatile uint32_t count;
     uint32_t          max_count;
-}sem_t;
+};
 
-sem_t *sem_create
+struct sem *sem_create
 (
     uint32_t init_val, 
     uint32_t max_val
 );
 
-sem_t *sem_init
+struct sem *sem_init
 (
-    sem_t *sem, 
+    struct sem *sem, 
     uint32_t init_val, 
     uint32_t max_count
 );
 
 int sem_acquire
 (
-    sem_t *sem, 
+    struct sem *sem, 
     uint32_t wait_ms
 );
 
 int sem_release
 (
-    sem_t *sem
+    struct sem *sem
 );
 #endif

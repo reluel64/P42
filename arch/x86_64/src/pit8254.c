@@ -28,26 +28,26 @@
 #define PIT8254_DIVIDER          (PIT8254_FREQ / PIT8254_REQ_RESOLUTION)
 
 
-typedef struct pit8254_dev_t
+struct pit8254_dev
 {
-    spinlock_rw_t           lock; 
+    struct spinlock_rw           lock; 
     uint16_t             divider;
     timer_tick_handler_t handler;
     void                *handler_data;
-    isr_t                timer_isr;
+    struct isr                timer_isr;
     uint8_t              mode;
-    time_spec_t          resolution;
-}pit8254_dev_t;
+    struct time_spec          resolution;
+};
 
 static int pit8254_irq_handler
 (
     void *dev, 
-    isr_info_t *inf
+    struct isr_info *inf
 );
 
-static int pit8254_rearm(device_t *dev);
+static int pit8254_rearm(struct device_node *dev);
 
-static int pit8254_probe(device_t *dev)
+static int pit8254_probe(struct device_node *dev)
 {
     if(devmgr_dev_name_match(dev, PIT8254_TIMER) &&
       devmgr_dev_type_match(dev, TIMER_DEVICE_TYPE))
@@ -58,11 +58,11 @@ static int pit8254_probe(device_t *dev)
     return(-1);
 }
 
-static int pit8254_init(device_t *dev)
+static int pit8254_init(struct device_node *dev)
 {
-    pit8254_dev_t *pit_dev = NULL;
+    struct pit8254_dev *pit_dev = NULL;
   
-    pit_dev = (pit8254_dev_t*)kcalloc(sizeof(pit8254_dev_t), 1);
+    pit_dev = (struct pit8254_dev*)kcalloc(sizeof(struct pit8254_dev), 1);
     pit_dev->mode = PIT8254_MODE_2 | PIT8254_ACCESS_LO_HI;
     
     spinlock_rw_init(&pit_dev->lock);
@@ -81,10 +81,10 @@ static int pit8254_init(device_t *dev)
     return(0);
 }
 
-static int pit8254_drv_init(driver_t *drv)
+static int pit8254_drv_init(struct driver_node *drv)
 {
-    device_t *dev = NULL;
-    pit8254_dev_t *pit_dev = NULL;
+    struct device_node *dev = NULL;
+    struct pit8254_dev *pit_dev = NULL;
 
     if(!devmgr_dev_create(&dev))
     {
@@ -107,9 +107,9 @@ static int pit8254_drv_init(driver_t *drv)
     return(0);
 }
 
-static int pit8254_rearm(device_t *dev)
+static int pit8254_rearm(struct device_node *dev)
 {
-    pit8254_dev_t *pit = NULL;
+    struct pit8254_dev *pit = NULL;
     
     pit = devmgr_dev_data_get(dev);
 
@@ -122,10 +122,10 @@ static int pit8254_rearm(device_t *dev)
 static int pit8254_irq_handler
 (
     void *dev, 
-    isr_info_t *inf
+    struct isr_info *inf
 )
 {
-    pit8254_dev_t *pit_dev = NULL;
+    struct pit8254_dev *pit_dev = NULL;
     
     pit_dev = devmgr_dev_data_get(dev);
 
@@ -143,12 +143,12 @@ static int pit8254_irq_handler
 
 static int pit8254_set_handler
 (
-    device_t             *dev,
+    struct device_node             *dev,
     timer_tick_handler_t th,
     void                 *arg
 )
 {
-    pit8254_dev_t *timer = NULL;
+    struct pit8254_dev *timer = NULL;
     uint8_t        int_flag = 0;
 
     timer = devmgr_dev_data_get(dev);
@@ -165,12 +165,12 @@ static int pit8254_set_handler
 
 static int pit8254_get_handler
 (
-    device_t             *dev,
+    struct device_node             *dev,
     timer_tick_handler_t *th,
     void                 **arg
 )
 {
-    pit8254_dev_t *timer = NULL;
+    struct pit8254_dev *timer = NULL;
     uint8_t       int_status = 0;
     
     if(th == NULL || arg == NULL)
@@ -199,8 +199,8 @@ static int pit8254_get_handler
 
 static int pit8254_set_timer
 (
-    device_t    *dev,
-    time_spec_t *tm
+    struct device_node    *dev,
+    struct time_spec *tm
 )
 {
     return(0);
@@ -208,14 +208,14 @@ static int pit8254_set_timer
 
 static int pit8254_set_mode
 (
-    device_t *dev,
+    struct device_node *dev,
     uint8_t  mode
 )
 {
     return(0);
 }
 
-static timer_api_t pit8254_api = 
+static struct timer_api pit8254_api = 
 {
     .enable      = NULL,
     .disable     = NULL,
@@ -226,7 +226,7 @@ static timer_api_t pit8254_api =
     .set_mode    = pit8254_set_mode
 };
 
-static driver_t pit8254 = 
+static struct driver_node pit8254 = 
 {
     .drv_name  = PIT8254_TIMER,
     .drv_type  = TIMER_DEVICE_TYPE,

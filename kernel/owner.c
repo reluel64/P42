@@ -4,11 +4,11 @@
 #include <utils.h>
 
 
-extern vm_ctx_t      vm_kernel_ctx;
+extern struct vm_ctx      vm_kernel_ctx;
 
-static list_head_t owners;
-static spinlock_t lock = SPINLOCK_INIT;
-static sched_owner_t kernel_owner;
+static struct list_head owners;
+static struct spinlock lock = SPINLOCK_INIT;
+static struct sched_owner kernel_owner;
 
 
 int _owner_setup
@@ -16,7 +16,7 @@ int _owner_setup
     void *owner
 )
 {
-    sched_owner_t *o = NULL;
+    struct sched_owner *o = NULL;
 
     o = owner;
 
@@ -32,9 +32,9 @@ int owner_kernel_init
 {
     uint8_t int_status = 0;
 
-    sched_owner_t *o = &kernel_owner;
+    struct sched_owner *o = &kernel_owner;
     
-    memset(o, 0, sizeof(sched_owner_t));
+    memset(o, 0, sizeof(struct sched_owner));
 
     linked_list_init(&o->threads);
 
@@ -59,8 +59,8 @@ int owner_add_thread
 {
     int status = -1;
     uint8_t int_status = 0;
-    sched_owner_t *ow = NULL;
-    sched_thread_t *th = NULL;
+    struct sched_owner *ow = NULL;
+    struct sched_thread *th = NULL;
 
     if((owner == NULL) || (thread == NULL))
     {
@@ -92,8 +92,8 @@ int owner_remove_thread
 {
     int status = -1;
     uint8_t int_status = 0;
-    sched_owner_t *ow = NULL;
-    sched_thread_t *th = NULL;
+    struct sched_owner *ow = NULL;
+    struct sched_thread *th = NULL;
 
     if((owner == NULL) || (thread == NULL))
     {
@@ -117,7 +117,7 @@ int owner_remove_thread
 
 }
 
-sched_owner_t *owner_kernel_get
+struct sched_owner *owner_kernel_get
 (
     void
 )

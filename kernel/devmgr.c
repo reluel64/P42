@@ -9,15 +9,15 @@
 #define DEVMGR_SRCH_STACK 128
 
 
-static list_head_t drv_list;
-static spinlock_rw_t  drv_list_lock;
-static device_t    root_bus;
-static spinlock_rw_t  dev_list_lock;
+static struct list_head drv_list;
+static struct spinlock_rw  drv_list_lock;
+static struct device_node    root_bus;
+static struct spinlock_rw  dev_list_lock;
 
 static int devmgr_dev_add_to_parent
 (
-    device_t *dev,
-    device_t *parent
+    struct device_node *dev,
+    struct device_node *parent
 );
 
 int devmgr_show_devices
@@ -25,12 +25,12 @@ int devmgr_show_devices
     void
 )
 {
-    device_t *dev = NULL;
-    list_node_t **dev_stack = NULL;
-    list_node_t *node        = NULL;
+    struct device_node *dev = NULL;
+    struct list_node **dev_stack = NULL;
+    struct list_node *node        = NULL;
     int          stack_index = 0;
 
-    dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(list_node_t*));
+    dev_stack = kcalloc(DEVMGR_SRCH_STACK, sizeof(struct list_node*));
 
     node = linked_list_first(&root_bus.children);
 
@@ -38,7 +38,7 @@ int devmgr_show_devices
     {
         while(node)
         {
-            dev = (device_t*)node;
+            dev = (struct device_node*)node;
 #if 0
             if(linked_list_count(&dev->children) > 0)
             {
@@ -92,7 +92,7 @@ int devmgr_init
     linked_list_init(&drv_list);
     spinlock_rw_init(&drv_list_lock);
     spinlock_rw_init(&dev_list_lock);
-    memset(&root_bus, 0, sizeof(device_t));
+    memset(&root_bus, 0, sizeof(struct device_node));
     devmgr_dev_name_set(&root_bus, "root_bus");
     devmgr_dev_type_set(&root_bus, DEVMGR_ROOT_BUS);
     return(0);
@@ -104,7 +104,7 @@ int devmgr_init
 
 int devmgr_dev_create
 (
-    device_t **dev
+    struct device_node **dev
 )
 {
     if(dev == NULL)
@@ -114,7 +114,7 @@ int devmgr_dev_create
 
     if(*dev == NULL)
     {
-        (*dev) = kcalloc(sizeof(device_t), 1);
+        (*dev) = kcalloc(sizeof(struct device_node), 1);
 
         if((*dev) == NULL)
         {
@@ -125,7 +125,7 @@ int devmgr_dev_create
     }
     else
     {
-        memset((*dev), 0, sizeof(device_t));
+        memset((*dev), 0, sizeof(struct device_node));
     }
 
     return(0);
@@ -133,7 +133,7 @@ int devmgr_dev_create
 
 int devmgr_dev_delete
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     uint32_t flags = 0;
@@ -143,7 +143,7 @@ int devmgr_dev_delete
     {
 
         flags = dev->flags;
-        memset(dev, 0, sizeof(device_t));
+        memset(dev, 0, sizeof(struct device_node));
 
         if(flags & DEVMGR_DEV_ALLOCATED)
         {
@@ -156,16 +156,16 @@ int devmgr_dev_delete
 
 int devmgr_dev_remove
 (
-    device_t *dev, 
+    struct device_node *dev, 
     uint8_t remove_children
 )
 {
-    device_t *child       = NULL;
+    struct device_node *child       = NULL;
     uint8_t   int_flag    = 0;
     size_t    stack_index = 0;
-    list_node_t *dev_stack[DEVMGR_SRCH_STACK];
-    list_node_t *node = NULL;
-    list_node_t   *next_node = NULL;
+    struct list_node *dev_stack[DEVMGR_SRCH_STACK];
+    struct list_node *node = NULL;
+    struct list_node   *next_node = NULL;
 
     if(dev == NULL)
     {
@@ -194,7 +194,7 @@ int devmgr_dev_remove
     {
         while(node)
         {
-            child = (device_t*)node;
+            child = (struct device_node*)node;
             next_node = linked_list_next(node);
 
             /* start going down if we have children*/
@@ -246,8 +246,8 @@ int devmgr_dev_remove
 
 int devmgr_dev_add
 (
-    device_t *dev, 
-    device_t *parent
+    struct device_node *dev, 
+    struct device_node *parent
 )
 {
     int          status = 0;
@@ -279,7 +279,7 @@ int devmgr_dev_add
 
 int devmgr_drv_add
 (
-    driver_t *drv
+    struct driver_node *drv
 )
 {
     int status = 0;
@@ -313,7 +313,7 @@ int devmgr_drv_add
 
 int devmgr_drv_remove
 (
-    driver_t *drv
+    struct driver_node *drv
 )
 {
     int status = 0;
@@ -343,7 +343,7 @@ int devmgr_drv_remove
 
 char *devmgr_dev_type_get
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     if(dev == NULL)
@@ -354,7 +354,7 @@ char *devmgr_dev_type_get
 
 char *devmgr_drv_type_get
 (
-    driver_t *drv
+    struct driver_node *drv
 )
 {
     if(drv == NULL)
@@ -365,7 +365,7 @@ char *devmgr_drv_type_get
 
 int devmgr_dev_type_set
 (
-    device_t *dev, 
+    struct device_node *dev, 
     char *type
 )
 {
@@ -380,7 +380,7 @@ int devmgr_dev_type_set
 
 int devmgr_dev_type_match
 (
-    device_t *dev, 
+    struct device_node *dev, 
     char *type
 )
 {
@@ -394,8 +394,8 @@ int devmgr_dev_type_match
 
 static int devmgr_dev_add_to_parent
 (
-    device_t *dev,
-    device_t *parent
+    struct device_node *dev,
+    struct device_node *parent
 )
 {
     uint8_t int_flag = 0;
@@ -427,13 +427,13 @@ static int devmgr_dev_add_to_parent
 
 /* devmgr_find_driver - find a driver by name */
 
-driver_t *devmgr_drv_find
+struct driver_node *devmgr_drv_find
 (
     const char *name
 )
 {
-    driver_t    *drv  = NULL;
-    list_node_t *node = NULL;
+    struct driver_node    *drv  = NULL;
+    struct list_node *node = NULL;
     uint8_t     int_flag = 0;
 
     spinlock_read_lock_int(&drv_list_lock, &int_flag);
@@ -442,7 +442,7 @@ driver_t *devmgr_drv_find
     
     while(node)
     {
-        drv = (driver_t*)node;
+        drv = (struct driver_node*)node;
 
         if(!strcmp(drv->drv_name, name))
         {
@@ -463,7 +463,7 @@ driver_t *devmgr_drv_find
 
 int devmgr_drv_init
 (
-    driver_t *drv
+    struct driver_node *drv
 )
 {
     int status = -1;
@@ -485,12 +485,12 @@ int devmgr_drv_init
 
 int devmgr_dev_probe
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     int status        = -1;
-    list_node_t *node = NULL;
-    driver_t       *drv  = NULL;
+    struct list_node *node = NULL;
+    struct driver_node       *drv  = NULL;
     uint8_t int_flag = 0;
 
     spinlock_read_lock_int(&drv_list_lock, &int_flag);
@@ -501,7 +501,7 @@ int devmgr_dev_probe
     while(node)
     {
         status = -1;
-        drv = (driver_t*)node;
+        drv = (struct driver_node*)node;
 
         if(dev->dev_type != NULL && drv->drv_type != NULL)
         {
@@ -542,7 +542,7 @@ int devmgr_dev_probe
 
 int devmgr_dev_init
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     int status = -1;
@@ -573,7 +573,7 @@ int devmgr_dev_init
 
 int devmgr_dev_uninit
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     int status = -1;
@@ -595,7 +595,7 @@ int devmgr_dev_uninit
 
 int devmgr_drv_data_set
 (
-    driver_t *drv, 
+    struct driver_node *drv, 
     void *data
 )
 {
@@ -611,7 +611,7 @@ int devmgr_drv_data_set
 
 void *devmgr_drv_data_get
 (
-    const driver_t *drv
+    const struct driver_node *drv
 )
 {
     if(drv == NULL)
@@ -624,7 +624,7 @@ void *devmgr_drv_data_get
 
 int devmgr_dev_data_set
 (
-    device_t *dev, 
+    struct device_node *dev, 
     void *data
 )
 {
@@ -640,7 +640,7 @@ int devmgr_dev_data_set
 
 void *devmgr_dev_data_get
 (
-    const device_t *dev
+    const struct device_node *dev
 )
 {
     if(dev == NULL)
@@ -651,9 +651,9 @@ void *devmgr_dev_data_get
     return(dev->dev_data);
 }
 
-device_t *devmgr_dev_parent_get
+struct device_node *devmgr_dev_parent_get
 (
-    const device_t *dev
+    const struct device_node *dev
 )
 {
     if(dev == NULL)
@@ -666,7 +666,7 @@ device_t *devmgr_dev_parent_get
 
 char *devmgr_dev_name_get
 (
-    const device_t *dev
+    const struct device_node *dev
 )
 {
     if(dev == NULL)
@@ -679,7 +679,7 @@ char *devmgr_dev_name_get
 
 int devmgr_dev_name_match
 (
-    const device_t *dev, 
+    const struct device_node *dev, 
     char *name
 )
 {
@@ -698,7 +698,7 @@ int devmgr_dev_name_match
 
 int devmgr_dev_name_set
 (
-    device_t *dev, 
+    struct device_node *dev, 
     char *name
 )
 {
@@ -708,7 +708,7 @@ int devmgr_dev_name_set
 
 int devmgr_dev_index_set
 (
-    device_t *dev, 
+    struct device_node *dev, 
     uint32_t index
 )
 {
@@ -718,7 +718,7 @@ int devmgr_dev_index_set
 
 uint32_t devmgr_dev_index_get
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     return(dev->index);
@@ -726,7 +726,7 @@ uint32_t devmgr_dev_index_get
 
 void *devmgr_dev_api_get
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     if(dev == NULL || dev->drv == NULL)
@@ -737,15 +737,15 @@ void *devmgr_dev_api_get
     return(dev->drv->drv_api);
 }
 
-device_t *devmgr_dev_get_by_name
+struct device_node *devmgr_dev_get_by_name
 (
     const char     *name, 
     const uint32_t index
 )
 {
-    device_t *dev = NULL;
-    list_node_t *dev_stack[DEVMGR_SRCH_STACK];
-    list_node_t *node        = NULL;
+    struct device_node *dev = NULL;
+    struct list_node *dev_stack[DEVMGR_SRCH_STACK];
+    struct list_node *node        = NULL;
     int          stack_index = 0;
     uint8_t      int_status = 0;
 
@@ -759,7 +759,7 @@ device_t *devmgr_dev_get_by_name
     {
         while(node)
         {
-            dev = (device_t*)node;
+            dev = (struct device_node*)node;
 
 
             if(dev->index == index && 
@@ -801,7 +801,7 @@ device_t *devmgr_dev_get_by_name
 
 void *devmgr_drv_api_get
 (
-    driver_t *drv
+    struct driver_node *drv
 )
 {
     if(drv == NULL)
@@ -812,9 +812,9 @@ void *devmgr_drv_api_get
     return(drv->drv_api);
 }
 
-driver_t *devmgr_dev_drv_get
+struct driver_node *devmgr_dev_drv_get
 (
-    device_t *dev
+    struct device_node *dev
 )
 {
     if(dev == NULL)
@@ -830,15 +830,15 @@ driver_t *devmgr_dev_drv_get
  * API for now, we will leave them as primitive implementations
  */ 
 #if 0
-dev_srch_t *devmgr_dev_first(char *name, device_t **dev_out)
+dev_srch_t *devmgr_dev_first(char *name, struct device_node **dev_out)
 {
-    device_t       *dev      = NULL;
+    struct device_node       *dev      = NULL;
     dev_srch_t  *dev_srch = NULL;
-    list_node_t *node     = NULL;
+    struct list_node *node     = NULL;
     
 
     dev_srch = kcalloc(1, sizeof(dev_srch_t));
-    dev_srch->stack = kcalloc(sizeof(device_t*), DEVMGR_SRCH_STACK);
+    dev_srch->stack = kcalloc(sizeof(struct device_node*), DEVMGR_SRCH_STACK);
 
     node = linked_list_first(&root_bus.children);
 
@@ -846,7 +846,7 @@ dev_srch_t *devmgr_dev_first(char *name, device_t **dev_out)
     {
         while(node)
         {
-            dev = (device_t*)node;
+            dev = (struct device_node*)node;
 
             if(linked_list_count(&dev->children) > 0)
             {
@@ -880,11 +880,11 @@ dev_srch_t *devmgr_dev_first(char *name, device_t **dev_out)
     return(NULL);
 }
 
-device_t *devmgr_dev_next(dev_srch_t *sh)
+struct device_node *devmgr_dev_next(dev_srch_t *sh)
 {
-    device_t       *dev      = NULL;
+    struct device_node       *dev      = NULL;
     dev_srch_t  *dev_srch = sh;
-    list_node_t *node     = NULL;
+    struct list_node *node     = NULL;
     
     /* Continue from we left off */
     node = sh->next_node;
@@ -893,7 +893,7 @@ device_t *devmgr_dev_next(dev_srch_t *sh)
     {
         while(node)
         {
-            dev = (device_t*)node;
+            dev = (struct device_node*)node;
 
             if(linked_list_count(&dev->children) > 0)
             {

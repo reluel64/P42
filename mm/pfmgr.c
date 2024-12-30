@@ -14,19 +14,19 @@
 #define PFMGR_FOUND_NONE (-1)
 
 
-typedef struct pfmgr_init_t
+struct pfmgr_init_data
 {
     phys_addr_t busy_start;
     phys_size_t busy_len;
     phys_addr_t prev;
-}pfmgr_init_t;
+};
 
-static pfmgr_base_t base;
-static pfmgr_t pfmgr_interface;
-static spinlock_t pfmgr_lock = SPINLOCK_INIT;
+static struct pfmgr_base base;
+static struct pfmgr pfmgr_interface;
+static struct spinlock pfmgr_lock = SPINLOCK_INIT;
 
 /* Tracking information = header + bitmap */
-#define TRACK_LEN(x) (ALIGN_UP((sizeof(pfmgr_free_range_t)) + \
+#define TRACK_LEN(x) (ALIGN_UP((sizeof(struct pfmgr_free_range)) + \
                                BITMAP_SIZE_FOR_AREA((x)), PAGE_SIZE))
 
 /* pfmgr_in_range -  check if a a memory interval is in range */
@@ -140,7 +140,7 @@ static virt_addr_t pfmgr_early_map
 
 static void pfmgr_early_clear_bitmap
 (
-    pfmgr_free_range_t *fmem, 
+    struct pfmgr_free_range *fmem, 
     phys_addr_t bmp_phys
 )
 {
@@ -149,7 +149,7 @@ static void pfmgr_early_clear_bitmap
     phys_size_t pos  = 0;
     phys_size_t bmp_len = 0;
     
-    bmp_len = fmem->hdr.struct_len - sizeof(pfmgr_free_range_t);
+    bmp_len = fmem->hdr.struct_len - sizeof(struct pfmgr_free_range);
 
     while(pos < bmp_len)
     {
@@ -174,7 +174,7 @@ static void pfmgr_early_clear_bitmap
 
 static void pfmgr_early_mark_bitmap
 (
-    pfmgr_free_range_t *fmem, 
+    struct pfmgr_free_range *fmem, 
     phys_addr_t bmp_phys, 
     phys_addr_t addr, 
     phys_size_t len
@@ -214,13 +214,13 @@ static void pfmgr_early_mark_bitmap
 
 static void pfmgr_init_free_callback
 (
-    memory_map_entry_t *e, 
+    struct memory_map_entry *e, 
     void *pv
 )
 {
-    pfmgr_init_t       *init = NULL;
-    pfmgr_free_range_t *freer = NULL;
-    pfmgr_free_range_t local_freer;
+    struct pfmgr_init_data       *init = NULL;
+    struct pfmgr_free_range *freer = NULL;
+    struct pfmgr_free_range local_freer;
     phys_addr_t        track_addr = 0;
     phys_addr_t        track_len = 0;
 
@@ -232,7 +232,7 @@ static void pfmgr_init_free_callback
         return;
     }
 
-    memset(&local_freer, 0, sizeof(pfmgr_free_range_t));
+    memset(&local_freer, 0, sizeof(struct pfmgr_free_range));
 
     track_len = TRACK_LEN(e->length);
     track_addr = ALIGN_DOWN(e->base + (e->length - track_len), PAGE_SIZE);
@@ -240,7 +240,7 @@ static void pfmgr_init_free_callback
     /* Link the previous entry with this one */
     if(init->prev)
     {
-        freer = (pfmgr_free_range_t*)pfmgr_early_map(init->prev);
+        freer = (struct pfmgr_free_range*)pfmgr_early_map(init->prev);
         if((virt_addr_t)freer != VM_INVALID_ADDRESS)
         {
             freer->hdr.next_range = track_addr;
@@ -280,12 +280,12 @@ static void pfmgr_init_free_callback
 #endif
 
     pfmgr_early_clear_bitmap(&local_freer, 
-                              track_addr + offsetof(pfmgr_free_range_t, bmp));
+                              track_addr + offsetof(struct pfmgr_free_range, bmp));
 
     if(pfmgr_in_range(e->base, e->length, _KERNEL_LMA,_KERNEL_IMAGE_LEN))
     {
         pfmgr_early_mark_bitmap(&local_freer,
-                           track_addr + offsetof(pfmgr_free_range_t, bmp),
+                           track_addr + offsetof(struct pfmgr_free_range, bmp),
                            _KERNEL_LMA, 
                            _KERNEL_IMAGE_LEN);
 #ifdef PFMGR_EARLY_DEBUG               
@@ -294,19 +294,19 @@ static void pfmgr_init_free_callback
     }
 
     if(pfmgr_in_range(e->base, e->length, base.physb_start, 
-                      base.busyr.count * sizeof(pfmgr_busy_range_t)))
+                      base.busyr.count * sizeof(struct pfmgr_busy_range)))
     {
         pfmgr_early_mark_bitmap(&local_freer,
-                                track_addr + offsetof(pfmgr_free_range_t, bmp),
+                                track_addr + offsetof(struct pfmgr_free_range, bmp),
                                 base.physb_start, 
-                                base.busyr.count * sizeof(pfmgr_busy_range_t));
+                                base.busyr.count * sizeof(struct pfmgr_busy_range));
 #ifdef PFMGR_EARLY_DEBUG
                            kprintf("MARKED BUSY RANGE\n");
 #endif
     }
 
     pfmgr_early_mark_bitmap(&local_freer,
-                       track_addr + offsetof(pfmgr_free_range_t, bmp),
+                       track_addr + offsetof(struct pfmgr_free_range, bmp),
                        track_addr, 
                        track_len);
 
@@ -314,11 +314,11 @@ static void pfmgr_init_free_callback
     kprintf("MARKED FREE_RANGE\n");
 #endif
     /* Commit to memory */
-    freer = (pfmgr_free_range_t*)pfmgr_early_map(track_addr);
+    freer = (struct pfmgr_free_range*)pfmgr_early_map(track_addr);
     
     if((virt_addr_t)freer != VM_INVALID_ADDRESS)
     {
-        memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
+        memcpy(freer, &local_freer, sizeof(struct pfmgr_free_range));
     }
     else
     {
@@ -334,12 +334,12 @@ static void pfmgr_init_free_callback
 
 static void pfmgr_init_busy_callback
 (
-    memory_map_entry_t *e, 
+    struct memory_map_entry *e, 
     void *pv
 )
 {
-    pfmgr_init_t *init = pv;    
-    pfmgr_busy_range_t *busy = NULL;
+    struct pfmgr_init_data *init = pv;    
+    struct pfmgr_busy_range *busy = NULL;
     phys_addr_t  addr = 0;
 
     if(e->type == MEMORY_USABLE)
@@ -349,13 +349,13 @@ static void pfmgr_init_busy_callback
 
     addr = base.physb_start + 
            base.busyr.count * 
-           sizeof(pfmgr_busy_range_t);
+           sizeof(struct pfmgr_busy_range);
 
     
     /* Link the previous entry with this one */
     if(init->prev)
     {
-        busy = (pfmgr_busy_range_t*)pfmgr_early_map(init->prev);
+        busy = (struct pfmgr_busy_range*)pfmgr_early_map(init->prev);
 
         if((virt_addr_t)busy != VM_INVALID_ADDRESS)
         {
@@ -370,19 +370,19 @@ static void pfmgr_init_busy_callback
         base.physb_start = ALIGN_UP(_KERNEL_LMA_END, PAGE_SIZE);
     }
 
-    busy = (pfmgr_busy_range_t*)pfmgr_early_map(base.physb_start + 
+    busy = (struct pfmgr_busy_range*)pfmgr_early_map(base.physb_start + 
                                  base.busyr.count * 
-                                 sizeof(pfmgr_busy_range_t));
+                                 sizeof(struct pfmgr_busy_range));
 
     if((virt_addr_t)busy != VM_INVALID_ADDRESS)
     {
-        memset(busy, 0, sizeof(pfmgr_busy_range_t));
+        memset(busy, 0, sizeof(struct pfmgr_busy_range));
 
         busy->hdr.base       = e->base;
         //busy->hdr.domain_id  = e->domain;
         busy->hdr.len        = e->length;
         busy->hdr.type       = e->type;
-        busy->hdr.struct_len = sizeof(pfmgr_busy_range_t);
+        busy->hdr.struct_len = sizeof(struct pfmgr_busy_range);
     }
     else
     {
@@ -390,7 +390,7 @@ static void pfmgr_init_busy_callback
     }
     init->prev = base.physb_start + 
                  base.busyr.count * 
-                 sizeof(pfmgr_busy_range_t);
+                 sizeof(struct pfmgr_busy_range);
 
     base.busyr.count++;
 
@@ -415,7 +415,7 @@ int pfmgr_early_alloc_pf
     void *pv
 )
 {
-    pfmgr_free_range_t *freer     = NULL;
+    struct pfmgr_free_range *freer     = NULL;
     phys_addr_t freer_phys  = 0;
     phys_addr_t bmp_phys    = 0;
     virt_addr_t *bmp        = 0;
@@ -425,8 +425,8 @@ int pfmgr_early_alloc_pf
     phys_size_t bmp_off     = 0;
     phys_size_t ret_pf      = 0;
     int         cb_sts      = 0;
-    pfmgr_free_range_t local_freer;
-    pfmgr_cb_data_t cb_dat = {.avail_bytes = 0,
+    struct pfmgr_free_range local_freer;
+    struct pfmgr_cb_data cb_dat = {.avail_bytes = 0,
                               .phys_base  = 0,
                               .used_bytes = 0
                              };
@@ -439,7 +439,7 @@ int pfmgr_early_alloc_pf
     {
         pf_pos = 0;
         bmp    = NULL;
-        freer  = (pfmgr_free_range_t*)pfmgr_early_map(freer_phys);
+        freer  = (struct pfmgr_free_range*)pfmgr_early_map(freer_phys);
         
         if((virt_addr_t)freer == VM_INVALID_ADDRESS)
         {
@@ -448,10 +448,10 @@ int pfmgr_early_alloc_pf
         }
 
         /* Get the physical address of the bitmap */
-        bmp_phys = freer_phys + sizeof(pfmgr_free_range_t);
+        bmp_phys = freer_phys + sizeof(struct pfmgr_free_range);
        
         /* save the structure locally */
-        memcpy(&local_freer, freer, sizeof(pfmgr_free_range_t));
+        memcpy(&local_freer, freer, sizeof(struct pfmgr_free_range));
         
         /* U Can't Touch This */
         if(local_freer.hdr.base < LOW_MEMORY)
@@ -520,10 +520,10 @@ int pfmgr_early_alloc_pf
         }
 
         /* Commit to memory */
-        freer = (pfmgr_free_range_t*)pfmgr_early_map(freer_phys);
+        freer = (struct pfmgr_free_range*)pfmgr_early_map(freer_phys);
         if((virt_addr_t)freer != VM_INVALID_ADDRESS)
         {
-            memcpy(freer, &local_freer, sizeof(pfmgr_free_range_t));
+            memcpy(freer, &local_freer, sizeof(struct pfmgr_free_range));
         }
         else
         {
@@ -550,7 +550,7 @@ int pfmgr_early_alloc_pf
 
 /* pfmgr_lkup_bmp_for_free_pf - helper routine that looks for free pages 
  *
- * This routine will look in the bitmap represented by the pfmgr_free_range_t
+ * This routine will look in the bitmap represented by the struct pfmgr_free_range
  * and will return the requested amount of page frames specified in pf that starts
  * at start address
  * 
@@ -558,13 +558,13 @@ int pfmgr_early_alloc_pf
 
 static int pfmgr_lkup_bmp_for_free_pf
 (
-    pfmgr_free_range_t *freer,
+    struct pfmgr_free_range *freer,
     phys_addr_t        *start,
     phys_size_t        *pf,
     uint32_t           flags
 )
 {
-    pfmgr_range_header_t *hdr = NULL;
+    struct pfmgr_range_header *hdr = NULL;
     phys_addr_t start_addr    = 0;
     phys_size_t pf_ix         = 0;
     phys_size_t pf_pos        = 0;
@@ -714,7 +714,7 @@ static int pfmgr_lkup_bmp_for_free_pf
 
 /* pfmgr_lkup_bmp_for_free_pf - helper routine that looks for free pages 
  *
- * This routine will look in the bitmap represented by the pfmgr_free_range_t
+ * This routine will look in the bitmap represented by the struct pfmgr_free_range
  * and will return the requested amount of page frames specified in pf that starts
  * at start address
  * 
@@ -725,7 +725,7 @@ static int pfmgr_lkup_bmp_for_free_pf
 /* TODO: MAKE ALLOCATION EVEN FASTER */
 static int pfmgr_mark_bmp
 (
-    pfmgr_free_range_t *freer, 
+    struct pfmgr_free_range *freer, 
     phys_addr_t addr,
     phys_size_t pf
 )
@@ -809,7 +809,7 @@ static int pfmgr_mark_bmp
 /* TODO: MAKE FREEING EVEN FASTER */
 static int pfmgr_clear_bmp
 (
-    pfmgr_free_range_t *freer, 
+    struct pfmgr_free_range *freer, 
     phys_addr_t         addr,
     phys_size_t         pf
 )
@@ -886,7 +886,7 @@ static int pfmgr_check_available_memory
     phys_size_t req_pf
 )
 {
-    list_node_t *fnode = NULL;
+    struct list_node *fnode = NULL;
     fnode = linked_list_first(&base.freer);
 
     while(fnode)
@@ -908,10 +908,10 @@ static int _pfmgr_alloc
     void       *pv
 )
 {
-    pfmgr_free_range_t *free_range = NULL;
-    list_node_t        *fnode      = NULL;
-    list_node_t        *next_fnode = NULL;
-    pfmgr_cb_data_t    cb_dat = {
+    struct pfmgr_free_range *free_range = NULL;
+    struct list_node        *fnode      = NULL;
+    struct list_node        *next_fnode = NULL;
+    struct pfmgr_cb_data    cb_dat = {
                                  .avail_bytes = 0,
                                  .phys_base   = 0,
                                  .used_bytes  = 0
@@ -938,7 +938,7 @@ static int _pfmgr_alloc
     
     while(fnode)
     {
-        free_range = (pfmgr_free_range_t*) fnode;
+        free_range = (struct pfmgr_free_range*) fnode;
 
         if(req_pf == 0)
         {
@@ -1152,12 +1152,12 @@ static int pfmgr_addr_to_free_range
 (
     phys_addr_t addr, 
     phys_size_t pf,
-    pfmgr_free_range_t **pfreer
+    struct pfmgr_free_range **pfreer
 )
 {
     phys_size_t         length     = 0;
-    list_node_t         *node      = NULL;
-    pfmgr_free_range_t *freer      = NULL;
+    struct list_node         *node      = NULL;
+    struct pfmgr_free_range *freer      = NULL;
 
     length = PF_TO_BYTES(pf);
 
@@ -1165,7 +1165,7 @@ static int pfmgr_addr_to_free_range
 
     while(node)
     {
-        freer = (pfmgr_free_range_t*)node;
+        freer = (struct pfmgr_free_range*)node;
 
         if(pfmgr_in_range(freer->hdr.base, 
                           freer->hdr.len,
@@ -1190,13 +1190,13 @@ static int _pfmgr_free
     void *pv
 )
 {
-    pfmgr_free_range_t *freer      = NULL;
+    struct pfmgr_free_range *freer      = NULL;
     phys_addr_t addr               = 0;
     phys_size_t to_free_pf         = 0;
     int         again              = 0;
     int         err                = 0;
     phys_addr_t next_addr          = 0;
-    pfmgr_cb_data_t cb_dat         = {.avail_bytes = 0, 
+    struct pfmgr_cb_data cb_dat         = {.avail_bytes = 0, 
                                       .used_bytes  = 0,
                                       .phys_base   = 0
                                      };
@@ -1276,19 +1276,19 @@ static int _pfmgr_free
 /* pfmgr_early_init - initializes tracking information */
 void pfmgr_early_init(void)
 {
-    pfmgr_init_t init;
+    struct pfmgr_init_data init;
 
     spinlock_lock(&pfmgr_lock);
 
-    memset(&init, 0, sizeof(pfmgr_init_t));
+    memset(&init, 0, sizeof(struct pfmgr_init_data));
     mem_map_iter(pfmgr_init_busy_callback, &init);
 
-    memset(&init, 0, sizeof(pfmgr_init_t));
+    memset(&init, 0, sizeof(struct pfmgr_init_data));
     mem_map_iter(pfmgr_init_free_callback, &init);
 
     spinlock_unlock(&pfmgr_lock);
 
-    memset(&pfmgr_interface, 0, sizeof(pfmgr_t));
+    memset(&pfmgr_interface, 0, sizeof(struct pfmgr));
     pfmgr_interface.alloc = pfmgr_early_alloc_pf;
 
     kprintf("KERNEL_BEGIN 0x%x KERNEL_END 0x%x\n",_KERNEL_LMA, _KERNEL_LMA_END);
@@ -1300,7 +1300,7 @@ int pfmgr_init(void)
     phys_addr_t     phys = 0;
     virt_size_t     size = 0;
     phys_addr_t     next_phys = 0;
-    pfmgr_range_header_t *hdr = (pfmgr_range_header_t*)VM_INVALID_ADDRESS;
+    struct pfmgr_range_header *hdr = (struct pfmgr_range_header*)VM_INVALID_ADDRESS;
 
 
     linked_list_init(&base.freer);
@@ -1312,7 +1312,7 @@ int pfmgr_init(void)
 
     do
     {
-        hdr = (pfmgr_range_header_t*)pfmgr_early_map(phys);
+        hdr = (struct pfmgr_range_header*)pfmgr_early_map(phys);
         
         if((virt_addr_t)hdr == VM_INVALID_ADDRESS)
         {
@@ -1324,7 +1324,7 @@ int pfmgr_init(void)
                 ALIGN_UP(hdr->struct_len, PAGE_SIZE) : 
                 hdr->struct_len;
                 
-        hdr = (pfmgr_range_header_t*)vm_map(NULL,  
+        hdr = (struct pfmgr_range_header*)vm_map(NULL,  
                                             VM_BASE_AUTO, 
                                             size,
                                             phys,
@@ -1343,13 +1343,13 @@ int pfmgr_init(void)
 
     phys = base.physb_start;
     next_phys = phys;
-    hdr = (pfmgr_range_header_t*)VM_INVALID_ADDRESS;
+    hdr = (struct pfmgr_range_header*)VM_INVALID_ADDRESS;
 
     do
     {
         if((next_phys % PAGE_SIZE) == 0)
         {
-            hdr = (pfmgr_range_header_t*)pfmgr_early_map(phys);
+            hdr = (struct pfmgr_range_header*)pfmgr_early_map(phys);
             
             if((virt_size_t)hdr == VM_INVALID_ADDRESS)
             {
@@ -1360,7 +1360,7 @@ int pfmgr_init(void)
                    ALIGN_UP(hdr->struct_len, PAGE_SIZE) : 
                    hdr->struct_len;
 
-            hdr = (pfmgr_range_header_t*)vm_map(NULL, 
+            hdr = (struct pfmgr_range_header*)vm_map(NULL, 
                                                 VM_BASE_AUTO, 
                                                 size, 
                                                 phys,
@@ -1375,8 +1375,8 @@ int pfmgr_init(void)
         else if((virt_addr_t)hdr != VM_INVALID_ADDRESS)
         {
             /* advance manually */
-            hdr = (pfmgr_range_header_t*)((uint8_t*)hdr + 
-                  sizeof(pfmgr_busy_range_t));
+            hdr = (struct pfmgr_range_header*)((uint8_t*)hdr + 
+                  sizeof(struct pfmgr_busy_range));
         }
 
         if((virt_size_t)hdr != VM_INVALID_ADDRESS)
@@ -1436,14 +1436,14 @@ int pfmgr_show_free_memory
     void
 )
 {
-    pfmgr_free_range_t *freer = NULL;
+    struct pfmgr_free_range *freer = NULL;
     phys_size_t free_mem = 0;
     phys_size_t total_mem = 0;
     int region = 0;
 
     
     kprintf("\nPhysical memory statistics:\n");
-    freer = (pfmgr_free_range_t*)linked_list_first(&base.freer);
+    freer = (struct pfmgr_free_range*)linked_list_first(&base.freer);
     
     while(freer)
     {
@@ -1454,7 +1454,7 @@ int pfmgr_show_free_memory
                 PF_TO_BYTES(freer->avail_pf));
         free_mem += freer->avail_pf;
         total_mem += freer->total_pf;
-        freer = (pfmgr_free_range_t*)linked_list_next(&freer->hdr.node);
+        freer = (struct pfmgr_free_range*)linked_list_next(&freer->hdr.node);
         region++;
     }
 

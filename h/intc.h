@@ -27,7 +27,7 @@
 #define IPI_TRIGGER_EDGE          (0x0)
 #define IPI_TRIGGER_LEVEL          (0x1)
 
-typedef struct ipi_packet_t
+struct ipi_packet
 {
     uint8_t dest_mode;
     uint8_t dest;
@@ -36,16 +36,16 @@ typedef struct ipi_packet_t
     uint8_t vector;
     uint8_t trigger;
     uint32_t dest_cpu;
-}ipi_packet_t;
+};
 
 
-typedef struct intc_api_t
+struct intc_api
 {
-    int  (*enable)          (device_t *);
-    int  (*disable)         (device_t *);
-    int  (*send_ipi)        (device_t *, ipi_packet_t *);
-    int  (*mask)            (device_t *, int);
-    int  (*unmask)          (device_t *, int);
-}intc_api_t;
+    int  (*enable)          (struct device_node *);
+    int  (*disable)         (struct device_node *);
+    int  (*send_ipi)        (struct device_node *, struct ipi_packet *);
+    int  (*mask)            (struct device_node *, int);
+    int  (*unmask)          (struct device_node *, int);
+};
 
 #endif

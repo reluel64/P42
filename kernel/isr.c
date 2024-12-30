@@ -11,18 +11,18 @@
 #include <platform.h>
 #include <sched.h>
 
-typedef struct isr_list_t
+struct isr_list
 {
-    list_head_t head;
-    spinlock_rw_t  lock;
+    struct list_head head;
+    struct spinlock_rw  lock;
 
-}isr_list_t;
+};
 
 
 
-static isr_list_t handlers[MAX_ISR_HANDLERS];
-static isr_list_t eoi;
-static spinlock_t serial_lock;
+static struct isr_list handlers[MAX_ISR_HANDLERS];
+static struct isr_list eoi;
+static struct spinlock serial_lock;
 
 int isr_init(void)
 {
@@ -39,18 +39,18 @@ int isr_init(void)
     return(0);
 }
 
-isr_t *isr_install
+struct isr *isr_install
 (
     interrupt_handler_t ih, 
     void *pv, 
     uint16_t index, 
     uint8_t  is_eoi,
-    isr_t *isr_slot
+    struct isr *isr_slot
 )
 {
-    isr_t      *intr      = NULL;
+    struct isr      *intr      = NULL;
     uint8_t    int_status = 0;
-    isr_list_t *isr_list  = NULL;
+    struct isr_list *isr_list  = NULL;
 
     if((index >= MAX_ISR_HANDLERS) && (is_eoi == 0))
     {
@@ -59,7 +59,7 @@ isr_t *isr_install
 
     if(isr_slot == NULL)
     {
-        intr = kmalloc(sizeof(isr_t));
+        intr = kmalloc(sizeof(struct isr));
 
         if(intr == NULL)
         {
@@ -73,7 +73,7 @@ isr_t *isr_install
         intr = isr_slot;
     }
 
-    memset(intr, 0, sizeof(isr_t));    
+    memset(intr, 0, sizeof(struct isr));    
 
     intr->ih = ih;
     intr->pv = pv;
@@ -99,15 +99,15 @@ isr_t *isr_install
 
 int isr_uninstall
 (
-    isr_t *isr,
+    struct isr *isr,
     uint8_t is_eoi
 )
 {
-    isr_t       *intr       = NULL;
+    struct isr       *intr       = NULL;
     uint8_t     int_status  = 0;
-    list_node_t *node       = NULL;
-    list_node_t *next_node  = NULL;    
-    isr_list_t  *isr_lst    = NULL;
+    struct list_node *node       = NULL;
+    struct list_node *next_node  = NULL;    
+    struct isr_list  *isr_lst    = NULL;
     uint16_t    max_index   = 0;
 
     if(isr == NULL)
@@ -136,7 +136,7 @@ int isr_uninstall
         {
             next_node = linked_list_next(node);
 
-            intr = (isr_t*)node;
+            intr = (struct isr*)node;
 
             if(isr == intr)
             {
@@ -164,10 +164,10 @@ void isr_dispatcher
     virt_addr_t iframe
 )
 {
-    isr_list_t        *int_lst   = NULL;
-    isr_t             *intr      = NULL;
-    list_node_t       *node      = NULL;
-    isr_info_t        inf = {.cpu_id = 0, .iframe = 0, .cpu = NULL};
+    struct isr_list        *int_lst   = NULL;
+    struct isr             *intr      = NULL;
+    struct list_node       *node      = NULL;
+    struct isr_info        inf = {.cpu_id = 0, .iframe = 0, .cpu = NULL};
     int32_t            st = 0;
 
     if(index < MAX_ISR_HANDLERS)
@@ -186,7 +186,7 @@ void isr_dispatcher
 
         while(node)
         {
-            intr = (isr_t*)node;
+            intr = (struct isr*)node;
 
             if(intr->ih)
             {
@@ -210,7 +210,7 @@ void isr_dispatcher
 
         while(node)
         {
-            intr = (isr_t*)node;
+            intr = (struct isr*)node;
 
             if(intr->ih)
             {

@@ -11,23 +11,23 @@
 #include <pfmgr.h>
 #include <vm_extent.h>
  
-extern vm_ctx_t vm_kernel_ctx;
+extern struct vm_ctx vm_kernel_ctx;
 
 static uint32_t vm_extent_avail
 (
-    list_head_t *lh,
+    struct list_head *lh,
     uint32_t  min_avail
 );
 
 static uint8_t vm_extent_joinable
 (
-    list_head_t *lh,
-    vm_extent_t *ext
+    struct list_head *lh,
+    struct vm_extent *ext
 );
 
 int32_t vm_extent_merge_in_hdr
 (
-    vm_extent_hdr_t *hdr
+    struct vm_extent_hdr *hdr
 );
 
 #define VM_SLOT_ALLOC_FLAGS  (VM_ALLOCATED | VM_PERMANENT | \
@@ -35,7 +35,7 @@ int32_t vm_extent_merge_in_hdr
 
 static int vm_extent_alloc_tracking
 (
-    list_head_t *lh,
+    struct list_head *lh,
     uint32_t    ext_per_slot
 )
 {
@@ -43,10 +43,10 @@ static int vm_extent_alloc_tracking
     int           status            = 0;
     uint32_t      alloc_track_avail = 0;
     uint8_t       joinable          = 0;
-    vm_extent_hdr_t *slot             = NULL;
-    vm_extent_t   rem_ext           = VM_EXTENT_INIT;
-    vm_extent_t   alloc_ext         = VM_EXTENT_INIT;
-    vm_extent_t   orig_ext           = 
+    struct vm_extent_hdr *slot             = NULL;
+    struct vm_extent   rem_ext           = VM_EXTENT_INIT;
+    struct vm_extent   alloc_ext         = VM_EXTENT_INIT;
+    struct vm_extent   orig_ext           = 
     {
         .base   = VM_BASE_AUTO, 
         .length = VM_SLOT_SIZE,
@@ -63,7 +63,7 @@ static int vm_extent_alloc_tracking
     }
 
     /* compute the remaining size so that we can insert it back */
-    memcpy(&rem_ext, &orig_ext, sizeof(vm_extent_t));
+    memcpy(&rem_ext, &orig_ext, sizeof(struct vm_extent));
     rem_ext.length -= VM_SLOT_SIZE;
 
     /* calculate the allocation address*/
@@ -152,7 +152,7 @@ static int vm_extent_alloc_tracking
     /* if all went fine so far, try to insert the new slot */
     if(status == 0)
     {
-        slot        = (vm_extent_hdr_t*)alloc_ext.base;
+        slot        = (struct vm_extent_hdr*)alloc_ext.base;
 
         /* init tracking slot */
         vm_extent_header_init(slot, ext_per_slot);
@@ -194,19 +194,19 @@ static int vm_extent_alloc_tracking
 
 static int vm_extent_release_tracking
 (
-    list_head_t *lh,
+    struct list_head *lh,
     uint32_t ext_per_slot,
-    vm_extent_hdr_t *hdr
+    struct vm_extent_hdr *hdr
 )
 {
     int         status           = 0;
     uint8_t     joinable         = 0;
     uint32_t    free_track_avail = 0;
     uint32_t    alloc_track_avail = 0;
-    vm_extent_t orig_extent      = VM_EXTENT_INIT;
-    vm_extent_t free_extent      = VM_EXTENT_INIT;
-    vm_extent_t rem_extent       = VM_EXTENT_INIT;
-    vm_extent_t src_extent       = VM_EXTENT_INIT;
+    struct vm_extent orig_extent      = VM_EXTENT_INIT;
+    struct vm_extent free_extent      = VM_EXTENT_INIT;
+    struct vm_extent rem_extent       = VM_EXTENT_INIT;
+    struct vm_extent src_extent       = VM_EXTENT_INIT;
 
 
     src_extent.base = (virt_addr_t)hdr;
@@ -230,8 +230,8 @@ static int vm_extent_release_tracking
     /* remove the node from the list.*/
     linked_list_remove(lh, &hdr->node);
     
-    memcpy(&orig_extent, &src_extent, sizeof(vm_extent_t));
-    memcpy(&free_extent, &src_extent, sizeof(vm_extent_t));
+    memcpy(&orig_extent, &src_extent, sizeof(struct vm_extent));
+    memcpy(&free_extent, &src_extent, sizeof(struct vm_extent));
  
     free_extent.flags = VM_HIGH_MEM;
     free_extent.prot  = 0;
@@ -432,7 +432,7 @@ static int vm_extent_release_tracking
 
 int vm_extent_alloc_slot
 (
-    list_head_t *lh,
+    struct list_head *lh,
     uint32_t    ext_per_slot
 )
 {
@@ -458,9 +458,9 @@ int vm_extent_alloc_slot
 
 int vm_extent_release_slot
 (
-    list_head_t   *lh,
+    struct list_head   *lh,
     uint32_t      ext_per_slot,
-    vm_extent_hdr_t *slot
+    struct vm_extent_hdr *slot
 )
 {
     int status = 0;
@@ -522,18 +522,18 @@ static inline int vm_is_in_range
 /* insert an extent into a slot */
 int vm_extent_insert
 (
-    list_head_t *lh,
-    const vm_extent_t *ext
+    struct list_head *lh,
+    const struct vm_extent *ext
 )
 {
-    list_node_t      *hdr_ln      = NULL;
-    list_node_t      *next_hdr_ln = NULL;
-    list_node_t      *ext_ln      = NULL;
-    list_node_t      *m_ext_ln    = NULL;
-    vm_extent_hdr_t  *hdr         = NULL;
-    vm_extent_hdr_t  *f_hdr       = NULL;
-    vm_extent_t      *c_ext       = NULL;
-    vm_extent_t      *m_ext       = NULL;
+    struct list_node      *hdr_ln      = NULL;
+    struct list_node      *next_hdr_ln = NULL;
+    struct list_node      *ext_ln      = NULL;
+    struct list_node      *m_ext_ln    = NULL;
+    struct vm_extent_hdr  *hdr         = NULL;
+    struct vm_extent_hdr  *f_hdr       = NULL;
+    struct vm_extent      *c_ext       = NULL;
+    struct vm_extent      *m_ext       = NULL;
 
 
     if((ext->flags & VM_REGION_MASK) == VM_REGION_MASK ||
@@ -550,12 +550,12 @@ int vm_extent_insert
     }
     
     hdr_ln = linked_list_first(lh);
-    f_hdr = (vm_extent_hdr_t*)hdr_ln;
+    f_hdr = (struct vm_extent_hdr*)hdr_ln;
     /* Start finding a free slot */
     while(hdr_ln)
     {
         next_hdr_ln = linked_list_next(hdr_ln);
-        hdr = (vm_extent_hdr_t*)hdr_ln;
+        hdr = (struct vm_extent_hdr*)hdr_ln;
 
         if(((linked_list_count(&hdr->avail_ext) > 0) &&
            (linked_list_count(&hdr->avail_ext) < 
@@ -572,7 +572,7 @@ int vm_extent_insert
 
         while(ext_ln)
         {
-            c_ext = (vm_extent_t*)ext_ln;
+            c_ext = (struct vm_extent*)ext_ln;
 
             if(vm_extent_join(ext, c_ext) == VM_OK)
             {
@@ -583,7 +583,7 @@ int vm_extent_insert
 
                 while(m_ext_ln)
                 {
-                    m_ext = (vm_extent_t*)m_ext_ln;
+                    m_ext = (struct vm_extent*)m_ext_ln;
 
                     if(vm_extent_join(m_ext, c_ext) == VM_OK)
                     {
@@ -609,7 +609,7 @@ int vm_extent_insert
     if(f_hdr != NULL)
     {
         /* remove the extent from the free extents */
-        c_ext = (vm_extent_t*)linked_list_get_last(&f_hdr->avail_ext);
+        c_ext = (struct vm_extent*)linked_list_get_last(&f_hdr->avail_ext);
 
         if(c_ext != NULL)
         {
@@ -626,15 +626,15 @@ int vm_extent_insert
 
 int vm_extent_extract
 (
-    list_head_t *lh,
-    vm_extent_t *ext
+    struct list_head *lh,
+    struct vm_extent *ext
 )
 {
-    list_node_t      *hdr_ln      = NULL;
-    list_node_t      *ext_ln      = NULL;
-    vm_extent_hdr_t *hdr     = NULL;
-    vm_extent_t   *best    = NULL;
-    vm_extent_t   *cext    = NULL;
+    struct list_node      *hdr_ln      = NULL;
+    struct list_node      *ext_ln      = NULL;
+    struct vm_extent_hdr *hdr     = NULL;
+    struct vm_extent   *best    = NULL;
+    struct vm_extent   *cext    = NULL;
     int           found    = 0;
 
     /* no length? no entry */
@@ -648,13 +648,13 @@ int vm_extent_extract
 
     while(hdr_ln)
     {
-        hdr = (vm_extent_hdr_t*)hdr_ln;
+        hdr = (struct vm_extent_hdr*)hdr_ln;
 
         ext_ln = linked_list_first(&hdr->busy_ext);
 
         while(ext_ln)
         {
-            cext = (vm_extent_t*)ext_ln;
+            cext = (struct vm_extent*)ext_ln;
 
             if(ext->base != VM_BASE_AUTO)
             {
@@ -715,7 +715,7 @@ int vm_extent_extract
     linked_list_remove(&hdr->busy_ext, &best->node);
 
     /* wipe the memory of the extent */
-    memset(best, 0, sizeof(vm_extent_t));
+    memset(best, 0, sizeof(struct vm_extent));
     
     /* add the extent to the available extent list */
     linked_list_add_tail(&hdr->avail_ext, &best->node);    
@@ -740,10 +740,10 @@ int vm_extent_extract
 
 int vm_extent_split
 (
-    vm_extent_t *ext_left,
+    struct vm_extent *ext_left,
     const virt_addr_t virt_mid,
     const virt_size_t len_mid,
-    vm_extent_t *ext_right
+    struct vm_extent *ext_right
 )
 {
 
@@ -799,8 +799,8 @@ int vm_extent_split
 
 static int vm_extent_can_join
 (
-    const vm_extent_t *src,
-    const vm_extent_t *dest
+    const struct vm_extent *src,
+    const struct vm_extent *dest
 )
 {
     if(src->prot != dest->prot)
@@ -829,8 +829,8 @@ static int vm_extent_can_join
 
 int vm_extent_join
 (
-    const vm_extent_t *src,
-    vm_extent_t *dest
+    const struct vm_extent *src,
+    struct vm_extent *dest
 )
 {
     int can_join = 0;
@@ -867,18 +867,18 @@ int vm_extent_join
 
 int vm_extent_merge
 (
-    list_head_t *lh
+    struct list_head *lh
 )
 {
-    list_node_t   *src_hdr_ln  = NULL;
-    list_node_t   *dst_hdr_ln  = NULL;
-    list_node_t   *src_ext_ln = NULL;
-    list_node_t   *dst_ext_ln = NULL;
+    struct list_node   *src_hdr_ln  = NULL;
+    struct list_node   *dst_hdr_ln  = NULL;
+    struct list_node   *src_ext_ln = NULL;
+    struct list_node   *dst_ext_ln = NULL;
     
-    vm_extent_hdr_t *src_hdr = NULL;
-    vm_extent_hdr_t *dst_hdr = NULL;
-    vm_extent_t   *src_ext = NULL;
-    vm_extent_t   *dst_ext = NULL;
+    struct vm_extent_hdr *src_hdr = NULL;
+    struct vm_extent_hdr *dst_hdr = NULL;
+    struct vm_extent   *src_ext = NULL;
+    struct vm_extent   *dst_ext = NULL;
     int            status   = VM_FAIL;
 
     if(lh == NULL)
@@ -890,24 +890,24 @@ int vm_extent_merge
 
     while(dst_hdr_ln)
     {
-        dst_hdr = (vm_extent_hdr_t*)dst_hdr_ln;
+        dst_hdr = (struct vm_extent_hdr*)dst_hdr_ln;
         dst_ext_ln = linked_list_first(&dst_hdr->busy_ext);
 
         while(dst_ext_ln)
         {
-            dst_ext = (vm_extent_t*)dst_ext_ln;
+            dst_ext = (struct vm_extent*)dst_ext_ln;
 
             src_hdr_ln = linked_list_first(lh);
 
             while(src_hdr_ln)
             {
-                src_hdr = (vm_extent_hdr_t*)src_hdr_ln;
+                src_hdr = (struct vm_extent_hdr*)src_hdr_ln;
 
                 src_ext_ln = linked_list_first(&src_hdr->busy_ext);
 
                 while(src_ext_ln)
                 {
-                    src_ext = (vm_extent_t*) src_ext_ln;
+                    src_ext = (struct vm_extent*) src_ext_ln;
 
                     if(vm_extent_can_join(src_ext, dst_ext))
                     {
@@ -934,19 +934,19 @@ int vm_extent_merge
 
 static uint32_t vm_extent_avail
 (
-    list_head_t *lh,
+    struct list_head *lh,
     uint32_t  min_avail
 )
 {
-    vm_extent_hdr_t *hdr = NULL;
-    list_node_t   *node = NULL;
+    struct vm_extent_hdr *hdr = NULL;
+    struct list_node   *node = NULL;
     uint32_t      free_slots = 0;
 
     node = linked_list_first(lh);
 
     while(node)
     {
-        hdr = (vm_extent_hdr_t*)node;
+        hdr = (struct vm_extent_hdr*)node;
 
         free_slots += linked_list_count(&hdr->avail_ext);
 
@@ -966,27 +966,27 @@ static uint32_t vm_extent_avail
 
 static uint8_t vm_extent_joinable
 (
-    list_head_t *lh,
-    vm_extent_t *ext
+    struct list_head *lh,
+    struct vm_extent *ext
 )
 {
     uint8_t joinable = 0;
-    vm_extent_hdr_t *hdr = NULL;
-    vm_extent_t   *pext = NULL;
-    list_node_t *ln = NULL;
-    list_node_t *en = NULL;
+    struct vm_extent_hdr *hdr = NULL;
+    struct vm_extent   *pext = NULL;
+    struct list_node *ln = NULL;
+    struct list_node *en = NULL;
 
     ln = linked_list_first(lh);
 
     while(ln)
     {
-        hdr = (vm_extent_hdr_t*) ln;
+        hdr = (struct vm_extent_hdr*) ln;
 
         en = linked_list_first(&hdr->busy_ext);
 
         while(en)
         {
-            pext = (vm_extent_t*)en;
+            pext = (struct vm_extent*)en;
             
             if(vm_extent_can_join(ext, pext) > 0)
             {
@@ -1004,24 +1004,24 @@ static uint8_t vm_extent_joinable
 
 int32_t vm_extent_merge_in_hdr
 (
-    vm_extent_hdr_t *hdr
+    struct vm_extent_hdr *hdr
 )
 {
-    list_node_t *src_ln = NULL;
-    list_node_t *dst_ln = NULL;
-    vm_extent_t *dext = NULL;
-    vm_extent_t *sext = NULL;
+    struct list_node *src_ln = NULL;
+    struct list_node *dst_ln = NULL;
+    struct vm_extent *dext = NULL;
+    struct vm_extent *sext = NULL;
 
     dst_ln = linked_list_first(&hdr->busy_ext);
 
     while(dst_ln)
     {
-        dext = (vm_extent_t*)dst_ln;
+        dext = (struct vm_extent*)dst_ln;
         src_ln = linked_list_next(dst_ln);
 
         while(src_ln)
         {
-            sext = (vm_extent_t*)src_ln;
+            sext = (struct vm_extent*)src_ln;
 
             if(vm_extent_join(sext, dext) == VM_OK)
             {
@@ -1040,15 +1040,15 @@ int32_t vm_extent_merge_in_hdr
 
 void vm_extent_header_init
 (
-    vm_extent_hdr_t *hdr,
+    struct vm_extent_hdr *hdr,
     uint32_t extent_count
 )
 {
     if(hdr != NULL)
     {
         kprintf("New header alloc %x\n", hdr);
-        memset(hdr, 0, sizeof(vm_extent_hdr_t) + 
-                       (extent_count * sizeof(vm_extent_t)));
+        memset(hdr, 0, sizeof(struct vm_extent_hdr) + 
+                       (extent_count * sizeof(struct vm_extent)));
 
         hdr->extent_count = extent_count;
 
@@ -1062,8 +1062,8 @@ void vm_extent_header_init
 
 void vm_extent_copy
 (
-    vm_extent_t *dst,
-    const vm_extent_t *src
+    struct vm_extent *dst,
+    const struct vm_extent *src
 )
 {
     dst->base = src->base;

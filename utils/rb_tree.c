@@ -5,13 +5,13 @@
 
 uint32_t rb_tree_find
 (
-    rb_tree_t *tree, 
+    struct rb_tree *tree, 
     rb_tree_commpare cmp_func, 
     void *key,
-    rb_node_t **result
+    struct rb_node **result
 )
 {
-    rb_node_t *node = NULL;
+    struct rb_node *node = NULL;
     int cmp_result = 0;
     uint32_t status = -1;
 
@@ -46,9 +46,9 @@ uint32_t rb_tree_find
 
 static void rb_transplant
 (
-    rb_tree_t *t,
-    rb_node_t *u,
-    rb_node_t *v
+    struct rb_tree *t,
+    struct rb_node *u,
+    struct rb_node *v
 )
 {
     if(u->parent == &t->nil)
@@ -67,10 +67,10 @@ static void rb_transplant
     v->parent = u->parent;
 }
 
-rb_node_t *rb_tree_minimum
+struct rb_node *rb_tree_minimum
 (
-    rb_tree_t *t,
-    rb_node_t *x
+    struct rb_tree *t,
+    struct rb_node *x
 )
 {
     while(x->left != &t->nil)
@@ -81,10 +81,10 @@ rb_node_t *rb_tree_minimum
     return(x);
 }
 
-rb_node_t *rb_tree_maximum
+struct rb_node *rb_tree_maximum
 (
-    rb_tree_t *t,
-    rb_node_t *x
+    struct rb_tree *t,
+    struct rb_node *x
 )
 {
     while(x->right != &t->nil)
@@ -97,11 +97,11 @@ rb_node_t *rb_tree_maximum
 
 static void rb_left_rotate
 (
-    rb_tree_t *t,
-    rb_node_t *x
+    struct rb_tree *t,
+    struct rb_node *x
 )
 {
-    rb_node_t *y = NULL;
+    struct rb_node *y = NULL;
 
     y = x->right;
     x->right = y->left;
@@ -132,11 +132,11 @@ static void rb_left_rotate
 
 static void rb_right_rotate
 (
-    rb_tree_t *t,
-    rb_node_t *x
+    struct rb_tree *t,
+    struct rb_node *x
 )
 {
-    rb_node_t *y = NULL;
+    struct rb_node *y = NULL;
 
     y = x->left;
     x->left = y->right;
@@ -167,11 +167,11 @@ static void rb_right_rotate
 
 static void rb_insert_fixup
 (
-    rb_tree_t *t,
-    rb_node_t *z
+    struct rb_tree *t,
+    struct rb_node *z
 )
 {
-    rb_node_t *y = NULL;
+    struct rb_node *y = NULL;
     
     while( z->parent->color == RED)
     {
@@ -229,11 +229,11 @@ static void rb_insert_fixup
 
 static void rb_delete_fixup
 (
-    rb_tree_t *t,
-    rb_node_t *x
+    struct rb_tree *t,
+    struct rb_node *x
 )
 {
-    rb_node_t *w = NULL;
+    struct rb_node *w = NULL;
 
     while(x != t->root && x->color == BLACK)
     {
@@ -310,15 +310,15 @@ static void rb_delete_fixup
 
 int rb_insert
 (
-    rb_tree_t *t,
-    rb_node_t *z,
+    struct rb_tree *t,
+    struct rb_node *z,
     rb_tree_commpare cmp,
     void *cmp_pv
     
 )
 {
-    rb_node_t *x = NULL;
-    rb_node_t *y = NULL;
+    struct rb_node *x = NULL;
+    struct rb_node *y = NULL;
     int cmp_result = 0;
     int result = -1;
     uint8_t found = 0;
@@ -375,12 +375,12 @@ int rb_insert
 
 int rb_delete
 (
-    rb_tree_t *t,
-    rb_node_t *z
+    struct rb_tree *t,
+    struct rb_node *z
 )
 {
-    rb_node_t *x = NULL;
-    rb_node_t *y = NULL;
+    struct rb_node *x = NULL;
+    struct rb_node *y = NULL;
     rb_color_t y_orig_color = BLACK;
 
     y = z;
@@ -429,7 +429,7 @@ int rb_delete
 
 void rb_tree_init
 (
-    rb_tree_t *t
+    struct rb_tree *t
 )
 {
     t->nil.color = BLACK;

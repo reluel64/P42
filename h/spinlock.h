@@ -7,103 +7,103 @@
 #define SPINLOCK_INIT {.lock = 0};
 #define SPINLOCK_RW_INIT {.lock = UINT32_MAX};
 
-typedef struct spinlock_t
+struct spinlock
 {
     volatile uint32_t lock;
-}spinlock_t;
+};
 
-typedef struct spinlock_rw_t
+struct spinlock_rw
 {
     volatile uint32_t lock;
-}spinlock_rw_t;
+};
 
 
 
 void spinlock_init
 (
-    spinlock_t *s
+    struct spinlock *s
 );
 
 void spinlock_lock
 (
-    spinlock_t *s
+    struct spinlock *s
 );
 
-int8_t spinlock_trylock
+int8_t spinlock_try_lock
 (
-    spinlock_t *s
+    struct spinlock *s
 );
 
 void spinlock_unlock
 (
-    spinlock_t *s
+    struct spinlock *s
 );
 
 void spinlock_unlock_int
 (
-    spinlock_t *s, 
+    struct spinlock *s, 
     uint8_t flag
 );
 
 void spinlock_lock_int
 (
-    spinlock_t *s, 
+    struct spinlock *s, 
     uint8_t *flag
 );
 
-int8_t spinlock_trylock_int
+int8_t spinlock_try_lock_int
 (
-    spinlock_t *s, 
+    struct spinlock *s, 
     uint8_t *flag
 )
 ;
 void spinlock_write_unlock_int
 (
-    spinlock_rw_t *s,
+    struct spinlock_rw *s,
     uint8_t flag
 );
 
 void spinlock_write_lock_int
 (
-    spinlock_rw_t *s, 
+    struct spinlock_rw *s, 
     uint8_t *flag
 );
 
 void spinlock_read_unlock_int
 (
-    spinlock_rw_t *s, 
+    struct spinlock_rw *s, 
     uint8_t flag
 );
 
 void spinlock_read_lock_int
 (
-    spinlock_rw_t *s, 
+    struct spinlock_rw *s, 
     uint8_t *flag
 );
 
 void spinlock_rw_init
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 );
 
 void spinlock_write_unlock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 );
 
 void spinlock_write_lock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 );
 
 void spinlock_read_unlock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 );
 
 void spinlock_read_lock
 (
-    spinlock_rw_t *s
+    struct spinlock_rw *s
 );
 
 #endif

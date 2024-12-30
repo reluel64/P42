@@ -18,8 +18,8 @@ static int thread_setup
     void             *owner
 )
 {
-    sched_thread_t *th = NULL;
-    sched_owner_t  *ow  = NULL;
+    struct sched_thread *th = NULL;
+    struct sched_owner  *ow  = NULL;
     virt_addr_t    stack_origin = 0;
     virt_size_t    stack_size = 0;
     uint32_t       mem_flags = 0;
@@ -75,7 +75,7 @@ static int thread_setup
                   NULL);
 
     /* Clear memory */
-    memset(th, 0, sizeof(sched_thread_t));
+    memset(th, 0, sizeof(struct sched_thread));
 
     th->prio         = prio;
     th->arg          = arg;
@@ -119,7 +119,7 @@ static int thread_setup
 
 int thread_start
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
     return(sched_start_thread(th));
@@ -169,7 +169,7 @@ void *thread_create
     void      *owner
 )
 {
-    sched_thread_t *th = NULL;
+    struct sched_thread *th = NULL;
     int status = 0;
 
     if((owner == NULL) || (entry_pt == NULL))
@@ -177,7 +177,7 @@ void *thread_create
         return(NULL);
     }
 
-    th = kcalloc(sizeof(sched_thread_t), 1);
+    th = kcalloc(sizeof(struct sched_thread), 1);
 
     if(th != NULL)
     {
@@ -211,7 +211,7 @@ void *kthread_create
     cpu_aff_t *affinity
 )
 {
-    sched_owner_t *ko = NULL;
+    struct sched_owner *ko = NULL;
     void *th_ret = NULL;
 
     ko = owner_kernel_get();
@@ -239,7 +239,7 @@ int kthread_create_static
 )
 {
     int th_ret = 0;
-    sched_owner_t *ko = NULL;
+    struct sched_owner *ko = NULL;
     
     ko = owner_kernel_get();
 

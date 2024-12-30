@@ -15,19 +15,19 @@
 #define PHYS_ALLOC_CB_STOP       (1 << 4)
 #define PHYS_ALLOC_PREFERED_ADDR (1 << 5)
 
-typedef struct pfmgr_cb_data_t pfmgr_cb_data_t;
+struct pfmgr_cb_data;
 
-typedef int (*alloc_cb)(pfmgr_cb_data_t *cb_dat, void *pv);
-typedef int (*free_cb) (pfmgr_cb_data_t *cb_dat, void *pv);
+typedef int (*alloc_cb)(struct pfmgr_cb_data *cb_dat, void *pv);
+typedef int (*free_cb) (struct pfmgr_cb_data *cb_dat, void *pv);
 
-typedef struct pfmgr_cb_data_t
+struct pfmgr_cb_data
 {
     phys_addr_t phys_base;
     phys_size_t avail_bytes;
     phys_size_t used_bytes;
-}pfmgr_cb_data_t;
+};
 
-typedef struct pfmgr_t
+struct pfmgr
 {
     int  (*alloc)
     (
@@ -44,41 +44,40 @@ typedef struct pfmgr_t
         void *pv
     );
 
-}pfmgr_t;
+};
 
-typedef struct pfmgr_base_t
+struct pfmgr_base
 {
     uint32_t domain_count;
     phys_addr_t physf_start;
     phys_addr_t physb_start;
-    list_head_t freer;
-    list_head_t busyr;
-}pfmgr_base_t;
+    struct list_head freer;
+    struct list_head busyr;
+};
 
-typedef struct pfmgr_range_header_t
+struct pfmgr_range_header
 {
-    list_node_t node;
+    struct list_node node;
     phys_addr_t next_range;
     phys_addr_t base;
     phys_size_t len;
     phys_size_t struct_len;
     uint32_t type;
-}pfmgr_range_header_t;
+};
 
-typedef struct pfmgr_free_range_t
+struct pfmgr_free_range
 {
-    pfmgr_range_header_t hdr;
+    struct pfmgr_range_header hdr;
     phys_size_t total_pf;
     phys_size_t avail_pf;
     phys_size_t next_lkup;
     phys_addr_t bmp[0];
-}pfmgr_free_range_t;
+};
 
-typedef struct pfmgr_busy_range_t
+struct pfmgr_busy_range
 {
-    pfmgr_range_header_t hdr;
-    
-}pfmgr_busy_range_t;
+    struct pfmgr_range_header hdr;
+};
 
 
 void pfmgr_early_init

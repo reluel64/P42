@@ -13,7 +13,7 @@ extern void __context_switch
 
 static void context_user_setup
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
     void *user_entry_pt = NULL;
@@ -32,12 +32,12 @@ static void context_user_setup
 
 int context_init
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
-    sched_owner_t *owner     = NULL;
+    struct sched_owner *owner     = NULL;
     virt_addr_t   *context   = NULL;
-    vm_ctx_t      *vm_ctx    = NULL;
+    struct vm_ctx      *vm_ctx    = NULL;
     virt_addr_t   rsp0       = 0;
     /* virt_addr_t   *user_start = NULL; */
 
@@ -105,12 +105,12 @@ int context_init
 
 int context_destroy
 (
-    sched_thread_t *th
+    struct sched_thread *th
 )
 {
-    sched_owner_t *owner     = NULL;
+    struct sched_owner *owner     = NULL;
     virt_addr_t   *context   = NULL;
-    vm_ctx_t      *vm_ctx    = NULL;
+    struct vm_ctx      *vm_ctx    = NULL;
     virt_size_t   rsp0       = 0;
 
     if(th == NULL)
@@ -145,8 +145,8 @@ int context_destroy
 
 void context_switch
 (
-    sched_thread_t *prev,
-    sched_thread_t *next
+    struct sched_thread *prev,
+    struct sched_thread *next
 )
 {
     if(prev != NULL)

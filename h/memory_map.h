@@ -8,7 +8,7 @@
 #define MEMORY_ENABLED          0x1
 
 
-typedef struct 
+struct memory_map_entry
 {
     uint64_t base;
     uint64_t length;
@@ -16,10 +16,10 @@ typedef struct
     uint32_t extended;
     uint32_t domain;
     uint32_t flags;
-}memory_map_entry_t;
+};
 
 int mem_map_iter
 (
-    void (*callback)(memory_map_entry_t *mmap,void *pv),
+    void (*callback)(struct memory_map_entry *mmap,void *pv),
     void *pv
 );

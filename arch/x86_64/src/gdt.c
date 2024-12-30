@@ -8,8 +8,8 @@ extern void __lgdt(void *gdt);
 extern void __ltr(uint64_t segment);
 extern void __flush_gdt(void);
 
-#define GDT_ENTRY_SIZE (sizeof(gdt_entry_t))
-#define TSS_ENTRY_SIZE (sizeof(tss64_entry_t))
+#define GDT_ENTRY_SIZE (sizeof(struct gdt_entry))
+#define TSS_ENTRY_SIZE (sizeof(struct tss64_entry))
 
 #define GDT_COUNT (16)
 #define GDT_TABLE_SIZE (GDT_COUNT * GDT_ENTRY_SIZE)
@@ -23,7 +23,7 @@ static int gdt_entry_encode
     uint64_t base,
     uint32_t limit,
     uint32_t flags,
-    gdt_entry_t *gdt_entry
+    struct gdt_entry *gdt_entry
 )
 {
     /* No way */
@@ -32,7 +32,7 @@ static int gdt_entry_encode
         return (-1);
     }
     
-    memset(gdt_entry, 0, sizeof(gdt_entry_t));
+    memset(gdt_entry, 0, sizeof(struct gdt_entry));
 
     /* set the base linear address */
     gdt_entry->base_high = ((base >> 24) & 0xff);
@@ -60,11 +60,11 @@ static int gdt_entry_encode
 
 int gdt_per_cpu_init(void *cpu_pv)
 {
-    cpu_platform_t *cpu      = NULL;
+    struct cpu_platform *cpu      = NULL;
     uint32_t        flags    = 0;
-    gdt_entry_t    *gdt      = NULL;
-    tss64_entry_t  *tss      = NULL;
-    gdt_ptr_t       gdt_ptr  = {.limit = 0, .addr = 0};
+    struct gdt_entry    *gdt      = NULL;
+    struct tss64_entry *tss      = NULL;
+    struct gdt_ptr       gdt_ptr  = {.limit = 0, .addr = 0};
     uint8_t        *desc_mem = NULL;
 
     desc_mem = (uint8_t*)vm_alloc(NULL, 
@@ -79,8 +79,8 @@ int gdt_per_cpu_init(void *cpu_pv)
     }
 
     cpu = cpu_pv;
-    gdt = (gdt_entry_t *)desc_mem;
-    tss = (tss64_entry_t*)(desc_mem + GDT_TABLE_SIZE);
+    gdt = (struct gdt_entry *)desc_mem;
+    tss = (struct tss64_entry*)(desc_mem + GDT_TABLE_SIZE);
 
 
     memset(desc_mem, 0, DESC_MEM_ALLOC);
@@ -131,7 +131,7 @@ int gdt_per_cpu_init(void *cpu_pv)
     tss->io_map = sizeof(tss);
 
 
-    gdt_entry_encode((uint64_t)tss, sizeof(tss64_entry_t) - 1, flags, &gdt[5]);
+    gdt_entry_encode((uint64_t)tss, sizeof(struct tss64_entry) - 1, flags, &gdt[5]);
 
     /* Yes, TSS takes two GDT entrties */
     ((uint64_t *)gdt)[6] = (((uint64_t)tss) >> 32);
@@ -156,7 +156,7 @@ void gdt_update_tss
     virt_addr_t rsp0
 )
 {
-    cpu_platform_t *cpu = NULL;
+    struct cpu_platform *cpu = NULL;
 
     cpu = cpu_pv;
     cpu->tss->rsp0_low = rsp0 & UINT32_MAX;

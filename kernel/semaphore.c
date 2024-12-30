@@ -4,9 +4,9 @@
 #include <sched.h>
 #include <semaphore.h>
 
-sem_t *sem_init
+struct sem *sem_init
 (
-    sem_t *sem, 
+    struct sem *sem, 
     uint32_t init_val, 
     uint32_t max_count
 )
@@ -27,16 +27,16 @@ sem_t *sem_init
     return(sem);
 }
 
-sem_t *sem_create
+struct sem *sem_create
 (
     uint32_t init_val, 
     uint32_t max_count
 )
 {
-    sem_t *sem = NULL;
-    sem_t *ret_sem = NULL;
+    struct sem *sem = NULL;
+    struct sem *ret_sem = NULL;
 
-    sem = kcalloc(1, sizeof(sem_t));
+    sem = kcalloc(1, sizeof(struct sem));
 
     ret_sem = sem_init(sem, init_val, max_count);
 
@@ -51,12 +51,12 @@ sem_t *sem_create
 
 int sem_acquire
 (
-    sem_t *sem, 
+    struct sem *sem, 
     uint32_t wait_ms
 )
 {
     uint8_t         int_state = 0;
-    sched_thread_t *thread = NULL;
+    struct sched_thread *thread = NULL;
     uint32_t        looped = 0;
 
     if(sem == NULL)
@@ -130,12 +130,12 @@ int sem_acquire
 
 int sem_release
 (
-    sem_t *sem
+    struct sem *sem
 )
 {
     uint8_t           int_state  = 0;
-    sched_thread_t    *thread    = NULL;
-    list_node_t       *pend_node = NULL;
+    struct sched_thread    *thread    = NULL;
+    struct list_node       *pend_node = NULL;
     
     if(sem == NULL)
     {

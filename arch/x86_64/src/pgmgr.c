@@ -17,17 +17,18 @@
 #include <intc.h>
 #include <pfmgr.h>
 
-typedef struct pgmgr_t
+struct pgmgr
 {
     virt_addr_t remap_tbl;
     uint8_t     pml5_support;
     uint8_t     nx_support;
     
-    pat_t pat;
-    isr_t fault_isr;
-    isr_t inv_isr;
+    union pat pat;
+    struct isr fault_isr;
+    struct isr inv_isr;
     uint8_t kernel_ctx_init;
-}pgmgr_t;
+};
+
 #define PGMGR_DEBUG
 /* for reference if in future we might want to also align the length */
 #if 0
@@ -37,18 +38,18 @@ typedef struct pgmgr_t
 
 
 /* locals */
-static pgmgr_t pgmgr;
+static struct pgmgr pgmgr;
 
 static int         pgmgr_page_fault_handler
 (
     void *pv, 
-    isr_info_t *inf
+    struct isr_info *inf
 );
 
 static int         pgmgr_per_cpu_invl_handler
 (
     void *pv, 
-    isr_info_t *inf
+    struct isr_info *inf
 );
 
 static virt_addr_t _pgmgr_temp_map
@@ -143,7 +144,7 @@ static int pgmgr_pml5_is_enabled(void)
 
 static int pgmgr_alloc_pf_cb
 (
-    pfmgr_cb_data_t *cb_dat,
+    struct pfmgr_cb_data *cb_dat,
     void *pv
 )
 {
@@ -169,7 +170,7 @@ static int pgmgr_alloc_pf(phys_addr_t *pf)
 
 static int pgmgr_free_pf_cb
 (
-    pfmgr_cb_data_t *cb_dat,
+    struct pfmgr_cb_data *cb_dat,
     void *pv
 )
 {
@@ -290,7 +291,7 @@ static int pgmgr_attr_translate
 
 static void pgmgr_clear_pt
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     phys_addr_t addr
 )
 {
@@ -326,7 +327,7 @@ static int pgmgr_level_is_empty
 
 static int pgmgr_level_entry_is_empty
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     phys_addr_t addr
 )
 {
@@ -346,9 +347,9 @@ static int pgmgr_level_entry_is_empty
 
 static void pgmgr_iter_free_level
 (
-    pgmgr_iter_callback_data_t *iter_dat,
-    pgmgr_level_data_t *ld,
-    pfmgr_cb_data_t *pfmgr_dat,
+    struct pgmgr_iter_callback_data *iter_dat,
+    struct pgmgr_level_data *ld,
+    struct pfmgr_cb_data *pfmgr_dat,
     uint32_t op
 )
 {
@@ -441,13 +442,13 @@ static void pgmgr_iter_free_level
 
 static void pgmgr_iter_alloc_level
 (
-    pgmgr_iter_callback_data_t *iter_dat,
-    pgmgr_level_data_t *ld,
-    pfmgr_cb_data_t *pfmgr_dat,
+    struct pgmgr_iter_callback_data *iter_dat,
+    struct pgmgr_level_data *ld,
+    struct pfmgr_cb_data *pfmgr_dat,
     uint32_t op
 )
 {
-    pgmgr_ctx_t *ctx = NULL;
+    struct pgmgr_ctx *ctx = NULL;
     
     ctx       = ld->ctx;
 
@@ -494,9 +495,9 @@ static void pgmgr_iter_alloc_level
 
 static void pgmgr_iter_free_page
 (
-    pgmgr_iter_callback_data_t *iter_dat,
-    pgmgr_level_data_t *ld,
-    pfmgr_cb_data_t *pfmgr_dat,
+    struct pgmgr_iter_callback_data *iter_dat,
+    struct pgmgr_level_data *ld,
+    struct pfmgr_cb_data *pfmgr_dat,
     uint32_t op
 )
 {
@@ -563,9 +564,9 @@ static void pgmgr_iter_free_page
 
 static void pgmgr_iter_alloc_page
 (
-    pgmgr_iter_callback_data_t *iter_dat,
-    pgmgr_level_data_t *ld,
-    pfmgr_cb_data_t *pfmgr_dat,
+    struct pgmgr_iter_callback_data *iter_dat,
+    struct pgmgr_level_data *ld,
+    struct pfmgr_cb_data *pfmgr_dat,
     uint32_t op
 )
 {
@@ -613,9 +614,9 @@ static void pgmgr_iter_alloc_page
  */
 static void pgmgr_iter_change_attribs
 (
-    pgmgr_iter_callback_data_t *iter_dat,
-    pgmgr_level_data_t *ld,
-    pfmgr_cb_data_t *pfmgr_dat,
+    struct pgmgr_iter_callback_data *iter_dat,
+    struct pgmgr_level_data *ld,
+    struct pfmgr_cb_data *pfmgr_dat,
     uint32_t op
 )
 {
@@ -652,15 +653,15 @@ static void pgmgr_iter_change_attribs
 
 static int pgmgr_iterate_levels
 (
-    pfmgr_cb_data_t *pfmgr_dat,
+    struct pfmgr_cb_data *pfmgr_dat,
     void            *pv
 )
 {
-    pgmgr_level_data_t *ld        = NULL;
-    pgmgr_ctx_t       *ctx        = NULL;
+    struct pgmgr_level_data *ld        = NULL;
+    struct pgmgr_ctx       *ctx        = NULL;
     uint8_t            step_up    = 0;
     
-    pgmgr_iter_callback_data_t it_dat = {
+    struct pgmgr_iter_callback_data it_dat = {
                                             .entry = 0,
                                             .step = 0,
                                             .next_vaddr = 0,
@@ -915,10 +916,10 @@ static int pgmgr_iterate_levels
 
 static int pgmgr_setup_remap_table
 (
-    pgmgr_ctx_t *ctx
+    struct pgmgr_ctx *ctx
 )
 {
-    pgmgr_level_data_t lvl_dat;
+    struct pgmgr_level_data lvl_dat;
     uint8_t curr_level = 0;
     virt_addr_t *level    = NULL;
     phys_addr_t addr      = 0;
@@ -983,13 +984,13 @@ static int pgmgr_setup_remap_table
 
 int pgmgr_allocate_backend
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len
 )
 {
-    pgmgr_level_data_t ld;
+    struct pgmgr_level_data ld;
     int status = 0;
 
     /* Create the tables */
@@ -1024,13 +1025,13 @@ int pgmgr_allocate_backend
 
 int pgmgr_release_backend
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len
 )
 {
-    pgmgr_level_data_t ld;
+    struct pgmgr_level_data ld;
     int status = 0;
 
     /* Release pages */
@@ -1062,7 +1063,7 @@ int pgmgr_release_backend
 
 int pgmgr_allocate_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len,
@@ -1071,7 +1072,7 @@ int pgmgr_allocate_pages
 )
 {
     phys_addr_t        attr_mask = 0;
-    pgmgr_level_data_t ld;
+    struct pgmgr_level_data ld;
     uint8_t            pfmgr_flags = PHYS_ALLOC_CB_STOP;
     int                status = 0;
     
@@ -1117,13 +1118,13 @@ int pgmgr_allocate_pages
 
 int pgmgr_release_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len
 )
 {
-    pgmgr_level_data_t ld;
+    struct pgmgr_level_data ld;
     int status = 0;
 
     /* Release pages */
@@ -1155,7 +1156,7 @@ int pgmgr_release_pages
 
 int pgmgr_map_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t      *out_len,
@@ -1163,9 +1164,9 @@ int pgmgr_map_pages
     phys_addr_t phys
 )
 {
-    pgmgr_level_data_t ld;
+    struct pgmgr_level_data ld;
     phys_addr_t attr_mask = 0;
-    pfmgr_cb_data_t mem = {.avail_bytes = 0, .phys_base = 0, .used_bytes = 0};
+    struct pfmgr_cb_data mem = {.avail_bytes = 0, .phys_base = 0, .used_bytes = 0};
     int status = 0;
 
     pgmgr_attr_translate(&attr_mask, vm_attr);
@@ -1200,14 +1201,14 @@ int pgmgr_map_pages
 
 int pgmgr_unmap_pages
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t req_len,
     virt_size_t *out_len
 )
 {
-    pfmgr_cb_data_t mem = {.avail_bytes = 0, .phys_base = 0, .used_bytes = 0};
-    pgmgr_level_data_t ld;
+    struct pfmgr_cb_data mem = {.avail_bytes = 0, .phys_base = 0, .used_bytes = 0};
+    struct pgmgr_level_data ld;
     int status = 0;
 
     /* Unmap pages */
@@ -1247,23 +1248,23 @@ int pgmgr_unmap_pages
 
 int pgmgr_change_attrib
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr, 
     virt_size_t len, 
     uint32_t attr
 )
 {
 
-    pgmgr_level_data_t ld;
+    struct pgmgr_level_data ld;
     phys_addr_t attr_mask;
-    pfmgr_cb_data_t cb_data = {.avail_bytes = 0,
+    struct pfmgr_cb_data cb_data = {.avail_bytes = 0,
                                .phys_base = 0,
                                .used_bytes = 0
                                };
     int status = 0;
     
     /* Clear the level data */
-    memset(&ld, 0, sizeof(pgmgr_level_data_t));
+    memset(&ld, 0, sizeof(struct pgmgr_level_data));
 
     /* Translate the attributes */
     pgmgr_attr_translate(&attr_mask, attr);
@@ -1290,7 +1291,7 @@ int pgmgr_change_attrib
     return(0);
 }
 
-static int pgmgr_map_kernel(pgmgr_ctx_t *ctx)
+static int pgmgr_map_kernel(struct pgmgr_ctx *ctx)
 {
     int status = 0;
 
@@ -1335,7 +1336,7 @@ static int pgmgr_map_kernel(pgmgr_ctx_t *ctx)
 
 int pgmgr_ctx_init
 (
-    pgmgr_ctx_t *ctx
+    struct pgmgr_ctx *ctx
 )
 { 
     spinlock_init(&ctx->lock);
@@ -1360,7 +1361,7 @@ int pgmgr_ctx_init
 
 int pgmgr_kernel_ctx_init
 (
-    pgmgr_ctx_t *ctx
+    struct pgmgr_ctx *ctx
 )
 {
     /* check if we already initalized it */
@@ -1396,13 +1397,13 @@ int pgmgr_kernel_ctx_init
 
 int pgmgr_init(void)
 {
-    pat_t *pat = NULL;
+    union pat *pat = NULL;
     pat = &pgmgr.pat;
 
     kprintf("Initializing Page Manager\n");
 
     /* clear the pat memory */
-    memset(pat, 0, sizeof(pat_t));
+    memset(pat, 0, sizeof(union pat));
 
     pgmgr.pml5_support = pgmgr_pml5_is_enabled();
     pgmgr.nx_support   = pgmgr_check_nx();
@@ -1532,7 +1533,7 @@ int pgmgr_temp_unmap
 
 void pgmgr_invalidate
 (
-    pgmgr_ctx_t *ctx,
+    struct pgmgr_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t len
 )
@@ -1559,7 +1560,7 @@ void pgmgr_invalidate
      cpu_issue_ipi(IPI_DEST_ALL_NO_SELF, 0, IPI_INVLPG);
 }
 
-static inline void pgmgr_invalidate_all(void *pv, isr_info_t *inf)
+static inline void pgmgr_invalidate_all(void *pv, struct isr_info *inf)
 {
    
     __write_cr3(__read_cr3());
@@ -1567,15 +1568,15 @@ static inline void pgmgr_invalidate_all(void *pv, isr_info_t *inf)
 }
 
 
-static int pgmgr_page_fault_handler(void *pv, isr_info_t *inf)
+static int pgmgr_page_fault_handler(void *pv, struct isr_info *inf)
 {
 
-    isr_frame_t *int_frame = 0;
+    struct isr_frame *int_frame = 0;
     virt_addr_t fault_address = 0;
     virt_addr_t error_code = *(virt_addr_t*)(inf->iframe - sizeof(uint64_t));
 
     fault_address = __read_cr2();
-    int_frame = (isr_frame_t*)inf->iframe;
+    int_frame = (struct isr_frame*)inf->iframe;
 
     kprintf("CPU %d: ADDRESS 0x%x ERROR 0x%x IP 0x%x SS 0x%x RFLAGS 0x%x\n",
             inf->cpu_id,   
@@ -1595,7 +1596,7 @@ static int pgmgr_page_fault_handler(void *pv, isr_info_t *inf)
 static int pgmgr_per_cpu_invl_handler
 (
     void *pv, 
-    isr_info_t *inf
+    struct isr_info *inf
 )
 {
  //kprintf("INVALIDATE  on CPU %x\n",inf->cpu_id);
@@ -1621,7 +1622,7 @@ int pgmgr_per_cpu_init(void)
     __write_cr0(cr0);
 
     __wbinvd();
-    __wrmsr(PAT_MSR, pgmgr.pat.pat);
+    __wrmsr(PAT_MSR, pgmgr.pat.pat_val);
     
     /* Invalidate page table */
     cr3 = __read_cr3();

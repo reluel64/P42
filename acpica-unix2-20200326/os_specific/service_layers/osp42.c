@@ -872,7 +872,7 @@ AcpiOsCreateSemaphore (
     }
 
 #else
-    Sem = AcpiOsAllocate (sizeof (sem_t));
+    Sem = AcpiOsAllocate (sizeof (struct sem));
     if (!Sem)
     {
         return (AE_NO_MEMORY);
@@ -953,7 +953,7 @@ AcpiOsWaitSemaphore (
     ACPI_STATUS         Status = AE_OK;
     
 #if 0
-    sem_t               *Sem = (sem_t *) Handle;
+    struct sem               *Sem = (struct sem *) Handle;
     int                 RetVal;
 #ifndef ACPI_USE_ALTERNATE_TIMEOUT
     struct timespec     Time;
@@ -976,7 +976,7 @@ AcpiOsWaitSemaphore (
      */
     case 0:
 
-        if (sem_trywait(Sem) == -1)
+        if (struct semrywait(Sem) == -1)
         {
             Status = (AE_TIME);
         }
@@ -1004,11 +1004,11 @@ AcpiOsWaitSemaphore (
 #ifdef ACPI_USE_ALTERNATE_TIMEOUT
         /*
          * Alternate timeout mechanism for environments where
-         * sem_timedwait is not available or does not work properly.
+         * struct semimedwait is not available or does not work properly.
          */
         while (MsecTimeout)
         {
-            if (sem_trywait (Sem) == 0)
+            if (struct semrywait (Sem) == 0)
             {
                 /* Got the semaphore */
                 return (AE_OK);
@@ -1028,7 +1028,7 @@ AcpiOsWaitSemaphore (
         Status = (AE_TIME);
 #else
         /*
-         * The interface to sem_timedwait is an absolute time, so we need to
+         * The interface to struct semimedwait is an absolute time, so we need to
          * get the current time, then add in the millisecond Timeout value.
          */
         if (clock_gettime (CLOCK_REALTIME, &Time) == -1)
@@ -1048,7 +1048,7 @@ AcpiOsWaitSemaphore (
             Time.tv_nsec = (Time.tv_nsec % ACPI_NSEC_PER_SEC);
         }
 
-        while (((RetVal = sem_timedwait (Sem, &Time)) == -1) && (errno == EINTR))
+        while (((RetVal = struct semimedwait (Sem, &Time)) == -1) && (errno == EINTR))
         {
             continue;   /* Restart if interrupted */
 
@@ -1058,7 +1058,7 @@ AcpiOsWaitSemaphore (
         {
             if (errno != ETIMEDOUT)
             {
-                perror ("sem_timedwait");
+                perror ("struct semimedwait");
             }
             Status = (AE_TIME);
         }
@@ -1579,7 +1579,7 @@ AcpiOsExecute (
     ACPI_OSD_EXEC_CALLBACK  Function,
     void                    *Context)
 {
-    sched_thread_t *th = NULL;
+    struct sched_thread *th = NULL;
 
     kprintf("INITIALIZING\n");
    // while(1);

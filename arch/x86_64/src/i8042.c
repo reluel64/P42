@@ -21,30 +21,30 @@
 #define I8042_DATA_PORT            (0x60)
 #define I8042_CMD_STS_PORT         (0x64)
 
-typedef struct
+struct i8042_dev
 {
-    isr_t kbd_isr;
-    isr_t mse_isr;
-}i8042_dev_t;
-extern sem_t *kb_sem;
+    struct isr kbd_isr;
+    struct isr mse_isr;
+};
+extern struct sem *kb_sem;
 
-static int i8042_kbd_irq(void *pv, isr_info_t *isr_inf)
+static int i8042_kbd_irq(void *pv, struct isr_info *isr_inf)
 {
     __inb(I8042_DATA_PORT);
     kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     return(0);
 }
 
-static int i8042_mse_irq(void *pv, isr_info_t *isr_inf)
+static int i8042_mse_irq(void *pv, struct isr_info *isr_inf)
 {
     __inb(I8042_DATA_PORT);
     kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     return(0);
 }
 
-static int i8042_dev_init(device_t *dev)
+static int i8042_dev_init(struct device_node *dev)
 {
-    static  i8042_dev_t i8042 = {0};
+    static  struct i8042_dev i8042 = {0};
     uint8_t status_reg    = 0;
     uint8_t config_byte   = 0;
     uint8_t two_port_ctrl = 0;
@@ -195,7 +195,7 @@ static int i8042_dev_init(device_t *dev)
     return(0);
 }
 
-static int i8042_probe(device_t *dev)
+static int i8042_probe(struct device_node *dev)
 {
     int status = -1;
     ACPI_TABLE_FADT *fadt = NULL;
@@ -227,9 +227,9 @@ static int i8042_probe(device_t *dev)
     return(status);
 }
 
-static int i8042_drv_init(driver_t *drv)
+static int i8042_drv_init(struct driver_node *drv)
 {
-    device_t *dev = NULL;
+    struct device_node *dev = NULL;
 
     devmgr_dev_create(&dev);
     devmgr_dev_name_set(dev, I8042_DEV_NAME);
@@ -239,7 +239,7 @@ static int i8042_drv_init(driver_t *drv)
     return(0);
 }
 
-static driver_t i8042_drv = 
+static struct driver_node i8042_drv = 
 {
     .drv_name   = I8042_DEV_NAME,
     .dev_probe  = i8042_probe,

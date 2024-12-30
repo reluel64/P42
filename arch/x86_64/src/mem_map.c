@@ -51,8 +51,8 @@ static void mem_map_numa_check_init(void)
 
 static int mem_map_get_numa_domain
 (
-    memory_map_entry_t *e820, 
-    memory_map_entry_t *dom, 
+    struct memory_map_entry *e820, 
+    struct memory_map_entry *dom, 
     phys_size_t *next_pos
 )
 {
@@ -64,7 +64,7 @@ static int mem_map_get_numa_domain
     phys_size_t             e820_limit   = 0;
     phys_size_t             numa_limit = 0;
 
-    memset(dom, 0, sizeof(memory_map_entry_t));
+    memset(dom, 0, sizeof(struct memory_map_entry));
 
     if(next_pos == NULL)
         return(-1);
@@ -173,7 +173,7 @@ static int mem_map_get_numa_domain
 }
 
 #ifdef  MEM_MAP_TEST_CALLBACK
-void mem_map_test_callback(memory_map_entry_t *map, void  *pv)
+void mem_map_test_callback(struct memory_map_entry *map, void  *pv)
 {
     
         kprintf("FINAL BASE 0x%x - LENGTH 0x%x - DOMAIN %d\n", map->base, map->length, map->domain);
@@ -221,7 +221,7 @@ static void mem_map_show_e820(void)
 {
 
     multiboot_info_t       *mb_info         = NULL;
-    memory_map_entry_t      mem_entry;
+    struct memory_map_entry      mem_entry;
 
     multiboot_memory_map_t *mb_mem_map      = NULL;
     uint64_t                map_length      = 0;
@@ -249,12 +249,12 @@ static void mem_map_show_e820(void)
 
 int mem_map_iter
 (
-    void (*callback)(memory_map_entry_t *mmap,void *pv),
+    void (*callback)(struct memory_map_entry *mmap,void *pv),
     void *pv
 )
 {
     multiboot_info_t       *mb_info         = NULL;
-    memory_map_entry_t      mem_entry;
+    struct memory_map_entry      mem_entry;
     multiboot_memory_map_t *mb_mem_map      = NULL;
     uint64_t                map_length      = 0;
     int                     has_numa        = 0;
@@ -262,7 +262,7 @@ int mem_map_iter
 #ifdef USE_NUMA_DOMAINS
     uint32_t                sig             = 0;
     uint64_t                mem_map         = 0;
-    memory_map_entry_t      dom_entry;
+    struct memory_map_entry      dom_entry;
     int                     numa_dom_status = 0;
     phys_size_t             next_pos        = 0;
     int                     in_domain       = 0;
@@ -311,7 +311,7 @@ int mem_map_iter
 
             for(phys_size_t i = 0; i < map_length; )
             {
-                memset(&mem_entry, 0, sizeof(memory_map_entry_t));
+                memset(&mem_entry, 0, sizeof(struct memory_map_entry));
 
                 mb_mem_map       = (multiboot_memory_map_t *)(mb_info->mmap_addr + i);
                 mem_entry.base   = mb_mem_map->addr;

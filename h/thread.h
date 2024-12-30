@@ -31,7 +31,7 @@ int thread_create_static
 
 int thread_start
 (
-    sched_thread_t *th
+    struct sched_thread *th
 );
 
 void *kthread_create

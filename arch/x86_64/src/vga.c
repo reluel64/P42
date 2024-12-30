@@ -13,15 +13,15 @@
 #define FB_LEN        (VGA_MAX_ROW * VGA_MAX_COL * sizeof(uint16_t))
 #define FB_ALLOC_SIZE  ALIGN_UP(FB_LEN, PAGE_SIZE)
 
-typedef struct vga_t
+struct vga
 {
     uint16_t *base;
     uint32_t row;
     uint32_t col;
-    spinlock_t lock;
-}vga_t;
+    struct spinlock lock;
+};
 
-static vga_t vga;
+static struct vga vga;
 
 static size_t vga_write
 (
@@ -61,7 +61,7 @@ void vga_init()
 }
 static void vga_new_line
 (
-    vga_t *vga
+    struct vga *vga
 )
 {
     uint16_t *line      = NULL;
@@ -99,7 +99,7 @@ static size_t vga_write
     size_t length
 )
 {
-    vga_t *vga = NULL;
+    struct vga *vga = NULL;
     uint16_t character = 0;
     const char *in_buf = NULL;
     uint16_t *line = NULL;
@@ -162,7 +162,7 @@ static int32_t vga_close
 }
 
 
-static io_entry_t vga_entry = 
+static struct io_device_node vga_entry = 
 {
     .name       = "vga",
     .open_func  = vga_open,

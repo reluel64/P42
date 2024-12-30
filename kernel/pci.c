@@ -53,7 +53,7 @@
 
 
 
-typedef struct pci_header_common
+struct __attribute__((packed)) pci_header_common
 {
     uint16_t vendor_id;
     uint16_t device_id;
@@ -67,11 +67,11 @@ typedef struct pci_header_common
     uint8_t latency_timer;
     uint8_t header_type;
     uint8_t bist;
-}__attribute__((packed)) pci_header_common;
+};
 
-typedef struct pci_header_type0
+struct __attribute__((packed)) pci_header_type0
 {
-    pci_header_common hdr;
+    struct pci_header_common hdr;
     uint32_t          bar[6];
     uint32_t          card_cis_pointer;
     uint16_t          subsystem_vendor;
@@ -84,12 +84,12 @@ typedef struct pci_header_type0
     uint8_t           interrupt_pin;
     uint8_t           min_grant;
     uint8_t           max_latency;
-}__attribute__((packed)) pci_header_type0;
+}pci_header_type0;
 
 /* PCI-to-PCI bridge */
-typedef struct pci_header_type1
+struct __attribute__((packed)) pci_header_type1
 {
-    pci_header_common hdr;
+    struct pci_header_common hdr;
     uint32_t          bar[2];
     uint8_t           primary_bus_number;
     uint8_t           secondary_bus_number;
@@ -112,7 +112,7 @@ typedef struct pci_header_type1
     uint8_t           int_line;
     uint8_t           int_pin;
     uint16_t          bridge_control;
-}__attribute__((packed)) pci_header_type1;
+};
 
 
 
@@ -126,7 +126,7 @@ int pci_enumerate
     ACPI_MCFG_ALLOCATION *allocation      = NULL;
     uint32_t             mcfg_alloc_count = 0;
     phys_addr_t          phys_conf        = 0;
-    pci_header_common    *phc             = NULL;
+    struct pci_header_common    *phc             = NULL;
 
     status = AcpiGetTable(ACPI_SIG_MCFG, 0, (ACPI_TABLE_HEADER**)&mcfg);
 
@@ -164,12 +164,12 @@ int pci_enumerate
                                              slot,
                                              fcn);
 
-                    phc = (pci_header_common*)vm_map(NULL, 
+                    phc = (struct pci_header_common*)vm_map(NULL, 
                                                      VM_BASE_AUTO, 
                                                      PCI_MCFG_CONF_SPACE_SIZE,
                                                      phys_conf, 
                                                      0,
-                                                     0);
+                                                     VM_ATTR_WRITABLE);
 
                     /* failed to map? just skip */
                     if((virt_addr_t)phc == VM_INVALID_ADDRESS)
@@ -189,11 +189,33 @@ int pci_enumerate
                         continue;
                     }
 
-                    kprintf("PHC %x -> DID %x VID %x Class %x"\
-                            "Subclass %x ProgIf %x " \
-                            "Header Type %x\n", phc, phc->device_id, phc->vendor_id, 
+                    kprintf("PHC 0x%x -> DID 0x%x VID 0x%x Class 0x%x "\
+                            "Subclass 0x%x ProgIf 0x%x " \
+                            "Header Type 0x%x\n", phc, phc->device_id, phc->vendor_id, 
                                                 phc->class_code, phc->subclass, phc->prog_if, 
-                                                phc->header_type);
+                                                phc->header_type & HEADER_TYPE_MASK);
+
+                    if((phc->header_type & HEADER_TYPE_MASK) == HEADER_TYPE_NORMAL)
+                    {
+                        struct pci_header_type0 *hdr0 = (struct pci_header_type0*)phc;
+
+                        for(int i = 0; i < 6; i++)
+                        {
+                            if((hdr0->bar[i] & 0x1) == 0)
+                            {
+                                uint32_t bar = hdr0->bar[i] & 0xFFFFFFF0;
+                                hdr0->bar[i] = 0xfffff000;
+
+                                kprintf("SIZE %x\n", (~hdr0->bar[i]) + 1);
+
+                                //kprintf("BAR %d: ADDR 0x%x TYPE %d\n", i, , ((hdr0->bar[i] >> 1) & 0x3));
+                            }
+                            else
+                            {
+                                //kprintf("BAR %d: 0x%x\n", i, hdr0->bar[i] & 0xFFFFFFFC);
+                            }
+                        }
+                    }
 
                     vm_unmap(NULL, (virt_addr_t)phc, PCI_MCFG_CONF_SPACE_SIZE);
 

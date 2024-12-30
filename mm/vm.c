@@ -5,17 +5,17 @@
 #include <utils.h>
 #include <pfmgr.h>
 
-vm_ctx_t vm_kernel_ctx;
+struct vm_ctx vm_kernel_ctx;
 
 void vm_ctx_show
 (
-    vm_ctx_t *ctx
+    struct vm_ctx *ctx
 )
 {
-    list_node_t *node = NULL;
-    list_node_t *en = NULL;
-    vm_extent_hdr_t *hdr = NULL;
-    vm_extent_t *e = NULL;
+    struct list_node *node = NULL;
+    struct list_node *en = NULL;
+    struct vm_extent_hdr *hdr = NULL;
+    struct vm_extent *e = NULL;
     virt_size_t alloc_len = 0;
     virt_size_t free_len = 0;
     uint32_t ix = 0;
@@ -42,7 +42,7 @@ void vm_ctx_show
 
     while(node)
     {
-        hdr = (vm_extent_hdr_t*)node;
+        hdr = (struct vm_extent_hdr*)node;
         ix = 0;
 
         kprintf("============================================\n");
@@ -53,7 +53,7 @@ void vm_ctx_show
         en = linked_list_first(&hdr->busy_ext);
         while(en)
         {
-            e = (vm_extent_t*)en;
+            e = (struct vm_extent*)en;
             kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",ix, 
                         e->base,
                         e->length, 
@@ -75,7 +75,7 @@ void vm_ctx_show
 
     while(node)
     {
-        hdr = (vm_extent_hdr_t*)node;
+        hdr = (struct vm_extent_hdr*)node;
         ix = 0;
 
         kprintf("============================================\n");
@@ -88,7 +88,7 @@ void vm_ctx_show
 
         while(en)
         {
-            e = (vm_extent_t*)en;
+            e = (struct vm_extent*)en;
             kprintf("IX %d: BASE 0x%x LENGTH 0x%x FLAGS %x PROT %x\n",ix, 
                         e->base,
                         e->length, 
@@ -114,12 +114,12 @@ void vm_ctx_show
 
 static int vm_setup_protected_regions
 (
-    vm_ctx_t *ctx
+    struct vm_ctx *ctx
 )
 {
     uint32_t   rsrvd_count = 0;
 
-    vm_extent_t re[] = 
+    struct vm_extent re[] = 
     {
         /* Reserve kernel image - only the higher half */
         {
@@ -169,7 +169,7 @@ static int vm_setup_protected_regions
         },
     };
 
-    rsrvd_count = sizeof(re) / sizeof(vm_extent_t);
+    rsrvd_count = sizeof(re) / sizeof(struct vm_extent);
 
     for(uint32_t i = 0; i < rsrvd_count; i++)
     {
@@ -191,7 +191,7 @@ static int vm_setup_protected_regions
 
 static int vm_ctx_init
 (
-    vm_ctx_t    *ctx,
+    struct vm_ctx    *ctx,
     virt_addr_t free_mem_track,
     virt_addr_t alloc_mem_track,
     virt_size_t free_track_size,
@@ -201,8 +201,8 @@ static int vm_ctx_init
 {
     virt_addr_t   vm_base = 0;
     virt_addr_t   vm_max  = 0;
-    vm_extent_hdr_t *hdr    = NULL;
-    vm_extent_t   ext     = VM_EXTENT_INIT;
+    struct vm_extent_hdr *hdr    = NULL;
+    struct vm_extent   ext     = VM_EXTENT_INIT;
 
     vm_max = cpu_virt_max();
 
@@ -228,7 +228,7 @@ static int vm_ctx_init
      */ 
     if(flags != VM_CTX_PREFER_HIGH_MEMORY)
     {
-        memset(ctx, 0, sizeof(vm_ctx_t));
+        memset(ctx, 0, sizeof(struct vm_ctx));
     }
 
     vm_base = (~vm_base) - (vm_max >> 1);
@@ -244,7 +244,7 @@ static int vm_ctx_init
     spinlock_init(&ctx->lock);
 
     /* Prepare initializing free memory tracking */
-    hdr = (vm_extent_hdr_t*) free_mem_track;
+    hdr = (struct vm_extent_hdr*) free_mem_track;
     
     linked_list_add_head(&ctx->free_mem,  &hdr->node);
     
@@ -252,18 +252,18 @@ static int vm_ctx_init
     ctx->free_track_size = free_track_size;
 
     /* How many free entries can we store per slot */
-    ctx->free_per_slot = (free_track_size - sizeof(vm_extent_hdr_t)) /
-                                            sizeof(vm_extent_t);
+    ctx->free_per_slot = (free_track_size - sizeof(struct vm_extent_hdr)) /
+                                            sizeof(struct vm_extent);
 
     /* How many allocated entries can we store per slot */
-    ctx->alloc_per_slot = (alloc_track_size - sizeof(vm_extent_hdr_t)) /
-                                              sizeof(vm_extent_t);
+    ctx->alloc_per_slot = (alloc_track_size - sizeof(struct vm_extent_hdr)) /
+                                              sizeof(struct vm_extent);
 
 kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     /* Clear the memory */
     vm_extent_header_init(hdr, ctx->free_per_slot);
 kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
-    memset(&ext, 0, sizeof(vm_extent_t));
+    memset(&ext, 0, sizeof(struct vm_extent));
  
     /* Insert higher memory */
     ext.base   = vm_base;
@@ -282,7 +282,7 @@ kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
                      &ext);
 kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     /* Setup tracking for allocated memory */
-    hdr = (vm_extent_hdr_t*)alloc_mem_track;
+    hdr = (struct vm_extent_hdr*)alloc_mem_track;
 kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
     /* Clear the memory */
     vm_extent_header_init(hdr, ctx->alloc_per_slot);
@@ -303,7 +303,7 @@ int vm_init(void)
 
     vm_base = (~vm_base) - (vm_max >> 1);
     
-    memset(&vm_kernel_ctx, 0, sizeof(vm_ctx_t));
+    memset(&vm_kernel_ctx, 0, sizeof(struct vm_ctx));
 
     if(pgmgr_kernel_ctx_init(&vm_kernel_ctx.pgmgr) == -1)
     {
@@ -385,7 +385,7 @@ int vm_init(void)
 
 int vm_user_ctx_init
 (
-    vm_ctx_t *ctx
+    struct vm_ctx *ctx
 )
 {
     int status = VM_OK;
@@ -457,7 +457,7 @@ int vm_user_ctx_init
 
 int vm_ctx_destroy
 (
-    vm_ctx_t *ctx
+    struct vm_ctx *ctx
 )
 {
     return(0);
@@ -465,7 +465,7 @@ int vm_ctx_destroy
 
 virt_addr_t vm_alloc
 (
-    vm_ctx_t   *ctx, 
+    struct vm_ctx   *ctx, 
     virt_addr_t virt, 
     virt_size_t len, 
     uint32_t    alloc_flags,
@@ -591,7 +591,7 @@ virt_addr_t vm_alloc
 
 virt_addr_t vm_map
 (
-    vm_ctx_t *ctx, 
+    struct vm_ctx *ctx, 
     virt_addr_t virt, 
     virt_size_t len, 
     phys_addr_t phys, 
@@ -715,7 +715,7 @@ virt_addr_t vm_map
 
 int vm_change_attr
 (
-    vm_ctx_t *ctx,
+    struct vm_ctx *ctx,
     virt_addr_t vaddr,
     virt_size_t len,
     uint32_t  set_mem_flags,
@@ -844,7 +844,7 @@ int vm_change_attr
 
 int vm_unmap
 (
-    vm_ctx_t    *ctx, 
+    struct vm_ctx    *ctx, 
     virt_addr_t vaddr, 
     virt_size_t len
 )
@@ -907,7 +907,7 @@ int vm_unmap
 
 int vm_free
 (
-    vm_ctx_t *ctx, 
+    struct vm_ctx *ctx, 
     virt_addr_t vaddr, 
     virt_size_t len
 )
@@ -973,7 +973,7 @@ int vm_free
 
 int vm_fault_handler
 (
-    vm_ctx_t    *ctx,
+    struct vm_ctx    *ctx,
     virt_addr_t vaddr,
     uint32_t    reason
 )

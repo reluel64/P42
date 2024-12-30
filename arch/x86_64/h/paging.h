@@ -18,7 +18,7 @@
 #define PAGE_GLOBAL           (1ull << 8)
 #define PAGE_EXECUTE_DISABLE  (1ull << 63)
 
-typedef struct pat_bits_t
+struct __attribute__ ((packed))  pat_bits
 {
     uint32_t pa0:3;
     uint32_t rsrvd0:5;
@@ -37,13 +37,13 @@ typedef struct pat_bits_t
     uint32_t pa7:3;
     uint32_t rsrvd7:5;
     
-}__attribute__ ((packed)) pat_bits_t;
+};
 
-typedef union pat_t
+union __attribute__ ((packed)) pat
 {
-    uint64_t pat;
-    pat_bits_t fields;
-}__attribute__ ((packed)) pat_t;
+    uint64_t pat_val;
+    struct pat_bits fields;
+};
 
 #define PT_SHIFT    (12)
 

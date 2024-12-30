@@ -103,7 +103,7 @@ static long long l_warningCount = 0;		///< Number of warnings encountered
 static long long l_errorCount = 0;			///< Number of actual errors
 static long long l_possibleOverruns = 0;	///< Number of possible overruns
 
-static spinlock_t lock = SPINLOCK_INIT;
+static struct spinlock lock = SPINLOCK_INIT;
 
 
 

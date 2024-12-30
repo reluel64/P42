@@ -67,12 +67,12 @@ static const int CONTEXT_END  =__LINE__;
 
 int context_init
 (
-    sched_thread_t *th
+    struct sched_thread *th
 );
 
 void context_switch
 (
-    sched_thread_t *prev,
-    sched_thread_t *next
+    struct sched_thread *prev,
+    struct sched_thread *next
 );
 #endif
