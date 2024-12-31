@@ -4,18 +4,18 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef enum
+enum rb_color
 {
     BLACK,
     RED
-}rb_color_t;
+};
 
 struct rb_node
 {
     struct rb_node *parent;
     struct rb_node *left;
     struct rb_node *right;
-    rb_color_t color;
+    enum   rb_color color;
 };
 
 struct rb_tree

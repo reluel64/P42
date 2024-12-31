@@ -381,7 +381,7 @@ int rb_delete
 {
     struct rb_node *x = NULL;
     struct rb_node *y = NULL;
-    rb_color_t y_orig_color = BLACK;
+    enum rb_color y_orig_color = BLACK;
 
     y = z;
     y_orig_color = y->color;
