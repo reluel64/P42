@@ -22,9 +22,16 @@ struct ioapic_iter_cb_data
     phys_size_t irq_base;
 };
 
+struct ioapic_drv
+{
+    struct driver_node drv_node;
+    uint32_t ioapic_ctrls_count;
+    struct ioapic_dev *ioapic_ctrls;
+};
+
 typedef int (*ioapic_iter_cb)(struct ioapic_iter_cb_data *cb, void *pv);
 
-static struct ioapic_dev *ioapics = NULL;
+
 
 static int ioapic_iterate
 (
@@ -536,21 +543,28 @@ static int ioapic_drv_init
     struct device_node   *dev       = NULL;
     struct intc_api *funcs      = NULL;
     struct ioapic_dev *ioapic = NULL;
+    struct ioapic_drv *ioapic_drv = NULL;
+
     int32_t status = -1;
+
+    ioapic_drv = (struct ioapic_drv*)drv;
 
     if(ioapic_iterate(ioapic_count, &ioapic_cnt) == 0)
     {
         if(ioapic_cnt > 0)
         {
-            ioapics = kcalloc(sizeof(struct ioapic_dev), ioapic_cnt);
+
+            ioapic_drv->ioapic_ctrls = kcalloc(sizeof(struct ioapic_dev), 
+                                               ioapic_cnt);
+
         }
     }
 
-    if(ioapics != NULL)
+    if(ioapic_drv->ioapic_ctrls != NULL)
     {
         for(uint32_t index = 0; index < ioapic_cnt; index++)
         {
-            ioapic = &ioapics[index];
+            ioapic = &ioapic_drv->ioapic_ctrls[index];
 
             if(devmgr_device_node_init(&ioapic->dev_node) == 0)
             {
@@ -563,6 +577,10 @@ static int ioapic_drv_init
                 {
                     /*devmgr_dev_delete(dev);*/
                     return(status);
+                }
+                else
+                {
+                    ioapic_drv->ioapic_ctrls_count++;
                 }
             }
         }
@@ -591,21 +609,24 @@ static struct intc_api api =
     .unmask   = ioapic_unmask
 };
 
-static struct driver_node ioapic_drv = 
+
+static struct ioapic_drv ioapic_drv = 
 {
-    .dev_probe  = ioapic_probe,
-    .dev_init   = ioapic_init,
-    .dev_uninit = NULL,
-    .drv_init   = ioapic_drv_init,
-    .drv_uninit = NULL,
-    .drv_name   = IOAPIC_DRV_NAME,
-    .drv_type   = INTERRUPT_CONTROLLER,
-    .drv_api    = &api
+    .drv_node.dev_probe  = ioapic_probe,
+    .drv_node.dev_init   = ioapic_init,
+    .drv_node.dev_uninit = NULL,
+    .drv_node.drv_init   = ioapic_drv_init,
+    .drv_node.drv_uninit = NULL,
+    .drv_node.drv_name   = IOAPIC_DRV_NAME,
+    .drv_node.drv_type   = INTERRUPT_CONTROLLER,
+    .drv_node.drv_api    = &api,
+    .ioapic_ctrls        = NULL,
+    .ioapic_ctrls_count  = 0
 };
 
 int ioapic_register(void)
 {
-    devmgr_drv_add(&ioapic_drv);
-    devmgr_drv_init(&ioapic_drv);
+    devmgr_drv_add(&ioapic_drv.drv_node);
+    devmgr_drv_init(&ioapic_drv.drv_node);
     return(0);
 }
