@@ -79,9 +79,10 @@
 
 struct apic_device
 {
+    struct device_node dev_node;
+    struct device_node *timer;
     phys_addr_t paddr;
     virt_addr_t vaddr;
-    uint32_t apic_id;
     uint8_t polarity;
     uint8_t trigger;
     uint8_t lint;

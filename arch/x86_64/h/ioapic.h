@@ -56,8 +56,9 @@ struct __attribute__((packed)) iowin
 };
 
 
-struct ioapic
+struct ioapic_dev
 {
+    struct device_node   dev_node;
     uint32_t             irq_base;
     uint32_t             id;
     phys_addr_t          phys_base;

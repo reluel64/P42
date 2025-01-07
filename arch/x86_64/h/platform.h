@@ -3,6 +3,8 @@
 #include <gdt.h>
 #include <cpu.h>
 #include <isr.h>
+#include <apic.h>
+#include <apic_timer.h>
 extern virt_addr_t kstack_base;
 extern virt_addr_t kstack_top;
 
@@ -62,6 +64,8 @@ struct __attribute__((packed)) idt64_ptr
 struct cpu_platform
 {
     struct cpu hdr;
+    struct apic_device apic;
+    struct apic_timer apic_tmr;
     struct gdt_entry *gdt;
     struct tss64_entry *tss;
 };
@@ -69,6 +73,7 @@ struct cpu_platform
 struct cpu_platfrom_driver
 {
     uint8_t       cpu_name[64];
+    struct cpu_platform bsp_cpu;
     struct idt64_entry *idt;
     struct idt64_ptr    idt_ptr;
     struct isr ipi_isr;

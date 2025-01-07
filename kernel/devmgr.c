@@ -131,6 +131,22 @@ int devmgr_dev_create
     return(0);
 }
 
+
+int32_t devmgr_device_node_init
+(
+    struct device_node *dev
+)
+{
+    if(dev == NULL)
+    {
+        return(-1);
+    }
+
+    memset(dev, 0, sizeof(struct device_node));
+
+    return(0);
+}
+
 int devmgr_dev_delete
 (
     struct device_node *dev

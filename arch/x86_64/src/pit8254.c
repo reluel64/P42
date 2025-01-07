@@ -30,6 +30,7 @@
 
 struct pit8254_dev
 {
+    struct device_node  dev_node;
     struct spinlock_rw           lock; 
     uint16_t             divider;
     timer_tick_handler_t handler;
@@ -38,6 +39,8 @@ struct pit8254_dev
     uint8_t              mode;
     struct time_spec          resolution;
 };
+
+static struct pit8254_dev _pit_dev = {0};
 
 static int pit8254_irq_handler
 (
@@ -62,12 +65,10 @@ static int pit8254_init(struct device_node *dev)
 {
     struct pit8254_dev *pit_dev = NULL;
   
-    pit_dev = (struct pit8254_dev*)kcalloc(sizeof(struct pit8254_dev), 1);
+    pit_dev = (struct pit8254_dev*)dev;
     pit_dev->mode = PIT8254_MODE_2 | PIT8254_ACCESS_LO_HI;
     
     spinlock_rw_init(&pit_dev->lock);
-
-    devmgr_dev_data_set(dev, pit_dev);
     
     pit_dev->divider = 1193;
     pit_dev->resolution.nanosec = (1000000000 / PIT8254_FREQ) * pit_dev->divider ;
@@ -82,25 +83,22 @@ static int pit8254_init(struct device_node *dev)
 }
 
 static int pit8254_drv_init(struct driver_node *drv)
-{
-    struct device_node *dev = NULL;
-    struct pit8254_dev *pit_dev = NULL;
+{    
 
-    if(!devmgr_dev_create(&dev))
+    if(!devmgr_device_node_init(&_pit_dev.dev_node))
     {
-        devmgr_dev_name_set(dev, PIT8254_TIMER);
-        devmgr_dev_type_set(dev, TIMER_DEVICE_TYPE);
-        devmgr_dev_index_set(dev, 0);
+        devmgr_dev_name_set(&_pit_dev.dev_node, PIT8254_TIMER);
+        devmgr_dev_type_set(&_pit_dev.dev_node, TIMER_DEVICE_TYPE);
+        devmgr_dev_index_set(&_pit_dev.dev_node, 0);
         
-        if(!devmgr_dev_add(dev, NULL))
+        if(!devmgr_dev_add(&_pit_dev.dev_node, NULL))
         {
-            pit_dev = devmgr_dev_data_get(dev);
 
             isr_install(pit8254_irq_handler, 
-                        dev, 
+                        &_pit_dev.dev_node, 
                         IRQ(0), 
                         0, 
-                        &pit_dev->timer_isr);
+                        &_pit_dev.timer_isr);
         }
     }
 
@@ -111,7 +109,7 @@ static int pit8254_rearm(struct device_node *dev)
 {
     struct pit8254_dev *pit = NULL;
     
-    pit = devmgr_dev_data_get(dev);
+    pit = (struct pit8254_dev *)dev;
 
     __outb(CH0_PORT, pit->divider & 0xff);
     __outb(CH0_PORT, (pit->divider >> 8) & 0xff);
@@ -127,7 +125,7 @@ static int pit8254_irq_handler
 {
     struct pit8254_dev *pit_dev = NULL;
     
-    pit_dev = devmgr_dev_data_get(dev);
+    pit_dev = (struct pit8254_dev *)dev;
 
     spinlock_read_lock(&pit_dev->lock);
     
@@ -151,7 +149,7 @@ static int pit8254_set_handler
     struct pit8254_dev *timer = NULL;
     uint8_t        int_flag = 0;
 
-    timer = devmgr_dev_data_get(dev);
+    timer = (struct pit8254_dev *)dev;
 
     spinlock_write_lock_int(&timer->lock, &int_flag);
 
@@ -178,7 +176,7 @@ static int pit8254_get_handler
         return(-1);
     }
 
-    timer = devmgr_dev_data_get(dev);
+    timer =(struct pit8254_dev *)dev;
 
     spinlock_read_lock_int(&timer->lock, &int_status);
 

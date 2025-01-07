@@ -369,15 +369,17 @@ static int cpu_bring_ap_up
 
 void cpu_signal_on
 (
-    uint32_t cpu_id
+    void
 )
 {
-    __atomic_store_n(&cpu_on, cpu_id, __ATOMIC_SEQ_CST);
+    uint32_t current_cpu_id = 0;
+    current_cpu_id = cpu_id_get();
+    __atomic_store_n(&cpu_on, current_cpu_id, __ATOMIC_SEQ_CST);
 }
 
 int cpu_issue_ipi
 (
-    uint8_t dest,
+    uint32_t dest,
     uint32_t cpu,
     uint32_t vector
 )
@@ -412,7 +414,7 @@ int cpu_issue_ipi
     dev    = devmgr_dev_get_by_name(APIC_DRIVER_NAME, cpu_id);
     api    = devmgr_dev_api_get(dev);
 
-    if(api == NULL || api->send_ipi == NULL)
+    if((api == NULL) || (api->send_ipi == NULL))
     {
         return(status);
     }
@@ -558,7 +560,7 @@ static void cpu_ap_entry_point(void)
     uint32_t cpu_id = 0;
     struct device_node *timer = NULL;
     struct device_node *cpu_dev = NULL;
-    struct cpu *cpu = NULL;
+    struct cpu_platform *cpu = NULL;
     uint8_t int_status = 0;
 
     int_status = cpu_int_check();
@@ -567,18 +569,20 @@ static void cpu_ap_entry_point(void)
     {
         cpu_int_lock();
     }
+
+    cpu = kcalloc(sizeof(struct cpu_platform), 1);
     
     cpu_id = cpu_id_get();
 
     /* Add cpu to the deivce manager */
        
-    if(!devmgr_dev_create(&cpu_dev))
+    if(!devmgr_device_node_init(&cpu->hdr.dev))
     {
-        devmgr_dev_name_set(cpu_dev,PLATFORM_CPU_NAME);
-        devmgr_dev_type_set(cpu_dev, CPU_DEVICE_TYPE);
-        devmgr_dev_index_set(cpu_dev, cpu_id);
+        devmgr_dev_name_set(&cpu->hdr.dev,PLATFORM_CPU_NAME);
+        devmgr_dev_type_set(&cpu->hdr.dev, CPU_DEVICE_TYPE);
+        devmgr_dev_index_set(&cpu->hdr.dev, cpu_id);
 
-        if(devmgr_dev_add(cpu_dev, NULL))
+        if(devmgr_dev_add(&cpu->hdr.dev, NULL))
         {
             kprintf("FAILED TO ADD AP CPU\n");
         }
@@ -586,8 +590,6 @@ static void cpu_ap_entry_point(void)
 
     /* signal that the cpu is up and running */
     kprintf("CPU %d STARTED\n", cpu_id);
-    
-    cpu = devmgr_dev_data_get(cpu_dev);
 
     /* at this point we should jump in the scheduler */
     timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
@@ -599,7 +601,7 @@ static void cpu_ap_entry_point(void)
     }
 
     /* this should not return - if it does, the loop below will halt the cpu */
-    sched_unit_init(timer, cpu, NULL);
+    sched_unit_init(timer, &cpu->hdr, NULL);
 
     kprintf("HALTING CPU %x\n",cpu_id);
 
@@ -658,12 +660,13 @@ static uint32_t cpu_get_domain
 }
 
 
-static int pcpu_dev_init(struct device_node *dev)
+static int pcpu_dev_init
+(
+    struct device_node *dev
+)
 {
     struct cpu                 *cpu            = NULL;
-    struct device_node              *apic_dev       = NULL;
-    struct device_node              *apic_timer_dev = NULL;
-    struct driver_node              *drv            = NULL;
+    struct driver_node         *drv            = NULL;
     struct cpu_platform        *pcpu           = NULL;
     struct cpu_platfrom_driver *pdrv           = NULL;
     uint32_t               cpu_id         = 0;
@@ -685,25 +688,10 @@ static int pcpu_dev_init(struct device_node *dev)
     drv    = devmgr_dev_drv_get(dev);
     pdrv   = devmgr_drv_data_get(drv);
     cpu_id = cpu_id_get();
+    pcpu   = (struct cpu_platform *)dev;
 
-    cpu = kcalloc(sizeof(struct cpu), 1);
-
-    if(cpu == NULL)
-    {
-        if(int_status)
-        {
-            cpu_int_unlock();
-        }
-
-        return(-1);
-    }
-
-    pcpu = kcalloc(sizeof(struct cpu_platform), 1);
-    
     if(pcpu == NULL)
     {
-        kfree(cpu);
-
         if(int_status)
         {
             cpu_int_unlock();
@@ -712,9 +700,7 @@ static int pcpu_dev_init(struct device_node *dev)
     }
 
     cpu = &pcpu->hdr;
-    cpu->dev = dev;
 
-    devmgr_dev_data_set(dev, cpu);
 
     /* Store cpu id and proximity domain */
     cpu->cpu_id = cpu_id;
@@ -725,47 +711,36 @@ static int pcpu_dev_init(struct device_node *dev)
     /* store per cpu private data */
     cpu->cpu_pv = pcpu;
 
-    memset(&cpu->exec_nodes, 0, sizeof(cpu->exec_nodes));
-
-    for(uint32_t i = 0; i < CPU_IPI_EXEC_NODE_COUNT; i++)
-    {
-        linked_list_add_tail(&cpu->avail_ipi_cb, &cpu->exec_nodes[i].node);
-    }
-
     /* Prepare the GDT */
     gdt_per_cpu_init(cpu->cpu_pv);
 
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
 
-     /* Create the APIC instance of the core */
-    if(!devmgr_dev_create(&apic_dev))
+    if(devmgr_device_node_init(&pcpu->apic.dev_node) == 0)
     {
-        kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
-        devmgr_dev_name_set(apic_dev, APIC_DRIVER_NAME);
-        devmgr_dev_type_set(apic_dev, INTERRUPT_CONTROLLER);
-        devmgr_dev_index_set(apic_dev, cpu_id);
+        devmgr_dev_name_set(&pcpu->apic.dev_node, APIC_DRIVER_NAME);
+        devmgr_dev_type_set(&pcpu->apic.dev_node, INTERRUPT_CONTROLLER);
+        devmgr_dev_index_set(&pcpu->apic.dev_node, cpu_id);
 
-        if(devmgr_dev_add(apic_dev, dev))
+        if(devmgr_dev_add(&pcpu->apic.dev_node, dev))
         {
             no_apic = 1;
         }
     }
-    
-    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
 
     if(!no_apic)
     {
        /* Create the APIC TIMER instance of the core */
-        if(!devmgr_dev_create(&apic_timer_dev))
+        if(devmgr_device_node_init(&pcpu->apic_tmr.dev_node) == 0)
         {
-            devmgr_dev_name_set(apic_timer_dev, APIC_TIMER_NAME);
-            devmgr_dev_type_set(apic_timer_dev, TIMER_DEVICE_TYPE);
-            devmgr_dev_index_set(apic_timer_dev, cpu_id);
+            devmgr_dev_name_set(&pcpu->apic_tmr.dev_node, APIC_TIMER_NAME);
+            devmgr_dev_type_set(&pcpu->apic_tmr.dev_node, TIMER_DEVICE_TYPE);
+            devmgr_dev_index_set(&pcpu->apic_tmr.dev_node, cpu_id);
     
-            if(devmgr_dev_add(apic_timer_dev, apic_dev))
+            if(devmgr_dev_add(&pcpu->apic_tmr.dev_node, &pcpu->apic.dev_node))
             {
-                devmgr_dev_delete(apic_timer_dev);
+                devmgr_dev_delete(&pcpu->apic_tmr.dev_node);
                 status = -1;
             }
         }
@@ -798,11 +773,9 @@ static int pcpu_dev_probe(struct device_node *dev)
 
 static int pcpu_drv_init(struct driver_node *drv)
 {
-    struct device_node              *cpu_bsp   = NULL;
     uint32_t               cpu_id    = 0;
     struct cpu_platfrom_driver *cpu_drv   = NULL;
     struct device_node              *timer     = NULL;
-    struct cpu                 *cpu       = NULL;
     static struct sched_thread init_th    = {0};
     uint8_t               int_status = 0;
 
@@ -848,23 +821,22 @@ static int pcpu_drv_init(struct driver_node *drv)
     /* set up the driver's private data */
     devmgr_drv_data_set(drv, cpu_drv);
 
-    if(!devmgr_dev_create(&cpu_bsp))
+    if(devmgr_device_node_init(&cpu_drv->bsp_cpu.hdr.dev) == 0)
     {
-        devmgr_dev_name_set(cpu_bsp,PLATFORM_CPU_NAME);
-        devmgr_dev_type_set(cpu_bsp, CPU_DEVICE_TYPE);
+        devmgr_dev_name_set(&cpu_drv->bsp_cpu.hdr.dev,PLATFORM_CPU_NAME);
+        devmgr_dev_type_set(&cpu_drv->bsp_cpu.hdr.dev, CPU_DEVICE_TYPE);
 
         cpu_id = cpu_id_get();
 
-        devmgr_dev_index_set(cpu_bsp, cpu_id);
+        devmgr_dev_index_set(&cpu_drv->bsp_cpu.hdr.dev, cpu_id);
 
-        if(devmgr_dev_add(cpu_bsp, NULL))
+        if(devmgr_dev_add(&cpu_drv->bsp_cpu.hdr.dev, NULL))
         {
             cpu_int_unlock();
             return(-1);
         }
 
         /* Set up the scheduler for the BSP */
-        cpu = devmgr_dev_data_get(cpu_bsp);
         timer = devmgr_dev_get_by_name(APIC_TIMER_NAME, cpu_id);
 
         if(timer == NULL)
@@ -889,7 +861,7 @@ static int pcpu_drv_init(struct driver_node *drv)
                             0,
                             NULL);
         isr_install(cpu_process_call_list, NULL, PLATFORM_SCHED_VECTOR, 0, &cpu_drv->ipi_isr);
-        if(sched_unit_init(timer, cpu, &init_th))
+        if(sched_unit_init(timer, &cpu_drv->bsp_cpu.hdr, &init_th))
         {
             if(int_status)
             {
@@ -907,117 +879,6 @@ static int pcpu_drv_init(struct driver_node *drv)
     return(0);
 }
 
-struct cpu *cpu_current_get(void)
-{
-    struct device_node *dev = NULL;
-    uint32_t cpu_id = 0;
-    struct cpu    *cpu = NULL;
-    int int_state = 0;
-
-    int_state = cpu_int_check();
-
-    if(int_state)
-    {
-        cpu_int_lock();
-    }
-
-    cpu_id = cpu_id_get();
-    
-    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, cpu_id);
-    cpu = devmgr_dev_data_get(dev);
-
-    if(int_state)
-    {
-        cpu_int_unlock();
-    }
-    
-    return(cpu);
-}
-
-
-int32_t cpu_enqueue_call
-(
-    uint32_t cpu_id,
-    int32_t (*ipi_handler)(void *pv),
-    void *pv
-)
-{
-    struct device_node *dev = NULL;
-    struct cpu *cpu = NULL;
-    uint8_t int_status = 0;
-    struct ipi_exec_node *ipi_node = NULL;
-    int32_t st = -1;
-
-    dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, cpu_id);
-    cpu = devmgr_dev_data_get(dev);
-
-    if(cpu != NULL)
-    {
-        spinlock_lock_int(&cpu->ipi_cb_lock, &int_status);
-
-        ipi_node = (struct ipi_exec_node*)linked_list_get_first(&cpu->avail_ipi_cb);
-
-        if(ipi_node != NULL)
-        {
-            ipi_node->ipi_handler = ipi_handler;
-            ipi_node->pv = pv;
-
-            linked_list_add_tail(&cpu->ipi_cb, &ipi_node->node);
-            st = 0;
-        }
-
-        spinlock_unlock_int(&cpu->ipi_cb_lock, int_status);
-
-        cpu_issue_ipi(IPI_DEST_NO_SHORTHAND, cpu_id, PLATFORM_SCHED_VECTOR);
-    }
-
-    return(st);
-}
-
-int32_t cpu_process_call_list
-(
-    void *pv,
-    struct isr_info *inf
-)
-{
-    struct cpu *cpu = inf->cpu;
-    uint8_t int_status = 0;
-    struct ipi_exec_node *ipi_node = NULL;
-    int32_t (*ipi_handler)(void *pv) = NULL;
-    void *ipi_pv = NULL;
-    
-
-    if(cpu != NULL)
-    {        
-        while(1)
-        {
-            spinlock_lock_int(&cpu->ipi_cb_lock, &int_status);
-            ipi_node = (struct ipi_exec_node*)linked_list_get_first(&cpu->ipi_cb);
-            spinlock_unlock_int(&cpu->ipi_cb_lock, int_status);
-            
-            if(ipi_node == NULL)
-            {
-                break;
-            }
-
-            ipi_handler = ipi_node->ipi_handler;
-            ipi_pv = ipi_node->pv;
-
-            if(ipi_handler != NULL)
-            {
-                ipi_handler(ipi_pv);
-            }
-
-            spinlock_lock_int(&cpu->ipi_cb_lock, &int_status);
-            linked_list_add_tail(&cpu->avail_ipi_cb, &ipi_node->node);
-            spinlock_unlock_int(&cpu->ipi_cb_lock, int_status);
-        }        
-    }
-
-    return(0);
-}
-
-
 
 static struct driver_node x86_cpu =
 {
@@ -1030,6 +891,8 @@ static struct driver_node x86_cpu =
     .drv_uninit = NULL,
     .drv_api    = NULL
 };
+
+
 
 int cpu_init(void)
 {

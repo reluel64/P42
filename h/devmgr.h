@@ -58,6 +58,10 @@ int devmgr_remove_drv(struct driver_node *drv);
 
 int devmgr_init(void);
 int devmgr_dev_create(struct device_node **dev);
+int32_t devmgr_device_node_init
+(
+    struct device_node *dev
+);
 int devmgr_dev_delete(struct device_node *dev);
 int devmgr_dev_add(struct device_node *dev, struct device_node *parent);
 int devmgr_drv_add(struct driver_node *drv);

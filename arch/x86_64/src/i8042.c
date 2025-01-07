@@ -23,9 +23,13 @@
 
 struct i8042_dev
 {
+    struct device_node dev_node;
     struct isr kbd_isr;
     struct isr mse_isr;
 };
+
+static  struct i8042_dev _i8042 = {0};
+
 extern struct sem *kb_sem;
 
 static int i8042_kbd_irq(void *pv, struct isr_info *isr_inf)
@@ -44,18 +48,18 @@ static int i8042_mse_irq(void *pv, struct isr_info *isr_inf)
 
 static int i8042_dev_init(struct device_node *dev)
 {
-    static  struct i8042_dev i8042 = {0};
+    
     uint8_t status_reg    = 0;
     uint8_t config_byte   = 0;
     uint8_t two_port_ctrl = 0;
     uint8_t ctrl_test     = 0;
     uint8_t port_test     = 0;
+    struct i8042_dev *i8042 = NULL;
 
-    devmgr_dev_data_set(dev, &i8042);
-
+    i8042 = (struct i8042_dev *)dev;
     /* install ISRs now to handle any potential arrival of data */
-    isr_install(i8042_kbd_irq, dev, IRQ(1), 0, &i8042.kbd_isr);
-    isr_install(i8042_mse_irq, dev, IRQ(12), 0, &i8042.mse_isr);
+    isr_install(i8042_kbd_irq, dev, IRQ(1), 0, &i8042->kbd_isr);
+    isr_install(i8042_mse_irq, dev, IRQ(12), 0, &i8042->mse_isr);
     /* flush the output buffer */
 
     do
@@ -98,8 +102,8 @@ static int i8042_dev_init(struct device_node *dev)
     if(ctrl_test != 0x55)
     {
         /* if the controller failed, remove the ISRs */
-        isr_uninstall(&i8042.kbd_isr, 0);
-        isr_uninstall(&i8042.mse_isr, 0);
+        isr_uninstall(&i8042->kbd_isr, 0);
+        isr_uninstall(&i8042->mse_isr, 0);
 
         kprintf("CTRL test failed\n");
         return(-1);
@@ -229,12 +233,10 @@ static int i8042_probe(struct device_node *dev)
 
 static int i8042_drv_init(struct driver_node *drv)
 {
-    struct device_node *dev = NULL;
-
-    devmgr_dev_create(&dev);
-    devmgr_dev_name_set(dev, I8042_DEV_NAME);
-    devmgr_dev_index_set(dev, 0);
-    devmgr_dev_add(dev, NULL);
+    devmgr_device_node_init(&_i8042.dev_node);
+    devmgr_dev_name_set(&_i8042.dev_node, I8042_DEV_NAME);
+    devmgr_dev_index_set(&_i8042.dev_node, 0);
+    devmgr_dev_add(&_i8042.dev_node, NULL);
 
     return(0);
 }

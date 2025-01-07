@@ -64,6 +64,9 @@ static int apic_nmi_fill
     ACPI_MADT_LOCAL_APIC_NMI    *nmi    = NULL;
     ACPI_MADT_LOCAL_X2APIC_NMI  *x2nmi  = NULL;
     int                         found   = 0;
+    uint32_t                    apic_id = 0;
+
+    apic_id = devmgr_dev_index_get(&apic->dev_node);
 
     status = AcpiGetTable(ACPI_SIG_MADT, 0, (ACPI_TABLE_HEADER**)&madt);
 
@@ -83,7 +86,7 @@ static int apic_nmi_fill
         {
             x2nmi = (ACPI_MADT_LOCAL_X2APIC_NMI*)subhdr;
 
-            if ((apic->apic_id == x2nmi->Uid) || 
+            if ((apic_id == x2nmi->Uid) || 
                 (x2nmi->Uid    == UINT32_MAX))
             {
                 apic->polarity = x2nmi->IntiFlags & ACPI_MADT_POLARITY_MASK;
@@ -131,7 +134,7 @@ static int apic_nmi_fill
             {
                 nmi = (ACPI_MADT_LOCAL_APIC_NMI*)subhdr;
 
-                if((apic->apic_id == nmi->ProcessorId) || 
+                if((apic_id == nmi->ProcessorId) || 
                 (nmi->ProcessorId == UINT8_MAX))
                 {
                     apic->lint     = nmi->Lint;
@@ -371,6 +374,7 @@ static int apic_dev_init(struct device_node *dev)
     struct apic_drv_private   *apic_drv = NULL;
     uint32_t            data      = 0;
     int                 int_status = 0;
+    uint32_t            apic_id = 0;
 
     kprintf("APIC_DEV_INIT\n");
 
@@ -384,7 +388,7 @@ static int apic_dev_init(struct device_node *dev)
     drv = devmgr_dev_drv_get(dev);
     apic_drv = devmgr_drv_data_get(drv);
 
-    apic = kcalloc(sizeof(struct apic_device), 1);
+    apic =(struct apic_device *)dev; 
 
     if(apic == NULL)
     {
@@ -395,7 +399,6 @@ static int apic_dev_init(struct device_node *dev)
 
         return(-1);
     }
-        
     
     /* If x2APIC is supported, then enable it */
     if(apic_drv->x2)
@@ -406,14 +409,12 @@ static int apic_dev_init(struct device_node *dev)
     
     kprintf("INIT_APIC 0x%x\n", dev);
 
-    apic->apic_id = devmgr_dev_index_get(dev);
+    apic_id = devmgr_dev_index_get(dev);
     
     if(apic_drv->x2 == 0)
     {
-        kprintf("APIC_BASE 0x%x APIC ID %d\n",apic_drv->paddr, apic->apic_id);
+        kprintf("APIC_BASE 0x%x APIC ID %d\n",apic_drv->paddr, apic_id);
     }
-
-    devmgr_dev_data_set(dev, apic);
 
     apic_nmi_fill(apic);
 

@@ -24,6 +24,8 @@ struct ioapic_iter_cb_data
 
 typedef int (*ioapic_iter_cb)(struct ioapic_iter_cb_data *cb, void *pv);
 
+static struct ioapic_dev *ioapics = NULL;
+
 static int ioapic_iterate
 (
     ioapic_iter_cb cb,
@@ -169,10 +171,10 @@ static int ioapic_write
     size_t length
 )
 {
-    struct ioapic *ioapic = NULL;
+    struct ioapic_dev *ioapic = NULL;
     uint32_t *iowin_data = NULL;
     
-    ioapic = devmgr_dev_data_get(dev);
+    ioapic = (struct ioapic_dev*)dev;
 
     if(ioapic == NULL)
     {
@@ -203,10 +205,10 @@ static int ioapic_read
     size_t length
 )
 {
-    struct ioapic *ioapic = NULL;
+    struct ioapic_dev *ioapic = NULL;
     uint32_t *iowin_data = NULL;
     
-    ioapic = devmgr_dev_data_get(dev);
+    ioapic = (struct ioapic_dev*)dev;
 
     if(ioapic == NULL)
     {
@@ -295,7 +297,7 @@ static int ioapic_device_init
     void      **cb_data  = NULL;
     struct device_node      *dev      = NULL;
     uint32_t   *index    = NULL;
-    struct ioapic   *ioapic   = NULL;
+    struct ioapic_dev   *ioapic   = NULL;
     uint32_t   dev_index = 0;
     uint32_t   vector    = 0;
     uint16_t   int_flags = 0;
@@ -320,10 +322,11 @@ static int ioapic_device_init
     }
 
     /* Allocate memory for per-device data */
-    ioapic = kcalloc(sizeof(struct ioapic), 1);
+    ioapic = (struct ioapic_dev*)dev;
 
     if(ioapic == NULL)
     {
+         kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(-1);
     }
 
@@ -343,16 +346,13 @@ static int ioapic_device_init
    
     if(ioapic->virt_base == VM_INVALID_ADDRESS)
     {
-        kfree(ioapic);
+         kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
         return(-1);
     }
     
     /* save pointers of IOREGSEL and IOWIN */
     ioapic->ioregsel = (volatile struct ioregsel*)ioapic->virt_base;
     ioapic->iowin = (volatile struct iowin*)(ioapic->virt_base + 0x10);
-    
-    /* Save per device structure */
-    devmgr_dev_data_set(dev, ioapic);
 
     memset(&version, 0, sizeof(struct ioapic_version));
 
@@ -446,9 +446,9 @@ static int ioapic_toggle_mask
 )
 {
     struct ioredtbl *redir = NULL;
-    struct ioapic *ioapic = NULL;
+    struct ioapic_dev *ioapic = NULL;
 
-    ioapic = devmgr_dev_data_get(dev);
+    ioapic = (struct ioapic_dev *)dev;
 
     redir = ioapic->redir_tbl;
 
@@ -458,7 +458,6 @@ static int ioapic_toggle_mask
     }
 
     irq += IRQ(0);
-
 
     for(uint32_t i = 0; i <= ioapic->redir_tbl_count; i++)
     {
@@ -536,37 +535,52 @@ static int ioapic_drv_init
     uint32_t   ioapic_cnt = 0;
     struct device_node   *dev       = NULL;
     struct intc_api *funcs      = NULL;
-
-    ioapic_iterate(ioapic_count, &ioapic_cnt);
-    
-    for(uint32_t index = 0; index < ioapic_cnt; index++)
+    struct ioapic_dev *ioapic = NULL;
+    int32_t status = -1;
+ kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    if(ioapic_iterate(ioapic_count, &ioapic_cnt) == 0)
     {
-        dev = NULL;
-        
-        if(devmgr_dev_create(&dev) == 0)
+        if(ioapic_cnt > 0)
         {
-            devmgr_dev_name_set(dev, IOAPIC_DRV_NAME);
-            devmgr_dev_type_set(dev, INTERRUPT_CONTROLLER);
-            devmgr_dev_index_set(dev, index);
-            
-            if(devmgr_dev_add(dev, NULL) != 0)
-            {
-                /*devmgr_dev_delete(dev);*/
-                return(-1);
-            }
+            ioapics = kcalloc(sizeof(struct ioapic_dev), ioapic_cnt);
         }
     }
-
-    /* We are using I/O APIC so PIC must be disabled */
-    dev = devmgr_dev_get_by_name(PIC8259_DRIVER_NAME, 0);
-    funcs = devmgr_dev_api_get(dev);
-
-    if(funcs != NULL && funcs->disable != NULL)
+    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+    if(ioapics != NULL)
     {
-        funcs->disable(dev);
+        for(uint32_t index = 0; index < ioapic_cnt; index++)
+        {
+            ioapic = &ioapics[index];
+            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+            if(devmgr_device_node_init(&ioapic->dev_node) == 0)
+            {
+                kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+                devmgr_dev_name_set(&ioapic->dev_node, IOAPIC_DRV_NAME);
+                devmgr_dev_type_set(&ioapic->dev_node, INTERRUPT_CONTROLLER);
+                devmgr_dev_index_set(&ioapic->dev_node, index);
+                kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+                if(devmgr_dev_add(&ioapic->dev_node, NULL) != 0)
+                {
+                    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+                    /*devmgr_dev_delete(dev);*/
+                    return(status);
+                }
+            }
+        }
+
+        /* We are using I/O APIC so PIC must be disabled */
+        dev = devmgr_dev_get_by_name(PIC8259_DRIVER_NAME, 0);
+        funcs = devmgr_dev_api_get(dev);
+
+        if(funcs != NULL && funcs->disable != NULL)
+        {
+            funcs->disable(dev);
+        }
+
+        status = 0;
     }
 
-    return(0);
+    return(status);
 }
 
 static struct intc_api api = 

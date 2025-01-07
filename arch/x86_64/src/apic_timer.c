@@ -11,15 +11,6 @@
 #include <platform.h>
 #include <utils.h>
 
-struct apic_timer
-{
-    struct spinlock_rw        lock;
-    uint32_t             calib_value;
-    timer_tick_handler_t handler;
-    void                *handler_data;
-    struct time_spec          tm_res;
-};
-
 static struct isr timer_isr;
 
 static int apic_timer_isr(void *drv, struct isr_info *inf)
@@ -34,12 +25,7 @@ static int apic_timer_isr(void *drv, struct isr_info *inf)
         return(-1);
     }
     
-    timer = devmgr_dev_data_get(dev);
-
-    if(timer == NULL)
-    {
-        return(-1);
-    }
+    timer = (struct apic_timer*)dev;
 
     spinlock_read_lock(&timer->lock);
     
@@ -101,7 +87,7 @@ static int apic_timer_init(struct device_node *dev)
     apic_drv    = devmgr_dev_drv_get(apic_dev);
     apic_drv_pv = devmgr_drv_data_get(apic_drv);
 
-    apic_timer  = kcalloc(sizeof(struct apic_timer), 1);
+    apic_timer  = (struct apic_timer*)dev;
     
     if(apic_timer == NULL)
     {
@@ -118,8 +104,6 @@ static int apic_timer_init(struct device_node *dev)
         cpu_int_unlock();
     }
     spinlock_rw_init(&apic_timer->lock);
-
-    devmgr_dev_data_set(dev, apic_timer);
 
     data = 0b1011;
     apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
@@ -196,7 +180,7 @@ static int apic_timer_drv_init(struct driver_node *drv)
 
 static int apic_timer_set_handler
 (
-    struct device_node             *dev,
+    struct device_node   *dev,
     timer_tick_handler_t  th, 
     void                 *arg
 )
@@ -204,7 +188,7 @@ static int apic_timer_set_handler
     struct apic_timer *timer = NULL;
     uint8_t       int_flag = 0;
 
-    timer = devmgr_dev_data_get(dev);
+    timer = (struct apic_timer*)dev;
 
     spinlock_write_lock_int(&timer->lock, &int_flag);
 
@@ -232,7 +216,7 @@ static int apic_timer_get_handler
         return(-1);
     }
 
-    timer = devmgr_dev_data_get(dev);
+    timer = (struct apic_timer*)dev;
 
     spinlock_read_lock_int(&timer->lock, &int_flag);
 
@@ -262,7 +246,7 @@ static int timer_toggle(struct device_node *dev, int en)
     apic_dev    = devmgr_dev_parent_get(dev);
     apic_drv    = devmgr_dev_drv_get(apic_dev);
     apic_drv_pv = devmgr_drv_data_get(apic_drv);
-    apic_timer  = devmgr_dev_data_get(dev);
+    apic_timer  = (struct apic_timer *)dev;
 
     if(en)
     {
@@ -290,25 +274,7 @@ static int apic_timer_reset(struct device_node *dev)
 {
     return(timer_toggle(dev, 1));
 }
-#if 0
-static int apic_timer_resolution_get
-(
-    struct device_node    *dev, 
-    struct time_spec *tm_res
-)
-{
-    apic_struct timer *timer = NULL;
 
-    timer = devmgr_dev_data_get(dev);
-
-    if(timer == NULL || tm_res == NULL)
-        return(-1);
-
-    memcpy(tm_res, &timer->tm_res, sizeof(struct time_spec));
-
-    return(0);
-}
-#endif
 static struct timer_api apic_timer_api = 
 {
     .enable       = apic_timer_enable,
