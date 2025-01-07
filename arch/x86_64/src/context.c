@@ -151,13 +151,13 @@ void context_switch
 {
     if(prev != NULL)
     {
-        gdt_update_tss(next->unit->cpu->cpu_pv, 
+        gdt_update_tss(next->unit->cpu, 
                       ((virt_addr_t*)next->context)[RSP0_INDEX]);
         __context_switch(prev->context, next->context);
     }
     else if(next != NULL)
     {
-        gdt_update_tss(next->unit->cpu->cpu_pv, 
+        gdt_update_tss(next->unit->cpu, 
                       ((virt_addr_t*)next->context)[RSP0_INDEX]);
 
         __context_switch(0, next->context);

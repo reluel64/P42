@@ -140,7 +140,6 @@ struct sched_exec_unit
     struct spinlock      wake_q_lock; /* lock for the wake queue */
     struct list_head     wake_q;    /* queue of threads that wait to be woken up  */
     struct list_head     unit_threads;
-    struct isr           sched_isr;
 };
 
 struct sched_owner

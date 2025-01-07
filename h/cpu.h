@@ -4,6 +4,7 @@
 #include <linked_list.h>
 #include <defs.h>
 #include <devmgr.h>
+#include <sched.h>
 #define CPU_DEVICE_TYPE "cpu"
 #define CPU_IPI_EXEC_NODE_COUNT 64
 
@@ -34,8 +35,7 @@ struct cpu
     struct spinlock  ipi_cb_lock;
     uint32_t cpu_id;
     uint32_t proximity_domain;
-    void *cpu_pv;
-    void *sched;
+    struct sched_exec_unit *sched;
 };
 
 

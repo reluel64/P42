@@ -559,7 +559,6 @@ static void cpu_ap_entry_point(void)
 {
     uint32_t cpu_id = 0;
     struct device_node *timer = NULL;
-    struct device_node *cpu_dev = NULL;
     struct cpu_platform *cpu = NULL;
     uint8_t int_status = 0;
 
@@ -708,11 +707,8 @@ static int pcpu_dev_init
     /* store proximity domain of the CPU */
     cpu->proximity_domain = cpu_get_domain(cpu_id);
 
-    /* store per cpu private data */
-    cpu->cpu_pv = pcpu;
-
     /* Prepare the GDT */
-    gdt_per_cpu_init(cpu->cpu_pv);
+    gdt_per_cpu_init(pcpu);
 
     /* Load the IDT */
     __lidt(&pdrv->idt_ptr);
