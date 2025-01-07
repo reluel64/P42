@@ -88,8 +88,9 @@ struct apic_device
     uint8_t lint;
 };
 
-struct apic_drv_private
+struct apic_drv
 {
+    struct driver_node drv_node;
     uint8_t     x2;
     phys_addr_t paddr;
     virt_addr_t vaddr;

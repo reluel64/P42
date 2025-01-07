@@ -61,7 +61,7 @@ struct __attribute__((packed)) idt64_ptr
     virt_addr_t addr;
 };
 
-struct cpu_platform
+struct platform_cpu
 {
     struct cpu hdr;
     struct apic_device apic;
@@ -70,10 +70,10 @@ struct cpu_platform
     struct tss64_entry *tss;
 };
 
-struct cpu_platfrom_driver
+struct platform_cpu_driver
 {
-    uint8_t       cpu_name[64];
-    struct cpu_platform bsp_cpu;
+    struct driver_node  drv_node;
+    struct platform_cpu bsp_cpu;
     struct idt64_entry *idt;
     struct idt64_ptr    idt_ptr;
     struct isr ipi_isr;
