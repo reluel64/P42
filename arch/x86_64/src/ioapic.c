@@ -537,7 +537,7 @@ static int ioapic_drv_init
     struct intc_api *funcs      = NULL;
     struct ioapic_dev *ioapic = NULL;
     int32_t status = -1;
- kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
     if(ioapic_iterate(ioapic_count, &ioapic_cnt) == 0)
     {
         if(ioapic_cnt > 0)
@@ -545,23 +545,22 @@ static int ioapic_drv_init
             ioapics = kcalloc(sizeof(struct ioapic_dev), ioapic_cnt);
         }
     }
-    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
     if(ioapics != NULL)
     {
         for(uint32_t index = 0; index < ioapic_cnt; index++)
         {
             ioapic = &ioapics[index];
-            kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
             if(devmgr_device_node_init(&ioapic->dev_node) == 0)
             {
-                kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
                 devmgr_dev_name_set(&ioapic->dev_node, IOAPIC_DRV_NAME);
                 devmgr_dev_type_set(&ioapic->dev_node, INTERRUPT_CONTROLLER);
                 devmgr_dev_index_set(&ioapic->dev_node, index);
-                kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
+
                 if(devmgr_dev_add(&ioapic->dev_node, NULL) != 0)
                 {
-                    kprintf("%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);
                     /*devmgr_dev_delete(dev);*/
                     return(status);
                 }
