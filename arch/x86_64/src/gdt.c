@@ -60,7 +60,7 @@ static int gdt_entry_encode
 
 int gdt_per_cpu_init(void *cpu_pv)
 {
-    struct cpu_platform *cpu      = NULL;
+    struct platform_cpu *cpu      = NULL;
     uint32_t        flags    = 0;
     struct gdt_entry    *gdt      = NULL;
     struct tss64_entry *tss      = NULL;
@@ -156,7 +156,7 @@ void gdt_update_tss
     virt_addr_t rsp0
 )
 {
-    struct cpu_platform *cpu = NULL;
+    struct platform_cpu *cpu = NULL;
 
     cpu = cpu_pv;
     cpu->tss->rsp0_low = rsp0 & UINT32_MAX;

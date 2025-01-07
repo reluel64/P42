@@ -185,7 +185,7 @@ static int cpu_idt_entry_encode
 
 static int cpu_idt_setup
 (
-    struct cpu_platfrom_driver *cpu_drv
+    struct platform_cpu_driver *cpu_drv
 )
 {
     struct idt64_entry      *idt = NULL;
@@ -559,7 +559,7 @@ static void cpu_ap_entry_point(void)
 {
     uint32_t cpu_id = 0;
     struct device_node *timer = NULL;
-    struct cpu_platform *cpu = NULL;
+    struct platform_cpu *cpu = NULL;
     uint8_t int_status = 0;
 
     int_status = cpu_int_check();
@@ -569,7 +569,7 @@ static void cpu_ap_entry_point(void)
         cpu_int_lock();
     }
 
-    cpu = kcalloc(sizeof(struct cpu_platform), 1);
+    cpu = kcalloc(sizeof(struct platform_cpu), 1);
     
     cpu_id = cpu_id_get();
 
@@ -666,8 +666,8 @@ static int pcpu_dev_init
 {
     struct cpu                 *cpu            = NULL;
     struct driver_node         *drv            = NULL;
-    struct cpu_platform        *pcpu           = NULL;
-    struct cpu_platfrom_driver *pdrv           = NULL;
+    struct platform_cpu        *pcpu           = NULL;
+    struct platform_cpu_driver *pdrv           = NULL;
     uint32_t               cpu_id         = 0;
     int                    no_apic        = 0;
     int                    status         = 0;
@@ -687,7 +687,7 @@ static int pcpu_dev_init
     drv    = devmgr_dev_drv_get(dev);
     pdrv   = devmgr_drv_data_get(drv);
     cpu_id = cpu_id_get();
-    pcpu   = (struct cpu_platform *)dev;
+    pcpu   = (struct platform_cpu *)dev;
 
     if(pcpu == NULL)
     {
@@ -770,7 +770,7 @@ static int pcpu_dev_probe(struct device_node *dev)
 static int pcpu_drv_init(struct driver_node *drv)
 {
     uint32_t               cpu_id    = 0;
-    struct cpu_platfrom_driver *cpu_drv   = NULL;
+    struct platform_cpu_driver *cpu_drv   = NULL;
     struct device_node              *timer     = NULL;
     static struct sched_thread init_th    = {0};
     uint8_t               int_status = 0;
@@ -784,14 +784,14 @@ static int pcpu_drv_init(struct driver_node *drv)
 
     spinlock_init(&lock);
 
-    cpu_drv = kcalloc(1, sizeof(struct cpu_platfrom_driver));
+    cpu_drv = (struct platform_cpu_driver *)drv;
 
-    cpu_drv->idt = (struct idt64_entry*)vm_alloc(NULL, VM_BASE_AUTO,
+    cpu_drv->idt = (struct idt64_entry *)vm_alloc(NULL, VM_BASE_AUTO,
                                                   IDT_ALLOC_SIZE,
                                                   VM_HIGH_MEM,
                                                   VM_ATTR_WRITABLE);
 
-    if(cpu_drv->idt == (struct idt64_entry*)VM_INVALID_ADDRESS)
+    if(cpu_drv->idt == (struct idt64_entry *)VM_INVALID_ADDRESS)
     {
         if(int_status)
         {
@@ -800,7 +800,6 @@ static int pcpu_drv_init(struct driver_node *drv)
 
         kprintf("Failed to allocate IDT\n");
 
-        kfree(cpu_drv);
         return(-1);
     }
   
@@ -876,23 +875,26 @@ static int pcpu_drv_init(struct driver_node *drv)
 }
 
 
-static struct driver_node x86_cpu =
+static struct platform_cpu_driver x86_cpu =
 {
-    .drv_name   = PLATFORM_CPU_NAME,
-    .drv_type   = CPU_DEVICE_TYPE,
-    .dev_probe  = pcpu_dev_probe,
-    .dev_init   = pcpu_dev_init,
-    .dev_uninit = NULL,
-    .drv_init   = pcpu_drv_init,
-    .drv_uninit = NULL,
-    .drv_api    = NULL
+    .drv_node.drv_name   = PLATFORM_CPU_NAME,
+    .drv_node.drv_type   = CPU_DEVICE_TYPE,
+    .drv_node.dev_probe  = pcpu_dev_probe,
+    .drv_node.dev_init   = pcpu_dev_init,
+    .drv_node.dev_uninit = NULL,
+    .drv_node.drv_init   = pcpu_drv_init,
+    .drv_node.drv_uninit = NULL,
+    .drv_node.drv_api    = NULL,
+    .idt = NULL,
+    .idt_ptr = {.addr = 0, .limit = 0},
+    .ipi_isr = ZERO_ISR_INIT,
+    .bsp_cpu = {0}
 };
-
 
 
 int cpu_init(void)
 {
-    devmgr_drv_add(&x86_cpu);
-    devmgr_drv_init(&x86_cpu);
+    devmgr_drv_add(&x86_cpu.drv_node);
+    devmgr_drv_init(&x86_cpu.drv_node);
     return(0);
 }
