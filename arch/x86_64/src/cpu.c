@@ -685,7 +685,7 @@ static int pcpu_dev_init
     pgmgr_per_cpu_init();
   
     drv    = devmgr_dev_drv_get(dev);
-    pdrv   = devmgr_drv_data_get(drv);
+    pdrv   = (struct platform_cpu_driver*)drv;
     cpu_id = cpu_id_get();
     pcpu   = (struct platform_cpu *)dev;
 
@@ -812,9 +812,6 @@ static int pcpu_drv_init(struct driver_node *drv)
                         0,
                         VM_ATTR_WRITABLE,
                         NULL);
- 
-    /* set up the driver's private data */
-    devmgr_drv_data_set(drv, cpu_drv);
 
     if(devmgr_device_node_init(&cpu_drv->bsp_cpu.hdr.dev) == 0)
     {
