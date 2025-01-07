@@ -72,9 +72,8 @@ static uint32_t apic_timer_loop
 
 static int apic_timer_init(struct device_node *dev)
 {  
-    struct device_node           *apic_dev    = NULL;
-    struct driver_node           *apic_drv    = NULL;
-    struct apic_drv_private *apic_drv_pv = NULL;
+    struct device_node      *apic_dev    = NULL;
+    struct apic_drv         *apic_drv = NULL;
     struct apic_timer       *apic_timer  = NULL;
     uint32_t            data        = 0;
     int                int_status   = 0;
@@ -83,11 +82,10 @@ static int apic_timer_init(struct device_node *dev)
     uint8_t            timer_done   = 0;
 
 
-    apic_dev    = devmgr_dev_parent_get(dev);
-    apic_drv    = devmgr_dev_drv_get(apic_dev);
-    apic_drv_pv = devmgr_drv_data_get(apic_drv);
-
     apic_timer  = (struct apic_timer*)dev;
+    apic_dev    = devmgr_dev_parent_get(dev);
+    apic_drv    = (struct apic_drv*)devmgr_dev_drv_get(apic_dev);
+    
     
     if(apic_timer == NULL)
     {
@@ -106,17 +104,17 @@ static int apic_timer_init(struct device_node *dev)
     spinlock_rw_init(&apic_timer->lock);
 
     data = 0b1011;
-    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
-                            DIVIDE_CONFIGURATION_REGISTER, 
-                            &data, 
-                            1);
+    apic_drv->apic_write(apic_drv->vaddr, 
+                         DIVIDE_CONFIGURATION_REGISTER, 
+                         &data, 
+                         1);
 
     /* Let's calibrate this */
     data = UINT32_MAX;
-    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
-                            INITIAL_COUNT_REGISTER, 
-                            &data, 
-                            1);
+    apic_drv->apic_write(apic_drv->vaddr, 
+                         INITIAL_COUNT_REGISTER, 
+                         &data, 
+                         1);
 
     timer_enqeue_static(NULL, 
                         &req_res, 
@@ -136,7 +134,7 @@ static int apic_timer_init(struct device_node *dev)
         cpu_int_lock();
     }
 
-    apic_drv_pv->apic_read(apic_drv_pv->vaddr, 
+    apic_drv->apic_read(apic_drv->vaddr, 
                            CURRENT_COUNT_REGISTER, 
                            &data, 
                            1);
@@ -146,10 +144,10 @@ static int apic_timer_init(struct device_node *dev)
      /* disable the timer */
     data = apic_timer->calib_value;
 
-    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
-                            INITIAL_COUNT_REGISTER, 
-                            &data, 
-                            1);
+    apic_drv->apic_write(apic_drv->vaddr, 
+                         INITIAL_COUNT_REGISTER, 
+                         &data, 
+                         1);
 
     apic_timer->tm_res = req_res;
     kprintf("APIC_TIMER_CALIB %d SEC %d NSEC %d\n",
@@ -160,10 +158,10 @@ static int apic_timer_init(struct device_node *dev)
     data = APIC_LVT_VECTOR_MASK(PLATFORM_LOCAL_TIMER_VECTOR) | 
            0b01 << 17;
 
-    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
-                            LVT_TIMER_REGISTER, 
-                            &data, 
-                            1);
+    apic_drv->apic_write(apic_drv->vaddr, 
+                         LVT_TIMER_REGISTER, 
+                         &data, 
+                         1);
     return(0);
 }
 
@@ -237,15 +235,13 @@ static int apic_timer_get_handler
 
 static int timer_toggle(struct device_node *dev, int en)
 {
-    struct device_node           *apic_dev    = NULL;
-    struct driver_node           *apic_drv    = NULL;
-    struct apic_drv_private *apic_drv_pv = NULL;
-    struct apic_timer       *apic_timer  = NULL;
-    uint32_t            data        = 0;
+    struct device_node   *apic_dev    = NULL;
+    struct apic_drv      *apic_drv = NULL;
+    struct apic_timer    *apic_timer  = NULL;
+    uint32_t             data        = 0;
 
     apic_dev    = devmgr_dev_parent_get(dev);
-    apic_drv    = devmgr_dev_drv_get(apic_dev);
-    apic_drv_pv = devmgr_drv_data_get(apic_drv);
+    apic_drv    = (struct apic_drv*)devmgr_dev_drv_get(apic_dev);
     apic_timer  = (struct apic_timer *)dev;
 
     if(en)
@@ -253,7 +249,7 @@ static int timer_toggle(struct device_node *dev, int en)
         data = apic_timer->calib_value;
     }
     
-    apic_drv_pv->apic_write(apic_drv_pv->vaddr, 
+    apic_drv->apic_write(apic_drv->vaddr, 
                             INITIAL_COUNT_REGISTER, 
                             &data, 
                             1);
