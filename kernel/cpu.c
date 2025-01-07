@@ -41,14 +41,14 @@ int32_t cpu_enqueue_call
 {
     struct device_node *dev = NULL;
     struct cpu *cpu = NULL;
-    struct cpu_platform *pcpu = NULL;
+    struct platform_cpu *pcpu = NULL;
     uint8_t int_status = 0;
     struct ipi_exec_node *ipi_node = NULL;
     int32_t st = -1;
     struct cpu_api *api = NULL;
 
     dev = devmgr_dev_get_by_name(PLATFORM_CPU_NAME, cpu_id);
-    pcpu = (struct cpu_platform*)dev;
+    pcpu = (struct platform_cpu*)dev;
 
     if(pcpu != NULL)
     {
